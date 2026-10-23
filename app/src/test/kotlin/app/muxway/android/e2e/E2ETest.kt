@@ -1,5 +1,6 @@
 package app.muxway.android.e2e
 
+import app.muxway.android.protocol.Ansi
 import app.muxway.android.protocol.Api
 import app.muxway.android.protocol.ApiException
 import org.junit.After
@@ -112,7 +113,7 @@ class E2ETest {
         assertEquals("bad_answer", assertThrows(ApiException::class.java) { api.read(address, 50, null) }.code)
         relay.mode = "control"
         val r = api.read(address, 50, null)!!
-        assertEquals("ok red nul\nend\n", r.content)
+        assertEquals("ok \u001b[31mred nul\nend\n", r.content)
         relay.mode = "normal"
         assertTrue(api.read(address, 50, null)!!.content.contains("$"))
     }
@@ -214,6 +215,35 @@ class E2ETest {
     }
 
     // --- the run's own hygiene ---
+
+    @Test
+    fun f13_colourReachesTheClientAsAStyledSpan() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        api.type(address, "printf '\\033[32mgreen-word\\033[0m\\n'")
+        api.key(address, "Enter")
+        waitPane("green-word")
+        waitFor("read shows the word") { api.read(address, 20, null)!!.content.contains("green-word") }
+        val content = api.read(address, 20, null)!!.content
+        val spans = Ansi.rows(content, 0).flatten()
+        val green = spans.filter { it.text.contains("green-word") }
+        assertTrue("one span with the word", green.size >= 1)
+        assertEquals(2, green.last().style.fg)
+        assertTrue("the prompt is plain", spans.any { it.style == Ansi.Style.PLAIN && it.text.contains("$") })
+    }
+
+    @Test
+    fun f14_shiftTabIsANamedKey() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        api.type(address, "cat -v")
+        api.key(address, "Enter")
+        waitFor("cat running") { core.command() == "cat" }
+        api.key(address, "BTab")
+        waitPane("^[[Z")
+        api.key(address, "C-c")
+        waitFor("shell back") { core.command() == "bash" }
+    }
 
     @Test
     fun z99_noSecretInAnyLogOfTheRun() {

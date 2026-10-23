@@ -87,6 +87,14 @@ class FlowTest {
         shot("typed")
 
         rule.onNodeWithText("^C").performClick()
+        await("┤ work/0.0 ├")
+        shot("tabs")
+
+        rule.onNodeWithText("scroll").performClick()
+        await(" scroll ")
+        shot("scroll-toggle")
+        rule.onNodeWithText("scroll").performClick()
+
         rule.onNodeWithText("panes").performClick()
         await("work/0.0")
         shot("back")

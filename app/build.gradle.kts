@@ -38,8 +38,11 @@ android {
     testOptions {
         unitTests.all {
             // The end-to-end suite reads these from scripts/e2e.sh.
+            // As inputs too, so a new run directory means the suite really runs again.
             for (name in listOf("MUXWAY_BIN", "MUXWAY_RUN_DIR", "MUXWAY_CORE")) {
-                System.getenv(name)?.let { v -> it.environment(name, v) }
+                val v = System.getenv(name) ?: ""
+                it.inputs.property(name, v)
+                if (v.isNotEmpty()) it.environment(name, v)
             }
             it.testLogging { events("failed") }
         }
