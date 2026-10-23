@@ -68,6 +68,9 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     val views = mutableStateMapOf<String, PaneState>()
     var sendError by mutableStateOf<String?>(null)
 
+    /** Why the Connect screen is showing, when the app put the user there. */
+    var notice by mutableStateOf<String?>(null)
+
     private fun ready() = settings.hubUrl.isNotEmpty() && hasToken
 
     private fun api(): Api {
@@ -102,6 +105,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         }
         settings = s.copy(hubUrl = url)
         store.save(settings)
+        notice = null
         api = null
         views.clear()
         panes = emptyList()
@@ -217,8 +221,17 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
+    /**
+     * A 401 is final: the token is wrong, expired or revoked. It is deleted so nothing
+     * retries it, which would only run the hub's lockout up for this network.
+     */
     private fun tokenRefused() {
         api = null
+        vault.clear()
+        hasToken = false
+        views.clear()
+        panes = emptyList()
+        notice = "The hub refused the stored token, so it was forgotten. Paste or scan a new one."
         if (screen !is Screen.Connect) screen = Screen.Connect
     }
 

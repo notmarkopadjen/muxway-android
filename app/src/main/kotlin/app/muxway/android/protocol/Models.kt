@@ -49,7 +49,7 @@ class ApiException(val status: Int, val code: String) : Exception(messageFor(sta
             "read_only" -> "Read only"
             "not_found" -> "Not found"
             "too_large" -> "Too long"
-            "locked_out" -> "Locked out, wait ten minutes"
+            "locked_out" -> "Too many failed logins from this network. Wait ten minutes"
             "rate_limited" -> "Too many requests, slow down"
             "host_offline" -> "Host offline"
             "bad_json", "bad_input", "bad_parameter" -> "The hub refused the request"

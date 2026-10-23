@@ -85,8 +85,11 @@ sequenceDiagram
   open the app can use it, so: a token per phone, scoped to the panes it
   needs, read-only unless typing is the point, revoked when the phone is
   lost.
-- A refused token (`401`) sends the app back to this screen; the message
-  says "Token refused" and nothing more.
+- A refused token (`401`: wrong, expired or revoked) is final, so the app
+  deletes it, comes back to this screen and says so. Nothing retries a
+  refused token: every retry would count towards the hub's lockout of the
+  phone's network (ten failures in ten minutes lock it for ten minutes,
+  which the app reports as "Too many failed logins from this network").
 - The token is never shown after saving, never logged, never part of an
   error message.
 - A connect code is the token: whoever photographs the terminal has it,

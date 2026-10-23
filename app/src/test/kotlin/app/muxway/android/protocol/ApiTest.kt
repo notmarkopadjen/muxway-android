@@ -43,6 +43,8 @@ class ApiTest {
         assertEquals(401, e.status)
         assertEquals("unauthorized", e.code)
         assertEquals("Token refused", e.message)
+        assertTrue(ApiException.messageFor(429, "locked_out").contains("Wait ten minutes"))
+        assertTrue(ApiException.messageFor(429, "locked_out").contains("network"))
         assertFalse(e.toString().contains(token))
     }
 

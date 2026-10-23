@@ -117,6 +117,12 @@ Deviations:
 - The debug APK grows by about 3.5 MB (CameraX); the release build with
   shrinking stays small.
 
+Follow-up from the first device test: the phone still held a revoked
+token, and every reopen of the app retried it until the hub locked the
+phone's network out, which then blocked the freshly scanned token too. A
+`401` now deletes the stored token and the Connect screen says why, so a
+refused token is tried once; the lockout message names the cause.
+
 ## Test run
 
 Local run `test-runs/20261023-233525-64dcdb4`: **passed**, 54 tests (15 end-to-end with the secret search, 39 unit including the script's codes read back with ZXing). The UI test was skipped for lack of a device.

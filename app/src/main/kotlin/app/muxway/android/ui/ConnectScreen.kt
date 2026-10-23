@@ -55,6 +55,7 @@ fun ConnectScreen(model: AppModel) {
             if (model.hasToken && saved.hubUrl.isNotEmpty()) Btn("panes", { model.back() })
         }
         Spacer(Modifier.height(8.dp))
+        model.notice?.let { Text("! $it", color = p.alert, modifier = Modifier.padding(vertical = 4.dp)) }
         Field("hub   ", url, { url = it }, hint = "https://hub.example.com", keyboard = KeyboardOptions(keyboardType = KeyboardType.Uri))
         Field(
             "token ", token, { token = it }, secret = true,
