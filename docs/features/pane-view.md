@@ -18,14 +18,17 @@ $ █
 ## Layout
 
 - The **tab strip** lists every pane the token may read, in listing order,
-  with `!` when a notification is pending. Open panes are inverted, the
-  focused one is marked `┤ ├`. Tapping a closed pane swaps it into the
-  focused tile; tapping an open one focuses it.
+  by name: the title the program set (Claude Code's is the session's name)
+  or `session/window.pane`. A glyph before the name says what the
+  [Claude lens](lenses.md) sees: `⟳` working, `!` `?` `z` `✓` waiting for
+  you. Open panes are inverted, the focused one is marked `┤ ├`. Tapping
+  a closed pane swaps it into the focused tile; tapping an open one
+  focuses it.
 - One pane fills the screen. Several panes sit **side by side in
   landscape** and **stacked in portrait**, each with an equal share. The
   header of the focused pane is inverted; tapping a pane focuses it.
-- Each header shows the pane's label, command and mode, and `! <kind>`
-  when a notification is pending.
+- Each header shows the pane's name, command and mode, then the lens's
+  glyph and word (`! permission`, `⟳ working`) when there is one.
 - The status row shows the time of the last successful read, or the
   error.
 
@@ -46,9 +49,15 @@ flowchart LR
 - **Width.** Rows are shown at the pane's own width, as tmux shows them,
   and the font is sized so that width fits the tile, never larger than the
   **text** setting. A 96-column pane on a phone comes out small but
-  intact; full-screen programs keep their layout.
+  intact, a 194-column one half that size; full-screen programs keep
+  their layout. The pane's size is tmux's and shared with every terminal
+  attached to it; the protocol has no way to resize it from a client.
 - **Zoom.** Pinch zooms between half and four times the fitted size; when
   the text is wider than the tile it scrolls sideways.
+- **Wrap.** The **wrap** toggle in the key row reflows rows to the columns
+  that fit at the current size instead: the text setting rules, pinch
+  changes the margins, nothing scrolls sideways. For shells and logs; a
+  full-screen program's layout breaks under it, so it is off by default.
 - **Colour.** The 16 base colours come from the theme (darker variants on
   paper), 16–255 are xterm's cube and grey ramp, true colour is passed
   through. Bold, dim, italic, underline and inverse are drawn.

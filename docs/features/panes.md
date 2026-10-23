@@ -12,11 +12,13 @@ Every pane the token may read, from `GET /v1/panes`, grouped by host.
   tap to open · hold to pick several
 ```
 
-- A row is the pane's alias, or `session/window.pane` when it has none,
-  then its command. `*` marks a pane this token may write.
+- A row is the pane's name (the title its program set, else the alias or
+  `session/window.pane`), then its place and command. `*` marks a pane
+  this token may write.
 - A pane with a pending notification shows `! <kind>` in the attention
   colour: `question`, `permission`, `idle` or `done`, see the core's
   [notifications](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/notifications.md).
+  A Claude Code pane that is busy shows `⟳ working` (see [lenses](lenses.md)).
 - Hosts from `GET /v1/hosts` that are online with nothing exposed, and
   hosts that are offline, are listed after the panes.
 - **tap** opens one pane. **hold** selects a pane; with a selection, taps
