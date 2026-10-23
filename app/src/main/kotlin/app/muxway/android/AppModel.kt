@@ -179,11 +179,17 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         if (enter) it.key(address, "Enter")
     }
 
+    /** False when the pane is still busy with the previous send. */
     fun key(address: String, name: String) = send(address) { it.key(address, name) }
 
-    private fun send(address: String, action: (Api) -> Unit) {
+    /** Replaces one open pane by another, keeping the others. */
+    fun swap(addresses: List<String>, at: Int, address: String) {
+        screen = Screen.View(addresses.mapIndexed { i, a -> if (i == at) address else a })
+    }
+
+    private fun send(address: String, action: (Api) -> Unit): Boolean {
         val v = view(address)
-        if (v.busy) return
+        if (v.busy) return false
         viewModelScope.launch {
             v.busy = true
             sendError = null
@@ -200,6 +206,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 v.busy = false
             }
         }
+        return true
     }
 
     private fun tokenRefused() {

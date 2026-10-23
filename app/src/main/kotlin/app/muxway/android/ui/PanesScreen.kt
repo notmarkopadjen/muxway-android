@@ -13,35 +13,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
 import app.muxway.android.AppModel
 import app.muxway.android.Screen
 import app.muxway.android.protocol.Pane
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PanesScreen(model: AppModel) {
     val p = LocalPalette.current
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(Unit) {
-        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            launch { model.followEvents() }
-            while (true) {
-                model.refreshList()
-                delay(15_000)
-            }
-        }
-    }
-
     val byHost = model.panes.groupBy { it.host }
     val offline = model.hosts.filter { !it.online && it.name !in byHost }
     val quiet = model.hosts.filter { it.online && it.name !in byHost }
