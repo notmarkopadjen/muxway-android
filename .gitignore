@@ -6,3 +6,15 @@
 *.key
 /test-runs/
 /tmp/
+
+# Android build
+/.gradle/
+/build/
+/app/build/
+/local.properties
+/.idea/
+/.kotlin/
+*.apk
+*.aab
+*.jks
+*.keystore
