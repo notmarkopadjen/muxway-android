@@ -1,0 +1,100 @@
+package app.muxway.android
+
+import android.graphics.Bitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import androidx.test.core.app.ActivityScenario
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import app.muxway.android.store.Settings
+import app.muxway.android.store.SettingsStore
+import app.muxway.android.store.Vault
+import org.junit.After
+import org.junit.Assume.assumeTrue
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.io.File
+
+/**
+ * Connect, list, open, type, back, settings: one pass through the app
+ * against the test hub that scripts/ui-tests.sh starts and reaches through
+ * adb reverse. Takes a screenshot at every step into the app's files/screens.
+ */
+@RunWith(AndroidJUnit4::class)
+class FlowTest {
+    @get:Rule
+    val rule = createEmptyComposeRule()
+
+    private val context = InstrumentationRegistry.getInstrumentation().targetContext
+    private val args = InstrumentationRegistry.getArguments()
+    private val hub = args.getString("hub") ?: ""
+    private val token = args.getString("token") ?: ""
+    private var scenario: ActivityScenario<MainActivity>? = null
+    private var step = 0
+
+    @Before
+    fun seed() {
+        assumeTrue("hub and token come from scripts/ui-tests.sh", hub.isNotEmpty() && token.isNotEmpty())
+        SettingsStore(context).save(Settings(hubUrl = hub, refreshSeconds = 1))
+        Vault(context).store(token)
+        File(context.getExternalFilesDir(null), "screens").deleteRecursively()
+    }
+
+    @After
+    fun close() {
+        scenario?.close()
+        Vault(context).clear()
+    }
+
+    private fun shot(name: String) {
+        val dir = File(context.getExternalFilesDir(null), "screens").also { it.mkdirs() }
+        val bitmap = rule.onRoot().captureToImage().asAndroidBitmap()
+        File(dir, "%02d-%s.png".format(++step, name)).outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    private fun await(text: String, seconds: Long = 15): SemanticsNodeInteraction {
+        rule.waitUntil(seconds * 1000) { rule.onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        return rule.onAllNodes(hasText(text, substring = true)).onFirst()
+    }
+
+    @Test
+    fun listOpenTypeAndNeverShowTheToken() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0")
+        shot("panes")
+        rule.onAllNodes(hasText(token.substring(4, 20), substring = true)).assertCountEquals(0)
+
+        await("work/0.0").performClick()
+        await("send")
+        await("$ ")
+        shot("pane")
+
+        rule.onNode(hasSetTextAction()).performTextInput("echo from android")
+        rule.onNodeWithText("send").performClick()
+        await("from android")
+        shot("typed")
+
+        rule.onNodeWithText("^C").performClick()
+        rule.onNodeWithText("panes").performClick()
+        await("work/0.0")
+        shot("back")
+
+        rule.onNodeWithText("settings").performClick()
+        await("save and connect")
+        shot("connect")
+        rule.onAllNodes(hasText(token.substring(4, 20), substring = true)).assertCountEquals(0)
+        rule.onAllNodes(hasText("stored", substring = true)).onFirst()
+    }
+}
