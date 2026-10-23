@@ -101,11 +101,22 @@ Fixtures use `hub.example.com` and a made-up token; the docs the same.
 
 ## Review (after implementation)
 
-- [ ] Diff matches the plan, deviations explained here
-- [ ] Security rules (AGENTS.md section 2) hold
-- [ ] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
-- [ ] Docs and diagrams updated
+- [x] Diff matches the plan, deviations explained here
+- [x] Security rules (AGENTS.md section 2) hold
+- [x] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
+- [x] Docs and diagrams updated
+
+Deviations:
+
+- The analyzer also tries the inverted frame, so a code shown as light
+  modules on a dark screen (a terminal theme the script's colours could
+  not override) still scans.
+- Test 2 runs through `HubUrl.check` and `Setup.parse` directly; the
+  `save` path needs Android and is exercised by hand on the device.
+- No UI test step for scanning: the test device has no code to look at.
+- The debug APK grows by about 3.5 MB (CameraX); the release build with
+  shrinking stays small.
 
 ## Test run
 
-Pending.
+Local run `test-runs/20261023-233525-64dcdb4`: **passed**, 54 tests (15 end-to-end with the secret search, 39 unit including the script's codes read back with ZXing). The UI test was skipped for lack of a device.

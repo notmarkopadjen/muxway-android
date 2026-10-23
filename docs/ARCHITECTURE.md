@@ -9,8 +9,8 @@ minimum Android 8.0 (API 26).
 ```mermaid
 flowchart LR
     subgraph app[Android app]
-        UI[ui: Connect, Panes, View] --> M[AppModel]
-        M --> P[protocol: Api, Json, Input, Ansi, HubUrl]
+        UI[ui: Connect, Scan, Panes, View] --> M[AppModel]
+        M --> P[protocol: Api, Json, Input, Ansi, Setup, HubUrl]
         M --> S[store: SettingsStore, Vault]
         S --> KS[(Android Keystore)]
     end
@@ -108,5 +108,6 @@ sequenceDiagram
   come from the protocol's fixed list. A read-only pane has no input bar.
 - Redirects are not followed, so a proxy cannot send the token elsewhere.
 - Dependencies: AndroidX core, activity, lifecycle, Compose BOM 2024.12.01,
-  Kotlin coroutines, all pinned in `app/build.gradle.kts`. JSON is the
-  platform's `org.json`.
+  Kotlin coroutines, CameraX 1.4.1 and ZXing core 3.5.3 (both for scanning
+  the connect code only), all pinned in `app/build.gradle.kts`. JSON is
+  the platform's `org.json`.
