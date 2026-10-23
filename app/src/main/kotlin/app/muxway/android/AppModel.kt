@@ -14,6 +14,7 @@ import app.muxway.android.protocol.Host
 import app.muxway.android.protocol.HubUrl
 import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.Pane
+import app.muxway.android.protocol.Setup
 import app.muxway.android.store.Settings
 import app.muxway.android.store.SettingsStore
 import app.muxway.android.store.Vault
@@ -28,6 +29,7 @@ import java.time.format.DateTimeFormatter
 sealed class Screen {
     data object Connect : Screen()
     data object Panes : Screen()
+    data object Scan : Screen()
     data class View(val addresses: List<String>) : Screen()
 }
 
@@ -82,7 +84,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     /** Back: pane view and settings return to the list; false when there is nowhere to go. */
     fun back(): Boolean {
         if (screen is Screen.Panes || (screen is Screen.Connect && !ready())) return false
-        open(Screen.Panes)
+        open(if (screen is Screen.Scan) Screen.Connect else Screen.Panes)
         return true
     }
 
@@ -107,6 +109,12 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         cursor = null
         open(Screen.Panes)
         return null
+    }
+
+    /** A scanned connect code: hub and token go through the same checks as typed ones. */
+    fun connectWithCode(text: String): String? {
+        val code = Setup.parse(text) ?: return "That is not a muxway code"
+        return save(settings.copy(hubUrl = code.hub), code.token)
     }
 
     fun forgetToken() {

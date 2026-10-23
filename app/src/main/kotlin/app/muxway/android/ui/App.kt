@@ -40,6 +40,7 @@ fun App(model: AppModel) {
                 when (val s = model.screen) {
                     is Screen.Connect -> ConnectScreen(model)
                     is Screen.Panes -> PanesScreen(model)
+                    is Screen.Scan -> ScanScreen(model)
                     is Screen.View -> ViewScreen(model, s.addresses)
                 }
             }

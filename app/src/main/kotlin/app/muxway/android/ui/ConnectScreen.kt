@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import app.muxway.android.AppModel
+import app.muxway.android.Screen
 import app.muxway.android.store.Theme
 
 @Composable
@@ -60,8 +61,12 @@ fun ConnectScreen(model: AppModel) {
             hint = if (model.hasToken) "stored · paste to replace" else "mxt_…",
             keyboard = KeyboardOptions(keyboardType = KeyboardType.Password),
         )
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Btn("scan code", { model.open(Screen.Scan) })
+            Text(" or paste a token from the hub's owner", color = p.dim)
+        }
         Text(
-            "  a token comes from the hub's owner:\n  muxway hub token create --name phone \\\n    --read 'alice-laptop/*' --write 'alice-laptop/@build'",
+            "  muxway hub token create --name phone \\\n    --read 'alice-laptop/*' --write 'alice-laptop/@build' \\\n    | scripts/connect-qr.py https://hub.example.com",
             color = p.dim,
             modifier = Modifier.padding(vertical = 4.dp),
         )
