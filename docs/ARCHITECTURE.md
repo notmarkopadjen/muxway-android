@@ -10,7 +10,7 @@ minimum Android 8.0 (API 26).
 flowchart LR
     subgraph app[Android app]
         UI[ui: Connect, Panes, View] --> M[AppModel]
-        M --> P[protocol: Api, Json, Input, HubUrl]
+        M --> P[protocol: Api, Json, Input, Ansi, HubUrl]
         M --> S[store: SettingsStore, Vault]
         S --> KS[(Android Keystore)]
     end
@@ -19,8 +19,10 @@ flowchart LR
 
 - **protocol** has no Android dependency. `Api` makes one blocking request
   per call with `HttpURLConnection`; `Json` reads the hub's answers
-  defensively; `Input` filters what is typed and what is shown; `HubUrl`
-  decides which URLs are acceptable. The end-to-end suite runs this layer on
+  defensively; `Input` filters what is typed; `Ansi` keeps colour and
+  attribute sequences out of pane content and drops every other escape,
+  then turns the text into styled rows; `HubUrl` decides which URLs are
+  acceptable. The end-to-end suite runs this layer on
   the JVM against a real hub.
 - **store** keeps settings in app-private preferences and the token in
   `Vault`: AES-256-GCM with a key generated inside the Keystore.
@@ -99,7 +101,9 @@ sequenceDiagram
   `HubUrl` refuses anything else before it is saved.
 - Bodies are read up to 2 MiB; JSON that does not fit the protocol is "The
   hub's answer made no sense", not a crash. Control characters and escape
-  sequences are removed from everything shown.
+  sequences are removed from everything shown; pane content keeps only
+  SGR (colour and attribute) sequences, which are parsed as bounded
+  integers and never interpreted beyond that.
 - Typed text loses control characters and is capped at 4096 bytes; keys
   come from the protocol's fixed list. A read-only pane has no input bar.
 - Redirects are not followed, so a proxy cannot send the token elsewhere.

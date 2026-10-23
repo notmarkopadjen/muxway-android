@@ -176,11 +176,27 @@ repository; `scripts/prepush-check.sh` runs before the push.
 
 ## Review (after implementation)
 
-- [ ] Diff matches the plan, deviations explained here
-- [ ] Security rules (AGENTS.md section 2) hold
-- [ ] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
-- [ ] Docs and diagrams updated
+- [x] Diff matches the plan, deviations explained here
+- [x] Security rules (AGENTS.md section 2) hold
+- [x] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
+- [x] Docs and diagrams updated
+
+Deviations:
+
+- The suite's first run after the change replayed the previous result,
+  because Gradle saw no changed input: the run directory and binary came
+  in through the environment only. They are declared task inputs now, so
+  every run under `scripts/e2e.sh` really runs (step 7).
+- A row that ends in a newline does not produce an empty trailing row,
+  matching how the body was shown before (`trimEnd('\n')`).
+- The text field keeps hardware keys while it has focus, as planned; the
+  tile's tap hands focus back to the screen so arrows reach the pane again.
+- The owner's token was reissued with write on every pane of the session
+  and the narrow one revoked; the whole session is exposed with write.
+- The on-device UI test gained the tab and scroll steps but still has no
+  device to run on here; it compiles.
+- The app version is 0.2.0 (code 2) so the phone sees an update.
 
 ## Test run
 
-Pending.
+Local run `test-runs/20261023-231828-eeb4fa2`: **passed**, 48 tests (15 end-to-end including two security fixtures reworked for colour, the colour and Shift-Tab flows, and the secret search), core at the commit in its `environment.txt`. The UI test was skipped for lack of a device.
