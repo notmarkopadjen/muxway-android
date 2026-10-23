@@ -20,9 +20,9 @@ class Api(private val baseUrl: String, private val token: String, private val us
 
     fun panes(): List<Pane> = Json.panes(get("panes").body)
 
-    /** Null when the pane has not changed since [etag]. */
+    /** Null when the pane has not changed since [etag]. Colour sequences are kept for [Ansi]. */
     fun read(address: String, lines: Int, etag: String?): PaneRead? {
-        val r = get("panes/${encode(address)}?lines=$lines", etag)
+        val r = get("panes/${encode(address)}?lines=$lines&ansi=1", etag)
         if (r.status == 304) return null
         return Json.read(r.body, r.etag)
     }

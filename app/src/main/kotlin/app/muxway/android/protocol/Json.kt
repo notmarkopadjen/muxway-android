@@ -13,7 +13,7 @@ object Json {
     fun panes(body: String): List<Pane> = parse(body) { o -> list(o.optJSONArray("panes")) { pane(it) } }
 
     fun read(body: String, etag: String): PaneRead = parse(body) { o ->
-        PaneRead(pane(o.getJSONObject("pane")), Input.screen(o.optString("content")), etag)
+        PaneRead(pane(o.getJSONObject("pane")), Ansi.keep(o.optString("content")), etag)
     }
 
     fun events(body: String): Events = parse(body) { o ->

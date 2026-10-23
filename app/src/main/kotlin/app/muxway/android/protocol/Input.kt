@@ -6,7 +6,7 @@ object Input {
 
     /** Protocol name to label, in the order the key row shows them. */
     val KEYS: List<Pair<String, String>> = listOf(
-        "Enter" to "Enter", "Tab" to "Tab", "Escape" to "Esc", "C-c" to "^C",
+        "Enter" to "Enter", "Tab" to "Tab", "BTab" to "S-Tab", "Escape" to "Esc", "C-c" to "^C",
         "Up" to "↑", "Down" to "↓", "Left" to "←", "Right" to "→",
         "BSpace" to "BS", "C-d" to "^D", "C-z" to "^Z", "C-l" to "^L",
         "PageUp" to "PgUp", "PageDown" to "PgDn", "Home" to "Home", "End" to "End",
@@ -40,7 +40,7 @@ object Input {
     }
 
     /** Index after an escape sequence starting at [i]: CSI to its final byte, OSC to BEL or ST, else past the final byte. */
-    private fun escapeEnd(s: String, i: Int): Int {
+    internal fun escapeEnd(s: String, i: Int): Int {
         if (i + 1 >= s.length) return s.length
         return when (s[i + 1]) {
             '[' -> {

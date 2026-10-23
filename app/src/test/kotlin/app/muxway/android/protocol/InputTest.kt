@@ -30,7 +30,7 @@ class InputTest {
     fun onlyTheProtocolsKeysAreKeys() {
         for ((name, _) in Input.KEYS) assertTrue(name, Input.isKey(name))
         assertFalse(Input.isKey("C-a"))
-        assertFalse(Input.isKey("BTab"))
+        assertFalse(Input.isKey("S-Tab"))
         assertFalse(Input.isKey(""))
     }
 

@@ -31,9 +31,9 @@ class JsonTest {
     }
 
     @Test
-    fun readContentLosesControlCharacters() {
-        val r = Json.read("""{"pane":$pane,"content":"$ make\u001b[0m\n\u0007ok\n"}""", "\"abc\"")
-        assertEquals("$ make\nok\n", r.content)
+    fun readContentKeepsColourAndLosesOtherControlCharacters() {
+        val r = Json.read("""{"pane":$pane,"content":"$ make\u001b[0m\n\u0007\u001b]0;t\u0007ok\n"}""", "\"abc\"")
+        assertEquals("$ make\u001b[0m\nok\n", r.content)
         assertEquals("\"abc\"", r.etag)
     }
 

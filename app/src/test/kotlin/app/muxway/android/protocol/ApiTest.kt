@@ -62,7 +62,7 @@ class ApiTest {
     @Test
     fun controlCharactersInContentAreRemoved() {
         answer = { json(200, """{"pane":{"address":"h/w/0.0","mode":"read"},"content":"ok \u001b[31mred\u0007\n"}""") }
-        assertEquals("ok red\n", api().read("h/w/0.0", 50, null)!!.content)
+        assertEquals("ok \u001b[31mred\n", api().read("h/w/0.0", 50, null)!!.content)
     }
 
     @Test
@@ -70,7 +70,7 @@ class ApiTest {
         answer = { Response(304) }
         assertNull(api().read("h/w/0.0", 50, "\"etag\""))
         assertEquals("\"etag\"", seen.single().header("If-None-Match"))
-        assertEquals("lines=50", seen.single().query)
+        assertEquals("lines=50&ansi=1", seen.single().query)
     }
 
     @Test
