@@ -69,6 +69,37 @@ sequenceDiagram
     CI->>GH: issue "Run <id>: result @ commit" (closed if passed)
 ```
 
+## This repository
+
+`scripts/e2e.sh` builds the hub from the core checkout (`MUXWAY_CORE`,
+default `../muxway`) and runs three suites:
+
+| Suite | Where | What |
+|---|---|---|
+| unit | JVM | `Input`, `HubUrl`, `Json`, `Api` against a server that misbehaves |
+| end-to-end | JVM | `E2ETest`: the protocol layer against a real hub, agent and tmux, through a recording relay; security tests first, a log search for secrets last |
+| UI | device | `FlowTest`: connect, list, open, type, back, settings, a screenshot per step |
+
+The UI suite runs when `adb devices` lists a device (an emulator or a
+phone; the hub is reached through `adb reverse`) and is otherwise
+recorded as skipped in `summary.md`. `MUXWAY_UI=0` skips it on purpose.
+
+```mermaid
+flowchart LR
+    E[scripts/e2e.sh] --> B[go build the hub]
+    B --> G[gradlew testDebugUnitTest assembleDebug]
+    G --> D{adb sees a device?}
+    D -- yes --> U[scripts/ui-tests.sh: hub, adb reverse, connectedDebugAndroidTest, pull screenshots]
+    D -- no --> S[ui-skipped.txt]
+    U --> R[scripts/junit-report.py: results.xml, summary.md]
+    S --> R
+```
+
+The run directory holds `logs/<test>/hub.log`, `agent.log` and
+`relay.log` per end-to-end test, `logs/gradle.log`, `screens/FlowTest/`
+for the UI run, `secrets-check.txt` from the log search, and
+`environment.txt`.
+
 ### The suite's contract
 
 Each repository provides `scripts/e2e.sh`. It builds the throwaway test
