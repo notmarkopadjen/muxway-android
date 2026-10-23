@@ -51,6 +51,7 @@ object Json {
             command = Input.printable(o.optString("command")),
             mode = o.optString("mode"),
             alias = o.optString("alias"),
+            activity = o.optLong("activity"),
             attention = a?.let { Attention(it.optString("kind"), it.optLong("at"), Input.printable(it.optString("text"))) },
         )
     }

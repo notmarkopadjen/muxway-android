@@ -19,12 +19,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.muxway.android.AppModel
 import app.muxway.android.Screen
+import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Pane
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PanesScreen(model: AppModel) {
     val p = LocalPalette.current
+    val now = ticker()
     val byHost = model.panes.groupBy { it.host }
     val offline = model.hosts.filter { !it.online && it.name !in byHost }
     val quiet = model.hosts.filter { it.online && it.name !in byHost }
@@ -42,7 +44,7 @@ fun PanesScreen(model: AppModel) {
             for ((host, panes) in byHost) {
                 item(key = "host:$host") { HostRow(host, "online") }
                 items(panes, key = { it.address }) { pane ->
-                    PaneRow(pane, pane.address in model.selected,
+                    PaneRow(pane, now, pane.address in model.selected,
                         onTap = { if (model.selected.isEmpty()) model.open(Screen.View(listOf(pane.address))) else model.toggleSelected(pane.address) },
                         onHold = { model.toggleSelected(pane.address) })
                 }
@@ -76,7 +78,7 @@ private fun HostRow(name: String, state: String) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PaneRow(pane: Pane, selected: Boolean, onTap: () -> Unit, onHold: () -> Unit) {
+private fun PaneRow(pane: Pane, now: Long, selected: Boolean, onTap: () -> Unit, onHold: () -> Unit) {
     val p = LocalPalette.current
     val fg = if (selected) p.bg else p.ink
     val bg = if (selected) p.ink else p.bg
@@ -85,9 +87,12 @@ private fun PaneRow(pane: Pane, selected: Boolean, onTap: () -> Unit, onHold: ()
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(if (pane.writable) "* " else "  ", color = fg)
-        Text(pane.label, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-        Text("  ${pane.command}", color = if (selected) p.bg else p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        pane.attention?.let { Text(" ! ${it.kind}", color = if (selected) p.bg else p.attention, maxLines = 1) }
+        Text(pane.name, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        Text("  ${pane.label} · ${pane.command}", color = if (selected) p.bg else p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Lens.glyph(pane, now)?.let { g ->
+            val waiting = Lens.status(pane, now) == Lens.Status.WAITING
+            Text(" $g ${if (waiting) pane.attention?.kind ?: "waiting" else "working"}", color = if (selected) p.bg else if (waiting) p.attention else p.dim, maxLines = 1)
+        }
     }
     Rule()
 }

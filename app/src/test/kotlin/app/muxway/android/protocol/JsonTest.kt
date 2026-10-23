@@ -26,8 +26,16 @@ class JsonTest {
     fun aPaneWithoutAliasIsNamedByItsPlace() {
         val p = Json.panes("""{"panes":[{"session":"work","window_index":2,"pane_index":1,"mode":"read"}]}""").single()
         assertEquals("work/2.1", p.label)
+        assertEquals("work/2.1", p.name)
         assertEquals(false, p.writable)
         assertNull(p.attention)
+    }
+
+    @Test
+    fun theNameIsTheCleanedTitleWhenThereIsOne() {
+        val p = Json.panes("""{"panes":[{"session":"work","window_index":0,"pane_index":1,"alias":"logs","title":"\u001b]0;x\u0007\u2733 build \u001b[1mserver\u0007"}]}""").single()
+        assertEquals("logs", p.label)
+        assertEquals("build server", p.name)
     }
 
     @Test

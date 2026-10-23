@@ -18,12 +18,16 @@ data class Pane(
     val command: String,
     val mode: String,
     val alias: String,
+    val activity: Long,
     val attention: Attention?,
 ) {
     val writable get() = mode == "write"
 
-    /** What the list shows: the alias when there is one, else session/window.pane. */
+    /** The alias when there is one, else session/window.pane. */
     val label get() = alias.ifEmpty { "$session/$windowIndex.$paneIndex" }
+
+    /** What tabs and headers show: the title the program set (without Claude Code's mark), else the label. */
+    val name get() = Lens.name(this)
 }
 
 data class PaneRead(val pane: Pane, val content: String, val etag: String)

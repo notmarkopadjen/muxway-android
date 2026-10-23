@@ -30,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -71,6 +72,7 @@ import app.muxway.android.PaneState
 import app.muxway.android.Screen
 import app.muxway.android.protocol.Ansi
 import app.muxway.android.protocol.Input
+import app.muxway.android.protocol.Lens
 import kotlinx.coroutines.delay
 
 /** One or more panes, side by side in landscape and stacked in portrait, with tabs above and one input bar. */
@@ -82,10 +84,12 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val focused = addresses[index]
     val state = model.view(focused)
     var remote by rememberSaveable { mutableStateOf(false) }
+    var wrap by rememberSaveable { mutableStateOf(false) }
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     val writable = state.pane?.writable == true
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
+    val now = ticker()
 
     fun hardKey(e: KeyEvent): Boolean {
         if (e.type != KeyEventType.KeyDown || !writable) return false
@@ -95,14 +99,14 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     }
 
     Column(Modifier.fillMaxSize().onKeyEvent(::hardKey).focusRequester(focus).focusable()) {
-        Tabs(model, addresses, focused) { tapped ->
+        Tabs(model, addresses, focused, now) { tapped ->
             val at = addresses.indexOf(tapped)
             if (at >= 0) focusedIndex = at else model.swap(addresses, index, tapped)
             focus.requestFocus()
         }
         Box(Modifier.weight(1f)) {
             val tile: @Composable (Int, Modifier) -> Unit = { i, m ->
-                PaneTile(model, addresses[i], i == index && addresses.size > 1, remote && i == index, m) { focusedIndex = i; focus.requestFocus() }
+                PaneTile(model, addresses[i], i == index && addresses.size > 1, remote && i == index, wrap, now, m) { focusedIndex = i; focus.requestFocus() }
             }
             if (landscape || addresses.size == 1) {
                 Row(Modifier.fillMaxSize()) { for (i in addresses.indices) tile(i, Modifier.weight(1f).fillMaxHeight()) }
@@ -116,7 +120,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         when {
             pane == null -> Text(" …", color = p.dim, modifier = Modifier.padding(4.dp))
             !pane.writable -> Text(" read-only · ${pane.address}", color = p.dim, modifier = Modifier.padding(4.dp))
-            else -> InputBar(model, state, remote) { remote = it }
+            else -> InputBar(model, state, remote, wrap, { remote = it }, { wrap = it })
         }
         Row(Modifier.fillMaxWidth().padding(2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Btn("panes", { model.open(Screen.Panes) })
@@ -126,36 +130,58 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     }
 }
 
-private class Tab(val address: String, val label: String, val attention: Boolean)
+private class Tab(val address: String, val label: String, val glyph: String?, val waiting: Boolean)
 
-/** Every pane the token may read; the open ones inverted. Tapping a closed one swaps it into the focused tile. */
+/**
+ * Every pane the token may read; the open ones inverted. A glyph before the name says what the
+ * Claude lens sees: working, or waiting for you. Tapping a closed one swaps it into the focused tile.
+ */
 @Composable
-private fun Tabs(model: AppModel, open: List<String>, focused: String, onTap: (String) -> Unit) {
+private fun Tabs(model: AppModel, open: List<String>, focused: String, now: Long, onTap: (String) -> Unit) {
     val p = LocalPalette.current
     val tabs = ArrayList<Tab>()
-    for (pane in model.panes) tabs.add(Tab(pane.address, pane.label, pane.attention != null))
-    for (a in open) if (tabs.none { it.address == a }) {
-        val pane = model.view(a).pane
-        tabs.add(Tab(a, pane?.label ?: a.substringAfter('/'), pane?.attention != null))
+    fun add(pane: app.muxway.android.protocol.Pane?, address: String) {
+        if (pane == null) tabs.add(Tab(address, address.substringAfter('/'), null, false))
+        else tabs.add(Tab(address, pane.name, Lens.glyph(pane, now), Lens.status(pane, now) == Lens.Status.WAITING))
     }
+    for (pane in model.panes) add(pane, pane.address)
+    for (a in open) if (tabs.none { it.address == a }) add(model.view(a).pane, a)
     LazyRow(Modifier.fillMaxWidth().background(p.bg), verticalAlignment = Alignment.CenterVertically) {
         items(tabs, key = { it.address }) { t ->
             val isOpen = t.address in open
-            val fg = if (isOpen) p.bg else if (t.attention) p.attention else p.ink
-            val edge = if (t.address == focused) "┤" else "│"
-            Text(
-                "$edge ${t.label}${if (t.attention) " !" else ""} ${if (t.address == focused) "├" else ""}",
-                color = fg,
-                maxLines = 1,
-                modifier = Modifier.background(if (isOpen) p.ink else p.bg).clickable { onTap(t.address) }.padding(horizontal = 4.dp, vertical = 6.dp),
-            )
+            val fg = if (isOpen) p.bg else p.ink
+            val mark = if (isOpen) p.bg else if (t.waiting) p.attention else p.dim
+            val isFocused = t.address == focused
+            // An open tab is inverted; one that waits for you is inverted in the attention colour.
+            val back = if (!isOpen) p.bg else if (t.waiting) p.attention else p.ink
+            Row(
+                Modifier.background(back).clickable { onTap(t.address) }.padding(horizontal = 4.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(if (isFocused) "┤ " else "│ ", color = fg, maxLines = 1)
+                t.glyph?.let { Text("$it ", color = mark, maxLines = 1) }
+                Text(t.label + if (isFocused) " ├" else " ", color = fg, maxLines = 1)
+            }
         }
     }
     Rule()
 }
 
+/** The current time in seconds, refreshed every few seconds so working marks age out. */
 @Composable
-private fun InputBar(model: AppModel, state: PaneState, remote: Boolean, onRemote: (Boolean) -> Unit) {
+fun ticker(): Long {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis() / 1000) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(5_000)
+            now = System.currentTimeMillis() / 1000
+        }
+    }
+    return now
+}
+
+@Composable
+private fun InputBar(model: AppModel, state: PaneState, remote: Boolean, wrap: Boolean, onRemote: (Boolean) -> Unit, onWrap: (Boolean) -> Unit) {
     var text by rememberSaveable(state.address) { mutableStateOf("") }
     fun send(enter: Boolean) {
         if (text.isEmpty() && !enter) return
@@ -164,6 +190,7 @@ private fun InputBar(model: AppModel, state: PaneState, remote: Boolean, onRemot
     }
     LazyRow(Modifier.fillMaxWidth().padding(horizontal = 2.dp)) {
         item(key = "scroll") { Btn("scroll", { onRemote(!remote) }, selected = remote) }
+        item(key = "wrap") { Btn("wrap", { onWrap(!wrap) }, selected = wrap) }
         items(Input.KEYS, key = { it.first }) { (name, label) ->
             Btn(label, { model.key(state.address, name) }, enabled = !state.busy)
         }
@@ -187,7 +214,7 @@ private fun InputBar(model: AppModel, state: PaneState, remote: Boolean, onRemot
  * unless [remote] turns swipes into arrow keys.
  */
 @Composable
-private fun PaneTile(model: AppModel, address: String, focused: Boolean, remote: Boolean, modifier: Modifier, onFocus: () -> Unit) {
+private fun PaneTile(model: AppModel, address: String, focused: Boolean, remote: Boolean, wrap: Boolean, now: Long, modifier: Modifier, onFocus: () -> Unit) {
     val p = LocalPalette.current
     val state = model.view(address)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -203,11 +230,16 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, remote:
 
     Column(modifier.clickable(onClick = onFocus).padding(2.dp)) {
         val pane = state.pane
-        val title = pane?.let { "${it.label} · ${it.command} · ${it.mode}" } ?: address
+        val title = pane?.let { "${it.name} · ${it.command} · ${it.mode}" } ?: address
         val fg = if (focused) p.bg else p.ink
-        Row(Modifier.fillMaxWidth().background(if (focused) p.ink else p.bg), verticalAlignment = Alignment.CenterVertically) {
+        val waiting = pane != null && Lens.status(pane, now) == Lens.Status.WAITING
+        val back = if (!focused) p.bg else if (waiting) p.attention else p.ink
+        Row(Modifier.fillMaxWidth().background(back), verticalAlignment = Alignment.CenterVertically) {
             Text("┤ $title ├", color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            pane?.attention?.let { Text(" ! ${it.kind} ", color = if (focused) p.bg else p.attention, maxLines = 1) }
+            pane?.let { Lens.glyph(it, now) }?.let { g ->
+                val word = if (waiting) pane.attention?.kind ?: "waiting" else "working"
+                Text(" $g $word ", color = if (focused) p.bg else if (waiting) p.attention else p.dim, maxLines = 1)
+            }
             if (remote) Text(" scroll ", color = fg, maxLines = 1)
         }
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).background(p.panel)) {
@@ -216,13 +248,17 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, remote:
             val density = LocalDensity.current
             // Glyph advance at 100 sp; the size that fits a number of columns is then a division.
             val advance100 = remember(base) { measurer.measure("M", base.copy(fontSize = 100.sp)).size.width.toFloat().coerceAtLeast(1f) }
-            val paneCols = pane?.width?.takeIf { it > 0 }
-            val rows = remember(state.content, paneCols) { Ansi.rows(state.content, paneCols ?: 0) }
-            val cols = paneCols ?: rows.maxOf { r -> r.sumOf { it.text.length } }.coerceIn(1, 400)
             val widthPx = (constraints.maxWidth - with(density) { 4.dp.roundToPx() }).coerceAtLeast(1)
-            val fitSp = widthPx * 100f / (advance100 * cols)
             var zoom by remember(address) { mutableFloatStateOf(1f) }
-            val sizeSp = (minOf(model.settings.textSp.toFloat(), fitSp) * zoom).coerceAtLeast(2f)
+            val maxSp = model.settings.textSp.toFloat()
+            // Wrap: the text setting rules and rows reflow to what fits. Otherwise the pane's own
+            // width fits the tile, never larger than the setting.
+            val unwrapped = remember(state.content) { Ansi.rows(state.content, 0) }
+            val paneCols = pane?.width?.takeIf { it > 0 } ?: unwrapped.maxOf { r -> r.sumOf { it.text.length } }.coerceIn(1, 400)
+            val fitSp = widthPx * 100f / (advance100 * paneCols)
+            val sizeSp = ((if (wrap) maxSp else minOf(maxSp, fitSp)) * zoom).coerceAtLeast(2f)
+            val cols = if (wrap) (widthPx * 100f / (advance100 * sizeSp)).toInt().coerceAtLeast(8) else paneCols
+            val rows = remember(state.content, cols) { if (cols == paneCols && pane?.width == null) unwrapped else Ansi.rows(state.content, cols) }
             val lineSp = sizeSp * 1.2f
             val text = remember(rows, p) { styled(rows, p) }
             val rowPx = with(density) { lineSp.sp.toPx() }
@@ -232,7 +268,7 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, remote:
             var gestures = Modifier.fillMaxSize().pointerInput(address) { pinch { z -> zoom = (zoom * z).coerceIn(0.5f, 4f) } }
             if (remote) gestures = gestures.pointerInput(address, rowPx, colPx) { swipes(rowPx, colPx) { name -> model.key(address, name) } }
             Box(gestures, contentAlignment = Alignment.BottomStart) {
-                Column(Modifier.fillMaxWidth().verticalScroll(vertical, reverseScrolling = true, enabled = !remote).horizontalScroll(horizontal, enabled = !remote)) {
+                Column(Modifier.fillMaxWidth().verticalScroll(vertical, reverseScrolling = true, enabled = !remote).horizontalScroll(horizontal, enabled = !remote && !wrap)) {
                     Text(text, color = p.ink, style = base.copy(fontSize = sizeSp.sp, lineHeight = lineSp.sp), softWrap = false, modifier = Modifier.padding(horizontal = 2.dp))
                 }
             }
