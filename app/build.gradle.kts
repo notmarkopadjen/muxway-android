@@ -35,21 +35,10 @@ android {
         compose = true
         buildConfig = true
     }
-    testOptions {
-        unitTests.all {
-            // The end-to-end suite reads these from scripts/e2e.sh.
-            // As inputs too, so a new run directory means the suite really runs again.
-            for (name in listOf("MUXWAY_BIN", "MUXWAY_RUN_DIR", "MUXWAY_CORE")) {
-                val v = System.getenv(name) ?: ""
-                it.inputs.property(name, v)
-                if (v.isNotEmpty()) it.environment(name, v)
-            }
-            it.testLogging { events("failed") }
-        }
-    }
 }
 
 dependencies {
+    implementation(project(":protocol"))
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
     implementation("androidx.core:core-ktx:1.15.0")
@@ -68,8 +57,6 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
 
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.json:json:20240303")
-    testImplementation("com.google.zxing:core:3.5.3")
 
     androidTestImplementation(composeBom)
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
