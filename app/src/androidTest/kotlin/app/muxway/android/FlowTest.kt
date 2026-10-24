@@ -42,6 +42,7 @@ class FlowTest {
     private val args = InstrumentationRegistry.getArguments()
     private val hub = args.getString("hub") ?: ""
     private val token = args.getString("token") ?: ""
+    private val adminToken = args.getString("adminToken") ?: ""
     private var scenario: ActivityScenario<MainActivity>? = null
     private var step = 0
 
@@ -112,6 +113,24 @@ class FlowTest {
         shot("connect")
         rule.onAllNodes(hasText(token.substring(4, 20), substring = true)).assertCountEquals(0)
         rule.onAllNodes(hasText("stored", substring = true)).onFirst()
+        // The phone's token is no admin: Settings has no admin section.
+        rule.onAllNodes(hasText("refresh")).assertCountEquals(0)
+    }
+
+    @Test
+    fun adminSectionOnlyForAnAdminToken() {
+        assumeTrue("adminToken comes from scripts/ui-tests.sh", adminToken.isNotEmpty())
+        Vault(context).store("test", adminToken)
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0")
+        rule.onNodeWithText("settings").performClick()
+        await("save settings")
+        await("agent connected")
+        await("clients")
+        shot("admin")
+        rule.onAllNodes(hasText(adminToken.substring(4, 20), substring = true)).assertCountEquals(0)
+        rule.onNodeWithText("refresh").performClick()
+        await("agent connected")
     }
 
     @Test

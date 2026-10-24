@@ -1,6 +1,7 @@
 package app.muxway.android.protocol
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -69,5 +70,22 @@ class JsonTest {
         }
         assertEquals("", Json.error("not json"))
         assertEquals("unauthorized", Json.error("""{"error":"unauthorized"}"""))
+    }
+
+    @Test
+    fun adminLogAndClientsAreReadAndCleaned() {
+        assertTrue(Json.admin("""{"id":"a","admin":true}"""))
+        assertFalse(Json.admin("""{"id":"a"}"""))
+        val log = Json.log("""{"records":[{"seq":7,"at":1767229300,"level":"WARN","msg":"refused\u001b[31m","attrs":{"addr":"203.0.113.9"}}],"next":7}""")
+        assertEquals("refused", log.single().msg)
+        assertEquals("203.0.113.9", log.single().attrs["addr"])
+        assertTrue(log.single().warning)
+        val clients = Json.clients(
+            """{"tokens":[{"id":"0ddba4b5","name":"phone"}],"users":[{"id":"1c6eb20e","email":"alice@example.com"}],
+               "clients":[{"kind":"session","id":"Xq3kP0aZ","client":"web","principal":"1c6eb20e","addr":"198.51.100.7","since":1,"seen":2},
+                          {"kind":"bearer","client":"muxway-android","principal":"0ddba4b5","addr":"198.51.100.8","since":1,"seen":2}]}""",
+        )
+        assertEquals(listOf("alice@example.com", "phone"), clients.map { it.who })
+        assertEquals(listOf(true, false), clients.map { it.endable })
     }
 }

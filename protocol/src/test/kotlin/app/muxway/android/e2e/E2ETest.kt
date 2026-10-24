@@ -385,6 +385,49 @@ class E2ETest {
     }
 
     @Test
+    fun f20_anAdminReadsTheLogAndEndsASessionAndNoOneElseDoes() {
+        val (api, _) = setup()
+        assertFalse(api.isAdmin())
+        for (call in listOf({ api.adminLog() }, { api.adminClients() }, { api.endSession("Xq3kP0aZ") })) {
+            val e = assertThrows(ApiException::class.java) { call() }
+            assertEquals(403, e.status)
+            assertEquals("forbidden", e.code)
+        }
+        val tok = core.cli("hub", "token", "create", "--dir", core.hubDir.path, "--name", "owner", "--read", "*", "--admin")
+        Env.secrets.add(tok)
+        val admin = Api(relay.url, tok, "muxway-android-e2e")
+        assertTrue(admin.isAdmin())
+        val log = admin.adminLog()
+        assertTrue(log.any { it.msg == "agent connected" && it.attrs["host"] == HOST })
+        assertTrue(log.any { it.msg == "admin refused" && it.warning })
+        assertTrue(log.none { line -> line.attrs.values.any { it.contains(tok) } })
+
+        // A browser signs in with the first token; the admin sees it and ends it.
+        val signIn = java.net.URL("${core.url}/v1/auth/token").openConnection() as java.net.HttpURLConnection
+        signIn.requestMethod = "POST"
+        signIn.doOutput = true
+        signIn.setRequestProperty("Content-Type", "application/json")
+        signIn.setRequestProperty("X-Muxway-Client", "web")
+        signIn.outputStream.use { it.write("""{"token":"${core.token()}"}""".toByteArray()) }
+        assertEquals(204, signIn.responseCode)
+        val cookie = signIn.getHeaderField("Set-Cookie").substringBefore(';')
+        Env.secrets.add(cookie.substringAfter('='))
+        val clients = admin.adminClients()
+        assertTrue(clients.any { it.client == "muxway-android-e2e" && !it.endable })
+        val session = clients.single { it.endable }
+        assertEquals("web", session.client)
+        assertEquals("phone", session.who)
+        admin.endSession(session.id)
+        val me = java.net.URL("${core.url}/v1/me").openConnection() as java.net.HttpURLConnection
+        me.setRequestProperty("Cookie", cookie)
+        me.setRequestProperty("X-Muxway-Client", "web")
+        assertEquals(401, me.responseCode)
+        assertTrue(admin.adminClients().none { it.endable })
+        assertThrows(IllegalArgumentException::class.java) { admin.endSession("../tokens/x") }
+        assertThrows(IllegalArgumentException::class.java) { admin.adminLog(501) }
+    }
+
+    @Test
     fun z99_noSecretInAnyLogOfTheRun() {
         val logs = File(Env.runDir, "logs")
         val found = ArrayList<String>()

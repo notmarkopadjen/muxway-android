@@ -169,6 +169,7 @@ fun ConnectScreen(model: AppModel) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Btn("save settings", ::saveSettings)
         }
+        if (model.admin && model.hasToken) AdminSection(model)
         Spacer(Modifier.height(12.dp))
         Text("  https only. plain http reaches localhost alone.\n  each hub's token is kept in the keystore and never shown again.", color = p.dim)
     }

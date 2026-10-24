@@ -34,16 +34,18 @@ agent_pid=$!
 for _ in $(seq 50); do "$bin" hub agents --dir "$tmp/hub" | grep -q "alice-laptop	online" && break; sleep 0.2; done
 "$bin" expose --tmux-name "$tmuxname" -t work:0.0 --write
 token=$("$bin" hub token create --dir "$tmp/hub" --name phone --read 'alice-laptop/*' --write 'alice-laptop/*')
+admin=$("$bin" hub token create --dir "$tmp/hub" --name owner --read 'alice-laptop/*' --write 'alice-laptop/*' --admin)
 
 adb -s "$serial" reverse "tcp:$port" "tcp:$port"
 status=0
 ANDROID_SERIAL="$serial" ./gradlew --no-daemon -q :app:connectedDebugAndroidTest \
     "-Pandroid.testInstrumentationRunnerArguments.hub=http://127.0.0.1:$port" \
     "-Pandroid.testInstrumentationRunnerArguments.token=$token" \
+    "-Pandroid.testInstrumentationRunnerArguments.adminToken=$admin" \
     > "$logs/gradle.log" 2>&1 || status=$?
 adb -s "$serial" pull /sdcard/Android/data/app.muxway.android/files/screens/. "$run/screens/FlowTest/" >> "$logs/adb.log" 2>&1 || true
 adb -s "$serial" logcat -d -t 2000 > "$logs/logcat.log" 2>&1 || true
-if grep -q "$token" "$logs"/*.log "$run"/screens -r 2>/dev/null; then
+if grep -qE "$token|$admin" "$logs"/*.log "$run"/screens -r 2>/dev/null; then
     echo "the token leaked into a UI test log" >&2
     status=1
 fi

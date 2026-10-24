@@ -18,6 +18,7 @@ class Api(private val baseUrl: String, private val token: String, private val us
         private const val TRANSCRIBE_TIMEOUT = 95_000
         /** What a client may name a session it starts. */
         val SESSION_NAME = Regex("^[a-z0-9_-]{1,32}$")
+        private val SESSION_ID = Regex("^[A-Za-z0-9_-]{1,16}$")
     }
 
     fun hosts(): List<Host> = Json.hosts(get("hosts").body)
@@ -82,6 +83,24 @@ class Api(private val baseUrl: String, private val token: String, private val us
     fun transcribe(wav: ByteArray): String {
         require(wav.size in 45..(4 shl 20)) { "clip size" }
         return Json.transcript(call("POST", "transcribe", wav, "audio/wav", null, TRANSCRIBE_TIMEOUT).body)
+    }
+
+    /** Whether this token carries the admin grant. */
+    fun isAdmin(): Boolean = Json.admin(get("me").body)
+
+    /** The hub's latest log lines; admin only. */
+    fun adminLog(limit: Int = 200): List<LogLine> {
+        require(limit in 1..500) { "limit" }
+        return Json.log(get("admin/log?limit=$limit").body)
+    }
+
+    /** Who is connected; admin only. */
+    fun adminClients(): List<AdminClient> = Json.clients(get("admin/overview").body)
+
+    /** Ends one browser session; admin only. */
+    fun endSession(id: String) {
+        require(SESSION_ID.matches(id)) { "session id" }
+        call("DELETE", "admin/sessions/$id", null, null, null)
     }
 
     fun events(after: Long?, wait: Int, limit: Int = 50): Events {

@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.muxway.android.protocol.Address
+import app.muxway.android.protocol.AdminClient
 import app.muxway.android.protocol.Api
 import app.muxway.android.protocol.ApiException
 import app.muxway.android.protocol.Commands
@@ -18,6 +19,7 @@ import app.muxway.android.protocol.Host
 import app.muxway.android.protocol.HubUrl
 import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.Lens
+import app.muxway.android.protocol.LogLine
 import app.muxway.android.protocol.Pane
 import app.muxway.android.protocol.Setup
 import app.muxway.android.store.Hub
@@ -93,6 +95,18 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     var transcriber by mutableStateOf(false)
         private set
     private var probed = false
+
+    /** Whether the token carries the admin grant, asked with the transcriber; Settings then shows the admin section. */
+    var admin by mutableStateOf(false)
+        private set
+    var adminLog by mutableStateOf(listOf<LogLine>())
+        private set
+    var adminClients by mutableStateOf(listOf<AdminClient>())
+        private set
+    var adminError by mutableStateOf<String?>(null)
+        private set
+    var adminLoading by mutableStateOf(false)
+        private set
 
     /** The last lines sent to a shell, newest first; the command row offers them again. */
     val recent = mutableStateListOf<String>().also { it.addAll(store.recent()) }
@@ -205,6 +219,9 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         api = null
         probed = false
         transcriber = false
+        admin = false
+        adminLog = emptyList()
+        adminClients = emptyList()
         views.clear()
         lastKind.clear()
         panes = emptyList()
@@ -272,6 +289,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 listError = null
                 if (!probed) {
                     transcriber = withContext(Dispatchers.IO) { api().hasTranscriber() }
+                    admin = withContext(Dispatchers.IO) { api().isAdmin() }
                     probed = true
                 }
                 openPending()
@@ -281,6 +299,37 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             } finally {
                 listing = false
             }
+        }
+    }
+
+    /** The hub's last 200 log lines and who is connected, for the admin section. */
+    fun refreshAdmin() {
+        if (!admin || adminLoading) return
+        viewModelScope.launch {
+            adminLoading = true
+            try {
+                val (log, clients) = withContext(Dispatchers.IO) { api().adminLog() to api().adminClients() }
+                adminLog = log
+                adminClients = clients
+                adminError = null
+            } catch (e: ApiException) {
+                adminError = e.message
+                if (e.code == "forbidden") admin = false
+                if (e.code == "unauthorized") tokenRefused()
+            } finally {
+                adminLoading = false
+            }
+        }
+    }
+
+    fun endSession(id: String) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { api().endSession(id) }
+            } catch (e: ApiException) {
+                adminError = e.message
+            }
+            refreshAdmin()
         }
     }
 
@@ -533,6 +582,9 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         api = null
         probed = false
         transcriber = false
+        admin = false
+        adminLog = emptyList()
+        adminClients = emptyList()
         vault.clear(settings.current)
         hasToken = false
         views.clear()

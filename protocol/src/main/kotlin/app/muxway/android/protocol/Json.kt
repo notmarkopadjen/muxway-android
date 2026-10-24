@@ -25,6 +25,31 @@ object Json {
         }, o.optLong("next"))
     }
 
+    /** Whether `/v1/me` names an admin. */
+    fun admin(body: String): Boolean = parse(body) { o -> o.optBoolean("admin") }
+
+    fun log(body: String): List<LogLine> = parse(body) { o ->
+        list(o.optJSONArray("records")) {
+            val attrs = LinkedHashMap<String, String>()
+            it.optJSONObject("attrs")?.let { a -> for (k in a.keys()) attrs[Input.printable(k)] = Input.printable(a.optString(k)) }
+            LogLine(it.optLong("seq"), it.optLong("at"), it.optString("level"), Input.printable(it.optString("msg")), attrs)
+        }
+    }
+
+    /** The overview's clients, each with its token's or user's name. */
+    fun clients(body: String): List<AdminClient> = parse(body) { o ->
+        val names = HashMap<String, String>()
+        list(o.optJSONArray("tokens")) { names[it.optString("id")] = it.optString("name") }
+        list(o.optJSONArray("users")) { names[it.optString("id")] = it.optString("email") }
+        list(o.optJSONArray("clients")) {
+            val principal = it.optString("principal")
+            AdminClient(
+                it.optString("kind"), it.optString("id"), Input.printable(it.optString("client")),
+                Input.printable(names[principal] ?: principal), it.optString("addr"), it.optLong("since"), it.optLong("seen"),
+            )
+        }
+    }
+
     /** The transcriber's text, cleaned as typed text is. */
     fun transcript(body: String): String = parse(body) { o -> Input.typed(o.optString("text")) }
 

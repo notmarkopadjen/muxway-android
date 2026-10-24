@@ -48,12 +48,26 @@ data class Event(
 
 data class Events(val events: List<Event>, val next: Long)
 
+/** One line of the hub's log, for an admin. */
+data class LogLine(val seq: Long, val at: Long, val level: String, val msg: String, val attrs: Map<String, String>) {
+    val warning get() = level != "INFO"
+}
+
+/**
+ * Someone connected to the hub: a browser session, which [id] names for ending it, or a
+ * bearer client. [who] is the token's name or the user's address.
+ */
+data class AdminClient(val kind: String, val id: String, val client: String, val who: String, val addr: String, val since: Long, val seen: Long) {
+    val endable get() = kind == "session" && id.isNotEmpty()
+}
+
 /** The hub said no, or did not answer. [code] is the protocol's error code. */
 class ApiException(val status: Int, val code: String) : Exception(messageFor(status, code)) {
     companion object {
         fun messageFor(status: Int, code: String): String = when (code) {
             "unauthorized" -> "Token refused"
             "read_only" -> "Read only"
+            "forbidden" -> "Not allowed"
             "not_found" -> "Not found"
             "too_large" -> "Too long"
             "locked_out" -> "Too many failed logins from this network. Wait ten minutes"

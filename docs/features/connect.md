@@ -3,7 +3,8 @@
 The Connect screen is the first thing the app shows until a hub and a
 token are stored, and the Settings screen afterwards. It holds the
 **hubs** the phone knows, the form that adds or changes one, and the
-preferences.
+preferences. For an admin token, Settings ends with the
+[admin section](admin.md).
 
 ## Several hubs
 
