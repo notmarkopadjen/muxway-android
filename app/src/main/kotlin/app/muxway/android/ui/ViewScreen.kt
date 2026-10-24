@@ -140,7 +140,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     // With a hardware keyboard assumed the on-screen one stays down until asked for.
     var ime by rememberSaveable(hardware) { mutableStateOf(!hardware) }
     val keyboard = LocalSoftwareKeyboardController.current
-    val fieldFocus = remember { FocusRequester() }
+    val fieldFocus = remember { FieldFocus() }
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     // Several panes: the arrangement cycles through the ones that make sense for the count, the
     // splits drag, and a pane's header dragged onto another tile swaps the two.
@@ -188,7 +188,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             if (addresses.size > 1) Btn("▦", { layout = layout.next(addresses.size) })
             // Tap: fit on, or send this size once more when it is on already; hold: fit off.
             Btn("⤢", { if (fit) fitAgain++ else fit = true }, selected = fit, enabled = writable, onLongClick = { fit = false })
-            if (hardware) Btn("⌨", { ime = !ime; if (ime) { fieldFocus.requestFocus(); keyboard?.show() } else keyboard?.hide() }, selected = ime)
+            if (hardware) Btn("⌨", { ime = !ime; if (ime) { fieldFocus.request(); keyboard?.show() } else keyboard?.hide() }, selected = ime)
             Btn("⚙", { model.open(Screen.Connect) })
         }
         Rule()
@@ -368,12 +368,29 @@ fun ticker(): Long {
 }
 
 /**
+ * Focus for the text field, which leaves the screen while a clip records or is heard. Asked for
+ * then, it is given once the field is back; asking the requester directly would throw.
+ */
+private class FieldFocus {
+    val requester = FocusRequester()
+    var wanted by mutableStateOf(false)
+        private set
+
+    fun request() { wanted = true }
+
+    fun give() {
+        wanted = false
+        requester.requestFocus()
+    }
+}
+
+/**
  * Esc pinned left, Enter pinned right, the other keys scrolling between; under them the command
  * row for the program in the pane, when it has one; then the text line, with the microphone
  * button when the hub has a transcriber.
  */
 @Composable
-private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FocusRequester, onFieldFocus: (Boolean) -> Unit) {
+private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, onFieldFocus: (Boolean) -> Unit) {
     val p = LocalPalette.current
     var text by rememberSaveable(state.address) { mutableStateOf("") }
     fun send(enter: Boolean) {
@@ -402,7 +419,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FocusRequest
         }
         hearing = model.transcribe(state.address, clip.wav()) { heard ->
             text = if (text.isEmpty()) heard else "$text $heard"
-            fieldFocus.requestFocus()
+            fieldFocus.request()
         }
     }
     fun startClip() {
@@ -448,7 +465,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FocusRequest
                         if (i == fixed) Text(" │ ", color = p.faint, maxLines = 1)
                         Btn(c.label, {
                             if (c.send) model.type(state.address, c.text, enter = true)
-                            else { text = c.text; fieldFocus.requestFocus() }
+                            else { text = c.text; fieldFocus.request() }
                         }, enabled = !busy)
                     }
                 }
@@ -473,13 +490,14 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FocusRequest
                 Btn("send", {}, enabled = false)
             }
             else -> {
+                LaunchedEffect(fieldFocus.wanted) { if (fieldFocus.wanted) fieldFocus.give() }
                 Field(
                     ">", text, { text = Input.typed(it) },
                     Modifier.weight(1f),
                     hint = state.pane?.label ?: "",
                     keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Send),
                     actions = KeyboardActions(onSend = { send(true) }),
-                    focusRequester = fieldFocus,
+                    focusRequester = fieldFocus.requester,
                     onFocus = onFieldFocus,
                     maxLines = 6,
                     onEnter = { send(true) },
