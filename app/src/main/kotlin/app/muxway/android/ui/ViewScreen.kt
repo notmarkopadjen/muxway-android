@@ -7,6 +7,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
@@ -140,8 +141,9 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             },
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Tabs(model, addresses, focused, now, Modifier.weight(1f), ::show)
-            Btn("≡", { model.open(Screen.Panes) })
+            Btn("‹", { model.open(Screen.Panes) })
+            if (addresses.size == 1) Tabs(model, addresses, focused, now, Modifier.weight(1f), ::show)
+            else Text(" ${addresses.size} panes", color = p.dim, maxLines = 1, modifier = Modifier.weight(1f))
             Btn("⤢", { fit = !fit }, selected = fit, enabled = writable)
             if (hardware) Btn("⌨", { ime = !ime; if (ime) { fieldFocus.requestFocus(); keyboard?.show() } else keyboard?.hide() }, selected = ime)
             Btn("⚙", { model.open(Screen.Connect) })
@@ -175,9 +177,9 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
 
 /** The colours a pane's state paints a tab or header with: background, then ink. */
 @Composable
-private fun stateColours(pane: Pane?, now: Long): Pair<Color, Color> {
+private fun stateColours(status: Lens.Status?): Pair<Color, Color> {
     val p = LocalPalette.current
-    return when (pane?.let { Lens.status(it, now) }) {
+    return when (status) {
         Lens.Status.WAITING -> p.attention to p.bg
         Lens.Status.WORKING -> p.dim to p.bg
         else -> p.panel to p.ink
@@ -201,15 +203,16 @@ private fun Tabs(model: AppModel, open: List<String>, focused: String, now: Long
         items(panes, key = { it.first }) { (address, pane) ->
             val isOpen = address in open
             val isFocused = address == focused
-            val (back, ink) = stateColours(pane, now)
-            val waiting = pane != null && Lens.status(pane, now) == Lens.Status.WAITING
+            val status = pane?.let { model.status(it, now) }
+            val (back, ink) = stateColours(status)
+            val waiting = status == Lens.Status.WAITING
             val border: Dp = if (isFocused) 3.dp else if (isOpen) 2.dp else 1.dp
             Row(
                 Modifier.padding(2.dp).border(border, if (isOpen) p.ink else p.faint).background(back)
                     .clickable { onTap(address) }.padding(horizontal = 8.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                pane?.let { Lens.glyph(it, now) }?.let { Text("$it ", color = ink, maxLines = 1, modifier = if (waiting) Modifier.alpha(pulse()) else Modifier) }
+                status?.let { Lens.glyph(it, pane?.attention?.kind) }?.let { Text("$it ", color = ink, maxLines = 1, modifier = if (waiting) Modifier.alpha(pulse()) else Modifier) }
                 Text(
                     pane?.name ?: address.substringAfter('/'), color = ink, maxLines = 1,
                     style = LocalTextStyle.current.copy(fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal, shadow = null),
@@ -287,19 +290,19 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
     }
 
     val pane = state.pane
-    val (back, ink) = stateColours(pane, now)
+    val status = pane?.let { model.status(it, now) }
+    val (back, ink) = stateColours(status)
     val edge: Dp = if (several && focused) 3.dp else 1.dp
     Column(modifier.padding(2.dp).border(edge, if (several && focused) p.ink else p.faint).clickable(onClick = onFocus)) {
         val title = pane?.let { "${it.name} · ${it.command} · ${it.mode}" } ?: address
-        val waiting = pane != null && Lens.status(pane, now) == Lens.Status.WAITING
+        val waiting = status == Lens.Status.WAITING
         Row(Modifier.fillMaxWidth().background(back).padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 title, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                 style = LocalTextStyle.current.copy(fontWeight = if (several && focused) FontWeight.Bold else FontWeight.Normal, shadow = null),
             )
-            pane?.let { Lens.glyph(it, now) }?.let { g ->
-                val word = if (waiting) pane.attention?.kind ?: "waiting" else "working"
-                Text(" $g $word ", color = ink, maxLines = 1, modifier = if (waiting) Modifier.alpha(pulse()) else Modifier)
+            status?.let { Lens.glyph(it, pane?.attention?.kind) }?.let { g ->
+                Text(" $g ${Lens.word(status, pane?.attention?.kind)} ", color = ink, maxLines = 1, modifier = if (waiting) Modifier.alpha(pulse()) else Modifier)
             }
             if (fit && pane?.writable == true) Text(" ${pane.width}×${pane.height} ", color = ink, maxLines = 1)
         }
@@ -335,8 +338,21 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
             val sideways = !fitting && !reflow
             val horizontal = rememberScrollState()
             val body = Modifier.fillMaxHeight().then(if (sideways) Modifier.width(with(density) { (cols * colPx).toDp() } + 4.dp) else Modifier.fillMaxWidth())
+            // A full-screen program (alternate screen) leaves nothing to scroll locally, so a
+            // drag pages it instead: a third of the tile per PageUp or PageDown.
+            val paging = rows.size <= visibleRows && pane?.writable == true
+            val page = heightPx / 3f
             Box(Modifier.fillMaxSize().pointerInput(address) { pinch { z -> zoom = (zoom * z).coerceIn(0.5f, 4f) } }
-                .then(if (sideways) Modifier.horizontalScroll(horizontal) else Modifier)) {
+                .then(if (sideways) Modifier.horizontalScroll(horizontal) else Modifier)
+                .then(if (paging) Modifier.pointerInput(address, page) {
+                    var acc = 0f
+                    detectDragGestures(onDragStart = { acc = 0f }) { change, drag ->
+                        change.consume()
+                        acc = (acc + drag.y).coerceIn(-2 * page, 2 * page)
+                        if (acc >= page && model.key(address, "PageUp")) acc -= page
+                        else if (acc <= -page && model.key(address, "PageDown")) acc += page
+                    }
+                } else Modifier)) {
                 // Newest row first in a reversed list: the bottom stays in view until you scroll up.
                 LazyColumn(body, reverseLayout = true) {
                     items(lines.size, key = { lines.size - it }) { i ->

@@ -3,6 +3,7 @@ package app.muxway.android
 import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -13,6 +14,7 @@ import app.muxway.android.protocol.ApiException
 import app.muxway.android.protocol.Host
 import app.muxway.android.protocol.HubUrl
 import app.muxway.android.protocol.Input
+import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Pane
 import app.muxway.android.protocol.Setup
 import app.muxway.android.store.Settings
@@ -41,6 +43,9 @@ class PaneState(val address: String) {
     var error by mutableStateOf<String?>(null)
     var updated by mutableStateOf("")
     var busy by mutableStateOf(false)
+
+    /** When the content last changed, in seconds; the lens counts a recent change as working. */
+    var changedAt by mutableLongStateOf(0L)
 
     /** Fit: the last size sent to the host, and whether a release is owed. */
     var fitKey = ""
@@ -71,6 +76,9 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     private var cursor: Long? = null
 
     val views = mutableStateMapOf<String, PaneState>()
+
+    /** The kind of the last event the hub sent for each pane; `working` is what the lens wants. */
+    val lastKind = mutableStateMapOf<String, String>()
     var sendError by mutableStateOf<String?>(null)
 
     /** Why the Connect screen is showing, when the app put the user there. */
@@ -113,6 +121,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         notice = null
         api = null
         views.clear()
+        lastKind.clear()
         panes = emptyList()
         hosts = emptyList()
         cursor = null
@@ -158,6 +167,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             try {
                 val ev = withContext(Dispatchers.IO) { api().events(cursor, 30) }
                 cursor = ev.next
+                for (e in ev.events) if (e.address.isNotEmpty() && e.kind.isNotEmpty()) lastKind[e.address] = e.kind
                 if (ev.events.isNotEmpty()) refreshList()
             } catch (e: ApiException) {
                 if (e.code == "unauthorized") { tokenRefused(); return }
@@ -172,6 +182,12 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     fun view(address: String) = views.getOrPut(address) { PaneState(address) }
 
+    /** What the lens says about a pane right now: waiting for you, working, or quiet. */
+    fun status(pane: Pane, now: Long): Lens.Status {
+        val changed = views[pane.address]?.let { now - it.changedAt in 0..Lens.RECENT_SECONDS } == true
+        return Lens.status(pane, lastKind[pane.address], changed)
+    }
+
     /** One read of a pane; a 304 leaves the content alone. */
     suspend fun pollOnce(address: String) {
         val v = view(address)
@@ -179,6 +195,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             val r = withContext(Dispatchers.IO) { api().read(address, settings.lines, v.etag) }
             if (r != null) {
                 v.pane = r.pane
+                if (r.content != v.content) v.changedAt = System.currentTimeMillis() / 1000
                 v.content = r.content
                 v.etag = r.etag
             }

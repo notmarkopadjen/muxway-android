@@ -46,9 +46,11 @@ fun PanesScreen(model: AppModel) {
                 item(key = "host:$host") {
                     Panel(host, Modifier.padding(vertical = 4.dp)) {
                         for (pane in panes) {
-                            PaneRow(pane, now, pane.address in model.selected,
+                            PaneRow(pane, model.status(pane, now), pane.address in model.selected,
                                 onTap = { if (model.selected.isEmpty()) model.open(Screen.View(listOf(pane.address))) else model.toggleSelected(pane.address) },
                                 onHold = { model.toggleSelected(pane.address) })
+                            // The way to open a selection sits right under the pane picked last.
+                            if (model.selected.isNotEmpty() && pane.address == model.selected.last()) SelectionBar(model)
                         }
                     }
                 }
@@ -56,17 +58,17 @@ fun PanesScreen(model: AppModel) {
             for (h in quiet) item(key = "host:${h.name}") { HostRow(h.name, "online · nothing exposed") }
             for (h in offline) item(key = "host:${h.name}") { HostRow(h.name, "offline") }
         }
-        if (model.selected.isNotEmpty()) {
-            Rule()
-            Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                val n = model.selected.size
-                Btn(if (n == 1) "open" else "open $n side by side", { model.open(Screen.View(model.selected.toList())) })
-                Text("${n}/4 · hold to select", color = p.dim)
-                Btn("clear", { model.selected.clear() })
-            }
-        } else {
-            Text("  tap to open · hold to pick several", color = p.dim, modifier = Modifier.padding(4.dp))
-        }
+        Text(if (model.selected.isEmpty()) "  tap to open · hold to pick several" else "  ${model.selected.size}/4 · hold to pick more", color = p.dim, modifier = Modifier.padding(4.dp))
+    }
+}
+
+/** `[clear] ………… [open N side by side]`, shown under the pane picked last. */
+@Composable
+private fun SelectionBar(model: AppModel) {
+    val n = model.selected.size
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Btn("clear", { model.selected.clear() })
+        Btn(if (n == 1) "open" else "open $n side by side", { model.open(Screen.View(model.selected.toList())) })
     }
 }
 
@@ -82,7 +84,7 @@ private fun HostRow(name: String, state: String) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PaneRow(pane: Pane, now: Long, selected: Boolean, onTap: () -> Unit, onHold: () -> Unit) {
+private fun PaneRow(pane: Pane, status: Lens.Status, selected: Boolean, onTap: () -> Unit, onHold: () -> Unit) {
     val p = LocalPalette.current
     val fg = if (selected) p.bg else p.ink
     val bg = if (selected) p.ink else p.bg
@@ -93,9 +95,9 @@ private fun PaneRow(pane: Pane, now: Long, selected: Boolean, onTap: () -> Unit,
         Text(if (pane.writable) "* " else "  ", color = fg)
         Text(pane.name, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         Text("  ${pane.label} · ${pane.command}", color = if (selected) p.bg else p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        Lens.glyph(pane, now)?.let { g ->
-            val waiting = Lens.status(pane, now) == Lens.Status.WAITING
-            Text(" $g ${if (waiting) pane.attention?.kind ?: "waiting" else "working"}", color = if (selected) p.bg else if (waiting) p.attention else p.dim, maxLines = 1,
+        Lens.glyph(status, pane.attention?.kind)?.let { g ->
+            val waiting = status == Lens.Status.WAITING
+            Text(" $g ${Lens.word(status, pane.attention?.kind)}", color = if (selected) p.bg else if (waiting) p.attention else p.dim, maxLines = 1,
                 modifier = if (waiting && !selected) Modifier.alpha(pulse()) else Modifier)
         }
     }
