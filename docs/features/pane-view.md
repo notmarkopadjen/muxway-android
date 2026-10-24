@@ -61,14 +61,14 @@ flowchart LR
     A --> T[Text in the bundled monospace font, scaled to fit]
 ```
 
-- **Fit.** With **fit** on (`⤢` in the top row, on by default for a
-  single pane you may write to), the pane on the host is sized to the
+- **Fit.** With **fit** on (`⤢` in the top row, on by default for every
+  pane you may write to, one or several), the pane on the host is sized to the
   columns and rows that fit the tile at the **text** setting, the way a
   terminal tells tmux its size: `POST .../resize`, debounced, once per
   distinct size, and `fit: auto` when you leave the view or turn it off,
   which gives the window back to tmux. The header shows the size. The
   person at the host sees the change, as with any terminal that attaches.
-  Side-by-side views start with fit off. While the on-screen keyboard is
+  While the on-screen keyboard is
   up the tile is half its height, so the host keeps its size until the
   keyboard goes. If another terminal sizes the window meanwhile, the
   phone sends its size once more after twenty seconds and then leaves it,

@@ -116,8 +116,8 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val index = focusedIndex.coerceIn(0, addresses.lastIndex)
     val focused = addresses[index]
     val state = model.view(focused)
-    // Fit: the host pane follows the tile, as a terminal would. On by default for one pane.
-    var fit by rememberSaveable(addresses) { mutableStateOf(addresses.size == 1) }
+    // Fit: the host pane follows the tile, as a terminal would. On by default.
+    var fit by rememberSaveable(addresses) { mutableStateOf(true) }
     var fitAgain by remember { mutableIntStateOf(0) }
     val hardware = model.settings.hardwareKeyboard
     // With a hardware keyboard assumed the on-screen one stays down until asked for.
