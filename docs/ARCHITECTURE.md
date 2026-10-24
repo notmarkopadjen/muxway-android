@@ -2,19 +2,34 @@
 
 The Android client speaks [protocol v1](https://github.com/notmarkopadjen/muxway/blob/main/docs/protocol/v1.md)
 of the muxway hub, JSON mode, and nothing else. Kotlin, Jetpack Compose,
-minimum Android 8.0 (API 26).
+minimum Android 8.0 (API 26). A Wear OS app and a watch face ship with it
+from the same repository, because the Data Layer between a watch and a
+phone connects only apps with the same package name and signing key.
 
-## Layers
+## Modules
 
 ```mermaid
 flowchart LR
-    subgraph app[Android app]
-        UI[ui: Connect, Scan, Panes, View; Theme and widgets after the web client] --> M[AppModel]
-        M --> P[protocol: Api, Json, Input, Ansi, Setup, HubUrl]
+    subgraph protocol[protocol: pure Kotlin]
+        P[Api, Json, Models, Lens, Board, Input, Ansi, Setup, HubUrl]
+    end
+    subgraph app[app: the phone]
+        UI[ui: Connect, Scan, Panes, View] --> M[AppModel]
         M --> S[store: SettingsStore, Vault]
         S --> KS[(Android Keystore)]
+        W[watch: AttentionService, Notifier, WatchBridge]
     end
+    subgraph wear[wear: the watch]
+        L[BoardListenerService] --> C[complications, tile, list, OpenPaneActivity]
+    end
+    subgraph watchface[watchface: Watch Face Format]
+        F[watchface.xml, fonts]
+    end
+    M & W --> P
+    C --> P
     P -- "HTTPS, Authorization: Bearer" --> H[(hub)]
+    W -- "Data Layer /board" --> L
+    C -. slots .-> F
 ```
 
 - **protocol** has no Android dependency. `Api` makes one blocking request
@@ -22,8 +37,10 @@ flowchart LR
   defensively; `Input` filters what is typed; `Ansi` keeps colour and
   attribute sequences out of pane content and drops every other escape,
   then turns the text into styled rows; `HubUrl` decides which URLs are
-  acceptable. The end-to-end suite runs this layer on
-  the JVM against a real hub.
+  acceptable; `Lens` and `Board` say what a pane is up to and rank the
+  panes for a glance. The end-to-end suite runs this layer on the JVM
+  against a real hub.
+- **wear** and **watchface** are described in [features/watch.md](features/watch.md).
 - **store** keeps settings in app-private preferences and the token in
   `Vault`: AES-256-GCM with a key generated inside the Keystore.
 - **AppModel** is the one view model: which screen is open, the pane list,
@@ -90,6 +107,25 @@ sequenceDiagram
     end
 ```
 
+### The watch
+
+```mermaid
+sequenceDiagram
+    participant H as hub
+    participant S as AttentionService (phone)
+    participant W as watch
+    participant A as MainActivity
+    loop while the watch setting is on
+        S->>H: GET /v1/events?wait=30, then GET /v1/panes
+        S->>S: Board.rank, notifications
+        S->>W: Data Layer /board
+    end
+    W->>A: muxway://open?pane=<address> (through the Wear companion)
+    A->>A: openLink: grammar, listed? then View
+```
+
+See [features/watch.md](features/watch.md) and [features/notifications.md](features/notifications.md).
+
 ## Security
 
 - The token is stored only through `Vault`; the ciphertext is useless off
@@ -109,5 +145,6 @@ sequenceDiagram
 - Redirects are not followed, so a proxy cannot send the token elsewhere.
 - Dependencies: AndroidX core, activity, lifecycle, Compose BOM 2024.12.01,
   Kotlin coroutines, CameraX 1.4.1 and ZXing core 3.5.3 (both for scanning
-  the connect code only), all pinned in `app/build.gradle.kts`. JSON is
-  the platform's `org.json`.
+  the connect code only), Play services wearable 18.2.0 (the Data Layer),
+  all pinned in `app/build.gradle.kts`; the watch's are listed in
+  [features/watch.md](features/watch.md). JSON is the platform's `org.json`.

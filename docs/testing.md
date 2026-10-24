@@ -72,12 +72,13 @@ sequenceDiagram
 ## This repository
 
 `scripts/e2e.sh` builds the hub from the core checkout (`MUXWAY_CORE`,
-default `../muxway`) and runs three suites:
+default `../muxway`) and runs four suites:
 
 | Suite | Where | What |
 |---|---|---|
-| unit | JVM | `Input`, `HubUrl`, `Json`, `Api` against a server that misbehaves |
+| unit | JVM | `protocol`: `Input`, `HubUrl`, `Json`, `Lens`, `Board` (ranking, hostile JSON), `Api` against a server that misbehaves; `wear`: `Face` (rows, overflow, stale) |
 | end-to-end | JVM | `E2ETest`: the protocol layer against a real hub, agent and tmux, through a recording relay; security tests first, a log search for secrets last |
+| check | JVM | `scripts/validate-face.sh`: the watch face against the Watch Face Format schema with Google's validator (fetched once into `tmp/`) |
 | UI | device | `FlowTest`: connect, list, open, type, back, settings, a screenshot per step |
 
 The UI suite runs when `adb devices` lists a device (an emulator or a
@@ -87,8 +88,9 @@ recorded as skipped in `summary.md`. `MUXWAY_UI=0` skips it on purpose.
 ```mermaid
 flowchart LR
     E[scripts/e2e.sh] --> B[go build the hub]
-    B --> G[gradlew testDebugUnitTest assembleDebug]
-    G --> D{adb sees a device?}
+    B --> G[gradlew: protocol and wear tests, three APKs]
+    G --> F[scripts/validate-face.sh]
+    F --> D{adb sees a device?}
     D -- yes --> U[scripts/ui-tests.sh: hub, adb reverse, connectedDebugAndroidTest, pull screenshots]
     D -- no --> S[ui-skipped.txt]
     U --> R[scripts/junit-report.py: results.xml, summary.md]
@@ -96,9 +98,14 @@ flowchart LR
 ```
 
 The run directory holds `logs/<test>/hub.log`, `agent.log` and
-`relay.log` per end-to-end test, `logs/gradle.log`, `screens/FlowTest/`
-for the UI run, `secrets-check.txt` from the log search, and
-`environment.txt`.
+`relay.log` per end-to-end test, `logs/gradle.log`, `logs/face-check.log`
+and `face-check.xml` from the face validation, `screens/FlowTest/` for
+the UI run, `secrets-check.txt` from the log search, and `environment.txt`.
+
+The watch itself is not driven by a test here: complications, the tile
+and the face need a Wear OS emulator paired with a phone emulator, which
+no CI runner has. Their logic lives in `Face` and `Board`, which the JVM
+suites cover; the rest is checked by hand on a device before a release.
 
 ### The suite's contract
 

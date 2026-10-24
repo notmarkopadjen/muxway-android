@@ -81,7 +81,7 @@ class AttentionService : Service() {
                     stopSelf()
                     return
                 }
-                notifier.show(board.copy(live = false))
+                notifier.say("no connection")
                 delay(5_000)
             }
         }

@@ -15,6 +15,8 @@ token are stored, and the Settings screen afterwards.
 | assume a hardware keyboard | The input field takes focus without raising the on-screen keyboard; `⌨` in the pane view's top row brings it up. The input connection stays, so dictation keyboards keep working. Off by default. |
 | effects | Glow, scanlines, vignette, power-on and pulses (see [look](look.md)). On by default. |
 | reflow | With fit off, reflow long rows to the screen instead of scaling the pane's width. Off by default. |
+| watch and notifications | Follow the panes in the background: a notification when one waits, the board to a paired watch (see [notifications](notifications.md) and [the watch](watch.md)). Off by default. |
+| notification text | Send what a pane said to the notification shade and the watch, not only its kind and name. Off by default. |
 
 **save and connect** checks the URL, stores the token when one was pasted,
 and opens the pane list. **forget token** deletes the token from the device.
