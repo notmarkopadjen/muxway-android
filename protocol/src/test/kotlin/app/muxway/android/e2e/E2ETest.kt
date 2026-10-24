@@ -4,7 +4,10 @@ import app.muxway.android.protocol.Ansi
 import app.muxway.android.protocol.Api
 import app.muxway.android.protocol.ApiException
 import app.muxway.android.protocol.Board
+import app.muxway.android.protocol.Clip
 import app.muxway.android.protocol.Lens
+import app.muxway.android.protocol.WatchGate
+import app.muxway.android.protocol.Wire
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -44,9 +47,9 @@ class E2ETest {
         cleanups.reversed().forEach { runCatching(it) }
     }
 
-    private fun setup(expose: String? = "--write", write: String? = "$HOST/*", revoke: Boolean = false, allowSessions: Boolean = false): Pair<Api, String> {
+    private fun setup(expose: String? = "--write", write: String? = "$HOST/*", revoke: Boolean = false, allowSessions: Boolean = false, sttUrl: String? = null): Pair<Api, String> {
         val logs = Env.logs(name.methodName)
-        core = Core(logs).start(expose, allowSessions)
+        core = Core(logs).start(expose, allowSessions, sttUrl)
         cleanups.add(core::close)
         val tok = core.token(write = write)
         if (revoke) core.revokeAll()
@@ -425,6 +428,57 @@ class E2ETest {
         assertTrue(admin.adminClients().none { it.endable })
         assertThrows(IllegalArgumentException::class.java) { admin.endSession("../tokens/x") }
         assertThrows(IllegalArgumentException::class.java) { admin.adminLog(501) }
+    }
+
+    @Test
+    fun f20_theWatchGateAnswersAWaitingPaneWithEnterAndShowsTheTail() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        var allowed = false
+        val gate = WatchGate(api, { api.panes() }, { allowed })
+        api.type(address, "read -p 'Deploy to prod? (y/N) ' a; echo \"answer=\$a\"")
+        api.key(address, "Enter")
+        waitPane("Deploy to prod?")
+        core.notify("question", "Deploy to prod?")
+        waitFor("attention listed") { api.panes().any { it.attention != null } }
+        val tail = gate.read(Wire.Read("r1", address, ""))
+        assertEquals("", tail.error)
+        assertTrue(tail.lines!!.joinToString("\n"), tail.lines!!.any { it.contains("Deploy to prod?") })
+        assertTrue(tail.writable)
+        assertFalse(tail.transcriber)
+        assertNull(gate.read(Wire.Read("r2", address, tail.etag)).lines)
+        // Not allowed yet: nothing reaches the pane.
+        assertEquals(WatchGate.REFUSED, gate.text(Wire.Text("t0", address, "y", "", true)).error)
+        assertEquals(WatchGate.REFUSED, gate.key(Wire.Key("k0", address, "Enter")).error)
+        assertFalse(core.pane().contains("answer=y"))
+        allowed = true
+        assertEquals(WatchGate.REFUSED, gate.key(Wire.Key("k1", address, "Up")).error)
+        assertEquals(WatchGate.REFUSED, gate.text(Wire.Text("t1", address, "yes", "", true)).error)
+        assertTrue(gate.text(Wire.Text("t2", address, "y", "", true)).ok)
+        waitPane("answer=y")
+        waitFor("attention cleared") { api.panes().all { it.attention == null } }
+        val after = gate.read(Wire.Read("r3", address, tail.etag))
+        assertTrue(after.lines!!.any { it.contains("answer=y") })
+    }
+
+    @Test
+    fun f21_aClipHeardByTheHubIsTypedOnlyAsTheGateHeardIt() {
+        val stt = TinyServer { r ->
+            if (r.path == "/v1/audio/transcriptions" && r.method == "POST") Response(200, """{"text":"echo heard-on-the-wrist"}""".toByteArray(), mapOf("Content-Type" to "application/json"))
+            else Response(404)
+        }
+        cleanups.add(stt::close)
+        val (api, _) = setup(sttUrl = stt.url + "/v1/audio/transcriptions")
+        val address = "$HOST/work/0.0"
+        val gate = WatchGate(api, { api.panes() }, { true })
+        assertTrue(gate.read(Wire.Read("r1", address, "")).transcriber)
+        val heard = gate.transcribe("c1", Clip.wav(ByteArray(Clip.SAMPLE_RATE * 2)))
+        assertEquals("", heard.error)
+        assertEquals("echo heard-on-the-wrist", heard.text)
+        assertEquals(WatchGate.REFUSED, gate.text(Wire.Text("t0", address, "", "c9", true)).error)
+        assertTrue(gate.text(Wire.Text("t1", address, "", "c1", true)).ok)
+        waitPane("heard-on-the-wrist")
+        assertEquals(WatchGate.TOO_SHORT, gate.transcribe("c2", Clip.wav(ByteArray(100))).error)
     }
 
     @Test
