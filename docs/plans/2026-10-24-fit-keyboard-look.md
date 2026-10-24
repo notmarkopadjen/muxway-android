@@ -167,6 +167,8 @@ addition, refuses a tap locally.
 
 ## Test run
 
+Round six: local run `test-runs/20261024-103852-a023f82`: **passed**, 75 tests; the two mouse tests ran against a hub built from the core checkout, which carries mouse input now.
+
 Round four: local run `test-runs/20261024-085305-22b4dfa`: **passed**, 62 tests.
 
 Round three: local run `test-runs/20261024-084345-aa1886f`: **passed**, 62 tests.
