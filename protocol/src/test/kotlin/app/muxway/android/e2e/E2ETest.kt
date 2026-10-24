@@ -191,6 +191,18 @@ class E2ETest {
     }
 
     @Test
+    fun f08b_twoLinesArePastedAsOneBlockThatEnterRuns() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        api.type(address, "echo first-\$((1+1))\necho second-\$((2+2))")
+        waitPane("echo second-")
+        api.key(address, "Enter")
+        waitPane("first-2")
+        waitPane("second-4")
+        assertEquals("", core.tmux("list-buffers").trim())
+    }
+
+    @Test
     fun f09_controlCStopsARunningCommand() {
         val (api, _) = setup()
         val address = "$HOST/work/0.0"

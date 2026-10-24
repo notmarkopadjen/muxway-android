@@ -28,7 +28,7 @@ class Api(private val baseUrl: String, private val token: String, private val us
     }
 
     fun type(address: String, text: String) {
-        val clean = Input.printable(text)
+        val clean = Input.typed(text)
         require(clean.isNotEmpty() && Input.utf8Length(clean) <= Input.MAX_TEXT_BYTES) { "text length" }
         post("panes/${encode(address)}/input", Json.text(clean))
     }

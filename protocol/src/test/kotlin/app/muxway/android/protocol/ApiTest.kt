@@ -108,10 +108,10 @@ class ApiTest {
     @Test
     fun inputIsFilteredBeforeItLeaves() {
         answer = { Response(204) }
-        api().type("h/w/0.0", "echo\u0000 hi\n")
+        api().type("h/w/0.0", "echo\u0000 hi\r\n")
         assertEquals("/v1/panes/h/w/0.0/input", seen.single().path)
-        assertEquals("""{"text":"echo hi"}""", String(seen.single().body))
-        assertThrows(IllegalArgumentException::class.java) { api().type("h/w/0.0", "\n\u001b") }
+        assertEquals("""{"text":"echo hi\n"}""", String(seen.single().body))
+        assertThrows(IllegalArgumentException::class.java) { api().type("h/w/0.0", "\u0007\u001b") }
         assertThrows(IllegalArgumentException::class.java) { api().type("h/w/0.0", "x".repeat(4097)) }
         assertThrows(IllegalArgumentException::class.java) { api().key("h/w/0.0", "C-a") }
         assertEquals(1, seen.size)

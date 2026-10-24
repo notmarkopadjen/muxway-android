@@ -86,6 +86,13 @@ class FlowTest {
         await("from android")
         shot("typed")
 
+        // Two lines go as one paste, then Enter: bash runs both.
+        rule.onNode(hasSetTextAction()).performTextInput("echo first-\$((1+1))\necho second-\$((2+2))")
+        shot("two-lines")
+        rule.onNodeWithText("send").performClick()
+        await("first-2")
+        await("second-4")
+
         rule.onNodeWithText("^C").performClick()
         await("┤ work/0.0 ├")
         shot("tabs")

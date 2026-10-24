@@ -245,12 +245,12 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun type(address: String, text: String, enter: Boolean): Boolean {
-        val clean = Input.printable(text)
+        val clean = Input.typed(text)
         val sent = send(address) {
             if (clean.isNotEmpty()) it.type(address, clean)
             if (enter) it.key(address, "Enter")
         }
-        if (sent && enter && view(address).pane?.let { Commands.isShell(it.command) } == true) remember(clean)
+        if (sent && enter && '\n' !in clean && view(address).pane?.let { Commands.isShell(it.command) } == true) remember(clean)
         return sent
     }
 

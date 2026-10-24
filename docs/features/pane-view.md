@@ -143,10 +143,17 @@ it is writable:
 - hardware keys reaching the screen (keyboard, D-pad, a glasses touchpad
   mapped to D-pad) send the matching named key: arrows, page up and down,
   home, end, tab, escape, enter, backspace. While the text field has focus
-  it keeps its own keys.
+  it keeps its own keys, and two are the line's: `Enter` sends,
+  `Shift+Enter` starts a new line.
+- the **text line** wraps and grows upward to six rows, then scrolls
+  inside. A text with several lines reaches the pane as one paste,
+  between the bracketed-paste marks when the program asked for them, so
+  Claude Code takes it as one message and bash as one block it shows
+  before `Enter` runs it. Completion of the first word is on the web
+  client for now (#12).
 - **type** sends the text as typed, without `Enter`;
-- **send**, or the keyboard's send action, sends the text and then
-  `Enter`;
+- **send**, the keyboard's send action, or a hardware `Enter` sends the
+  text and then `Enter`;
 - the **command row**, between the key row and the text line, is for the
   program in the pane and scrolls sideways. Claude Code's pane (the lens
   decides) gets `/clear`, `/compact`, `/rename`, `/model`, `/resume`,
@@ -163,8 +170,11 @@ anything to it.
 
 ## Security considerations
 
-- Text loses control characters before it leaves, the keyboard cannot
-  insert them, and the app refuses to send anything over 4096 bytes. Keys,
+- Text loses control characters before it leaves, the newline excepted:
+  it is the one the hub admits, and the agent delivers a text with one
+  through a tmux buffer, never a shell, with the paste marks written by
+  tmux. The keyboard cannot insert the others, and the app refuses to
+  send anything over 4096 bytes. Keys,
   whether tapped, swiped or pressed on hardware, come from the protocol's
   list; nothing else can be sent. A swipe sends one key per answered
   request, so it cannot flood the hub.

@@ -20,12 +20,15 @@ object Input {
     fun isKey(name: String) = name in names
 
     /** Drops C0, DEL and C1; the hub refuses them. */
-    fun printable(s: String): String = clean(s, keepNewline = false)
+    fun printable(s: String): String = clean(s, keepNewline = false, tabs = false)
+
+    /** What the input line sends: printable, the newline kept; the hub pastes a text with one. */
+    fun typed(s: String): String = clean(s, keepNewline = true, tabs = false)
 
     /** Keeps newlines, turns tabs into spaces, drops every other control character. */
-    fun screen(s: String): String = clean(s, keepNewline = true)
+    fun screen(s: String): String = clean(s, keepNewline = true, tabs = true)
 
-    private fun clean(s: String, keepNewline: Boolean): String {
+    private fun clean(s: String, keepNewline: Boolean, tabs: Boolean): String {
         val out = StringBuilder(s.length)
         var col = 0
         var i = 0
@@ -34,7 +37,7 @@ object Input {
             when {
                 c == '\u001b' -> { i = escapeEnd(s, i); continue }
                 c == '\n' && keepNewline -> { out.append(c); col = 0 }
-                c == '\t' && keepNewline -> { val n = 8 - col % 8; repeat(n) { out.append(' ') }; col += n }
+                c == '\t' && tabs -> { val n = 8 - col % 8; repeat(n) { out.append(' ') }; col += n }
                 c >= ' ' && c != '\u007f' && (c < '\u0080' || c > '\u009f') -> { out.append(c); col++ }
             }
             i++

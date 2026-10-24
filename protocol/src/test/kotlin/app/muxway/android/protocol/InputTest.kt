@@ -13,6 +13,13 @@ class InputTest {
     }
 
     @Test
+    fun typedKeepsOnlyTheNewline() {
+        assertEquals("echo hi\n", Input.typed("echo\u0000 \u001b[31mhi\r\n\t\u007f\u0085"))
+        assertEquals("one\ntwo", Input.typed("one\r\ntwo"))
+        assertEquals("", Input.typed("\u001b[200~\u001b[201~"))
+    }
+
+    @Test
     fun screenKeepsNewlinesAndExpandsTabs() {
         assertEquals("a       b\nc", Input.screen("a\tb\r\n\u0007c\u001b[0m"))
         assertEquals("title and text", Input.screen("\u001b]0;window\u0007title \u001b]2;x\u001b\\and \u001b(Btext"))

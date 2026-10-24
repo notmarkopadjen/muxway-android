@@ -395,13 +395,15 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FocusRequest
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Field(
-            ">", text, { text = Input.printable(it) },
+            ">", text, { text = Input.typed(it) },
             Modifier.weight(1f),
             hint = state.pane?.label ?: "",
             keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Send),
             actions = KeyboardActions(onSend = { send(true) }),
             focusRequester = fieldFocus,
             onFocus = onFieldFocus,
+            maxLines = 6,
+            onEnter = { send(true) },
         )
         Btn("type", { send(false) }, enabled = !busy && text.isNotEmpty())
         Btn("send", { send(true) }, enabled = !busy)

@@ -26,13 +26,24 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -96,7 +107,11 @@ fun Btn(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, selec
     )
 }
 
-/** A labelled single-line field with a border; the cursor is the ink colour. */
+/**
+ * A labelled field with a border; the cursor is the ink colour. With [maxLines] above one it grows
+ * with its text to that many rows, then scrolls inside; [onEnter] takes a hardware Enter, and
+ * Shift+Enter then starts a new line at the caret.
+ */
 @Composable
 fun Field(
     label: String,
@@ -109,16 +124,28 @@ fun Field(
     actions: KeyboardActions = KeyboardActions.Default,
     focusRequester: FocusRequester? = null,
     onFocus: ((Boolean) -> Unit)? = null,
+    maxLines: Int = 1,
+    onEnter: (() -> Unit)? = null,
 ) {
     val p = LocalPalette.current
-    Row(modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    var field by remember { mutableStateOf(TextFieldValue(value)) }
+    if (field.text != value) field = TextFieldValue(value, TextRange(value.length))
+    fun newLine() {
+        val s = field.selection
+        val text = field.text.replaceRange(s.min, s.max, "\n")
+        field = TextFieldValue(text, TextRange(s.min + 1))
+        onChange(text)
+    }
+    val align = if (maxLines > 1) Alignment.Top else Alignment.CenterVertically
+    Row(modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = align) {
         Text("$label ", color = p.dim, maxLines = 1)
         Box(Modifier.weight(1f).border(1.dp, p.dim).padding(horizontal = 6.dp, vertical = 6.dp)) {
             if (value.isEmpty()) Text(hint, color = p.faint, maxLines = 1)
             BasicTextField(
-                value = value,
-                onValueChange = onChange,
-                singleLine = true,
+                value = field,
+                onValueChange = { field = it; if (it.text != value) onChange(it.text) },
+                singleLine = maxLines == 1,
+                maxLines = maxLines,
                 textStyle = LocalTextStyle.current.copy(color = p.ink),
                 cursorBrush = SolidColor(p.ink),
                 visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
@@ -126,7 +153,15 @@ fun Field(
                 keyboardActions = actions,
                 modifier = Modifier.fillMaxWidth()
                     .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-                    .onFocusChanged { onFocus?.invoke(it.isFocused) },
+                    .onFocusChanged { onFocus?.invoke(it.isFocused) }
+                    .onPreviewKeyEvent { e ->
+                        val enter = e.type == KeyEventType.KeyDown && (e.key == Key.Enter || e.key == Key.NumPadEnter)
+                        when {
+                            !enter || onEnter == null -> false
+                            e.isShiftPressed -> { newLine(); true }
+                            else -> { onEnter(); true }
+                        }
+                    },
             )
         }
     }
