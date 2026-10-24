@@ -41,6 +41,11 @@ class PaneState(val address: String) {
     var error by mutableStateOf<String?>(null)
     var updated by mutableStateOf("")
     var busy by mutableStateOf(false)
+
+    /** Fit: the last size sent to the host, and whether a release is owed. */
+    var fitKey = ""
+    var fitted = false
+    var fitJob: Job? = null
 }
 
 class AppModel(app: Application) : AndroidViewModel(app) {
@@ -189,6 +194,52 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         val clean = Input.printable(text)
         if (clean.isNotEmpty()) it.type(address, clean)
         if (enter) it.key(address, "Enter")
+    }
+
+    /**
+     * Fit: asks the host to size the pane to [cols] × [rows], debounced, once per distinct size,
+     * retried after the hub's one-per-second limit. The answer is the pane as listed afterwards.
+     */
+    fun fit(address: String, cols: Int, rows: Int) {
+        val v = view(address)
+        val key = "${cols}x$rows"
+        if (v.fitKey == key) return
+        v.fitJob?.cancel()
+        v.fitJob = viewModelScope.launch {
+            delay(300)
+            var tries = 0
+            while (true) {
+                try {
+                    val p = withContext(Dispatchers.IO) { api().resize(address, cols, rows) }
+                    v.fitKey = key
+                    v.fitted = true
+                    v.pane = p
+                    v.etag = null
+                    pollOnce(address)
+                    return@launch
+                } catch (e: ApiException) {
+                    if (e.code == "rate_limited" && tries++ < 3) { delay(1100); continue }
+                    v.error = e.message
+                    if (e.code == "unauthorized") tokenRefused()
+                    return@launch
+                } catch (e: IllegalArgumentException) {
+                    return@launch
+                }
+            }
+        }
+    }
+
+    /** Gives the pane back to tmux, if this app ever sized it. */
+    fun release(address: String) {
+        val v = views[address] ?: return
+        v.fitJob?.cancel()
+        v.fitKey = ""
+        if (!v.fitted) return
+        v.fitted = false
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { api().release(address) } }
+            v.etag = null
+        }
     }
 
     /** False when the pane is still busy with the previous send. */

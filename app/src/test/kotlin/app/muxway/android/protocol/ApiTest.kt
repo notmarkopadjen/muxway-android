@@ -37,6 +37,23 @@ class ApiTest {
     }
 
     @Test
+    fun resizeSendsColsAndRowsAndReleaseSendsFitAuto() {
+        answer = { json(200, """{"pane":{"address":"h/w/0.0","width":40,"height":12,"mode":"write"}}""") }
+        val p = api().resize("h/w/0.0", 40, 12)
+        assertEquals(40, p.width)
+        assertEquals(12, p.height)
+        api().release("h/w/0.0")
+        assertEquals(listOf("/v1/panes/h/w/0.0/resize", "/v1/panes/h/w/0.0/resize"), seen.map { it.path })
+        val sent = org.json.JSONObject(String(seen[0].body))
+        assertEquals(40, sent.getInt("cols"))
+        assertEquals(12, sent.getInt("rows"))
+        assertEquals(2, sent.length())
+        assertEquals("auto", org.json.JSONObject(String(seen[1].body)).getString("fit"))
+        assertThrows(IllegalArgumentException::class.java) { api().resize("h/w/0.0", 10, 12) }
+        assertThrows(IllegalArgumentException::class.java) { api().resize("h/w/0.0", 40, 400) }
+    }
+
+    @Test
     fun errorsBecomeCodesWithoutTheToken() {
         answer = { json(401, """{"error":"unauthorized"}""") }
         val e = assertThrows(ApiException::class.java) { api().panes() }

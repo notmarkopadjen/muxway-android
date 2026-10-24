@@ -102,6 +102,14 @@ class E2ETest {
     }
 
     @Test
+    fun s04b_readOnlyPaneRefusesAResize() {
+        val (api, _) = setup(expose = null)
+        val before = api.panes().single().width
+        assertEquals("read_only", assertThrows(ApiException::class.java) { api.resize("$HOST/work/0.0", 40, 12) }.code)
+        assertEquals(before, api.panes().single().width)
+    }
+
+    @Test
     fun s05_hostileAnswersAreCappedCleanedOrRefused() {
         val (api, _) = setup()
         val address = "$HOST/work/0.0"
@@ -243,6 +251,25 @@ class E2ETest {
         waitPane("^[[Z")
         api.key(address, "C-c")
         waitFor("shell back") { core.command() == "bash" }
+    }
+
+    @Test
+    fun f15_fitSizesThePaneOnTheHostAndReleasesIt() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        val before = api.panes().single()
+        val fitted = api.resize(address, 40, 12)
+        assertEquals(40, fitted.width)
+        assertEquals(12, fitted.height)
+        waitFor("tmux shows 40 columns") { core.width() == 40 }
+        api.type(address, "echo " + "x".repeat(50))
+        api.key(address, "Enter")
+        waitPane("xxxxx")
+        // The hub joins wrapped lines, so the listing is what says the pane is 40 wide now.
+        assertEquals(40, api.panes().single().width)
+        assertTrue(api.read(address, 20, null)!!.content.contains("x".repeat(50)))
+        api.release(address)
+        waitFor("tmux is back to its own size") { core.width() == before.width }
     }
 
     @Test

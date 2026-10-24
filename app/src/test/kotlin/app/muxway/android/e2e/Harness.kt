@@ -107,6 +107,8 @@ class Core(private val logs: File) {
 
     fun command(): String = tmux("display-message", "-p", "-t", "work:0.0", "#{pane_current_command}")
 
+    fun width(): Int = tmux("display-message", "-p", "-t", "work:0.0", "#{pane_width}").trim().toIntOrNull() ?: -1
+
     fun notify(kind: String, text: String) = cli("notify", "--dir", agentDir.path, "--pane", paneId(), "--kind", kind, "--text", text)
 
     fun close() {

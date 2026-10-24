@@ -38,6 +38,17 @@ class Api(private val baseUrl: String, private val token: String, private val us
         post("panes/${encode(address)}/input", Json.key(name))
     }
 
+    /** Sizes the pane on the host, as a terminal would; answers the pane as listed afterwards. */
+    fun resize(address: String, cols: Int, rows: Int): Pane {
+        require(cols in 20..500 && rows in 5..300) { "size" }
+        return Json.resized(post("panes/${encode(address)}/resize", Json.size(cols, rows)).body)
+    }
+
+    /** Gives the pane and its window back to tmux's own sizing. */
+    fun release(address: String) {
+        post("panes/${encode(address)}/resize", Json.fitAuto())
+    }
+
     fun events(after: Long?, wait: Int, limit: Int = 50): Events {
         val q = StringBuilder("events?wait=$wait&limit=$limit")
         if (after != null) q.append("&after=$after")
