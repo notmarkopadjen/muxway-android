@@ -141,7 +141,19 @@ Round three (0.5.2):
   panes open the tab strip gives way to a count.
 - The selection bar sits under the pane picked last, clear at the left.
 
+Round four (0.5.3): the drags were being eaten. A lazy list on Android
+consumes vertical drags for its stretch effect even with nothing to
+scroll, so the paging drag never arrived; and the paging handler took
+every direction, which stopped the page swipe. The list now scrolls only
+when it has more rows than fit, without overscroll, and paging reads
+vertical drags alone. Tabs stay with several panes open; the selection
+bar follows the list. Several panes gained `▦`, cycling row, column, main
+and grid like tmux's next-layout, and draggable bars between tiles; the
+arrangement is local to the phone.
+
 ## Test run
+
+Round four: local run `test-runs/20261024-085305-22b4dfa`: **passed**, 62 tests.
 
 Round three: local run `test-runs/20261024-084345-aa1886f`: **passed**, 62 tests.
 

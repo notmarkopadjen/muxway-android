@@ -22,9 +22,9 @@ Every pane the token may read, from `GET /v1/panes`, grouped by host.
 - Hosts from `GET /v1/hosts` that are online with nothing exposed, and
   hosts that are offline, are listed after the panes.
 - **tap** opens one pane. **hold** selects a pane; with a selection, taps
-  add or remove panes. A bar appears right under the pane picked last,
-  **clear** at its left and **open N side by side** at its right, which
-  opens them together, up to four.
+  add or remove panes. A bar appears right under the list, **clear** at
+  its left and **open N side by side** at its right, which opens them
+  together, up to four.
 
 ## Refreshing
 

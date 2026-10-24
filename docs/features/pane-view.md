@@ -26,17 +26,20 @@ focused pane.
   for you (`!` `?` `z` `✓`, pulsing), dim when it works (`⟳`), plain when
   quiet. Selection never changes the colour: the open pane has a thick
   border and its name in bold. Tapping another tab switches to that pane.
-  The strip scrolls when the tabs do not fit and keeps the open one in
-  view. With several panes open side by side the strip gives way to a
-  count; their headers carry the states instead.
-- The **controls** sit at the right end of the same row: `⤢` fit on or
-  off, `⌨` the on-screen keyboard (only with the hardware keyboard
+  The strip scrolls when the tabs do not fit and keeps the focused one in
+  view, with several panes open as well.
+- The **controls** sit at the right end of the same row: `▦` (with
+  several panes) the next arrangement, `⤢` fit on or off, `⌨` the on-screen keyboard (only with the hardware keyboard
   setting), `⚙` settings.
 - A **swipe** left or right across the page moves to the next or previous
   pane in the strip.
-- One pane fills the screen. Several panes sit **side by side in
-  landscape** and **stacked in portrait**, each with an equal share. Each
-  header is painted like its tab, with the pane's name, command and mode,
+- One pane fills the screen. Several panes start **side by side in
+  landscape** and **stacked in portrait**, each with an equal share; `▦`
+  cycles the arrangement like tmux's next-layout: row, column, main pane
+  with the others beside it, grid (from three panes), back to automatic.
+  The bar between two panes drags to resize them; no pane goes under
+  fifteen percent. The arrangement is the phone's own and never reaches
+  the host. Each header is painted like its tab, with the pane's name, command and mode,
   the lens's word (`! permission`, `⟳ working`) and, with fit on, the
   size; the focused one has the thick border and bold name.
 - The line under the input shows the time of the last successful read, or
@@ -88,10 +91,12 @@ flowchart LR
   sent (the pane's scrollback), and new output keeps the bottom in view
   until you scroll up. A full-screen program on the alternate screen
   (Claude Code is one) has no scrollback to fetch, so when the rows fit
-  the tile a drag **pages the program instead**: every third of the
-  tile's height sends `PageUp` or `PageDown`, one key per answered
+  the tile a vertical drag **pages the program instead**: every third of
+  the tile's height sends `PageUp` or `PageDown`, one key per answered
   request. Claude Code scrolls its transcript on those keys; so do most
-  pagers and editors.
+  pagers and editors. The list underneath takes no drags then, and never
+  the system's stretch effect, so the drag reaches the pager and a
+  sideways swipe reaches the page.
 
 ## Reading
 
