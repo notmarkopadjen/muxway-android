@@ -49,6 +49,17 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Holds one long poll on the user's own terminal hub so a paired watch and the notification shade show which panes wait for them" />
         </service>
+        <!-- The watch's requests about one pane: the tail, a key, a text, a clip. -->
+        <service android:name=".watch.WatchRequests" android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/pane" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/clip" />
+            </intent-filter>
+        </service>
         <receiver android:name=".watch.BootReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

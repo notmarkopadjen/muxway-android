@@ -11,6 +11,8 @@ import app.muxway.android.protocol.Api
 import app.muxway.android.protocol.ApiException
 import app.muxway.android.protocol.Board
 import app.muxway.android.protocol.Lens
+import app.muxway.android.protocol.Pane
+import app.muxway.android.protocol.WatchGate
 import app.muxway.android.store.Settings
 import app.muxway.android.store.SettingsStore
 import app.muxway.android.store.Vault
@@ -33,6 +35,7 @@ class AttentionService : Service() {
     private lateinit var bridge: WatchBridge
     private var job: Job? = null
     private var board: Board = Board.EMPTY
+    @Volatile private var panes: List<Pane> = emptyList()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -57,7 +60,9 @@ class AttentionService : Service() {
         }
         ServiceCompat.startForeground(this, Notifier.SUMMARY_ID, notifier.summary(null, "connecting"), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         job?.cancel()
-        job = scope.launch { follow(Api(settings.hubUrl, token, "muxway-android/" + BuildConfig.VERSION_NAME), settings) }
+        val api = Api(settings.hubUrl, token, "muxway-android/" + BuildConfig.VERSION_NAME)
+        gate = WatchGate(api, { panes }, { store.load().watchAnswer })
+        job = scope.launch { follow(api, settings) }
         return START_STICKY
     }
 
@@ -66,7 +71,7 @@ class AttentionService : Service() {
         var cursor: Long? = null
         while (true) {
             try {
-                val panes = api.panes()
+                panes = api.panes()
                 board = Board.rank(panes, System.currentTimeMillis() / 1000, settings.notifyText) { Lens.status(it, lastKind[it.address], false) }
                 notifier.show(board)
                 bridge.push(board)
@@ -88,6 +93,7 @@ class AttentionService : Service() {
     }
 
     override fun onDestroy() {
+        gate = null
         job?.cancel()
         bridge.push(board.copy(live = false), force = true)
         notifier.clear()
@@ -97,6 +103,9 @@ class AttentionService : Service() {
 
     companion object {
         const val ACTION_STOP = "app.muxway.android.watch.STOP"
+
+        /** The gate the watch's requests go through, while the service runs. */
+        @Volatile var gate: WatchGate? = null
 
         /** Starts or stops the service to match the setting and whether a token is stored. */
         fun apply(context: Context) {

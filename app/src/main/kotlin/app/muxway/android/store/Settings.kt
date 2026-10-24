@@ -17,6 +17,7 @@ data class Settings(
     val reflow: Boolean = false,
     val watch: Boolean = false,
     val notifyText: Boolean = false,
+    val watchAnswer: Boolean = false,
 ) {
     /** The hub in use, and its URL; empty until one is added. */
     val hub: Hub? get() = hubs.firstOrNull { it.id == current }
@@ -51,6 +52,7 @@ class SettingsStore(context: Context) {
             reflow = prefs.getBoolean("reflow", d.reflow),
             watch = prefs.getBoolean("watch", d.watch),
             notifyText = prefs.getBoolean("notify_text", d.notifyText),
+            watchAnswer = prefs.getBoolean("watch_answer", d.watchAnswer),
         )
     }
 
@@ -69,6 +71,7 @@ class SettingsStore(context: Context) {
             .putBoolean("reflow", s.reflow)
             .putBoolean("watch", s.watch)
             .putBoolean("notify_text", s.notifyText)
+            .putBoolean("watch_answer", s.watchAnswer)
             .apply()
     }
 

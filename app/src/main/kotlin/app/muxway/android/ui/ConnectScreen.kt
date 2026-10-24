@@ -70,6 +70,7 @@ fun ConnectScreen(model: AppModel) {
     var reflow by rememberSaveable { mutableStateOf(saved.reflow) }
     var watch by rememberSaveable { mutableStateOf(saved.watch) }
     var notifyText by rememberSaveable { mutableStateOf(saved.notifyText) }
+    var watchAnswer by rememberSaveable { mutableStateOf(saved.watchAnswer) }
     val context = LocalContext.current
     val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
@@ -94,6 +95,7 @@ fun ConnectScreen(model: AppModel) {
                 reflow = reflow,
                 watch = watch,
                 notifyText = notifyText,
+                watchAnswer = watchAnswer,
             ),
         )
         if (model.hasToken) model.back()
@@ -165,6 +167,7 @@ fun ConnectScreen(model: AppModel) {
             }
         }
         Toggle("notification text: show what a pane asks on the phone and the watch (bystanders can read it)", notifyText) { notifyText = it }
+        Toggle("watch may answer: the watch can send Enter, Esc, y, n, ^C and a spoken line to a pane while this phone is locked", watchAnswer) { watchAnswer = it }
         Rule(Modifier.padding(vertical = 6.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Btn("save settings", ::saveSettings)
