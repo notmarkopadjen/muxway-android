@@ -1,0 +1,12 @@
+<resources>
+    <string name="watch_face_name">muxway</string>
+    <string name="theme_label">theme</string>
+    <string name="theme_green">green</string>
+    <string name="theme_amber">amber</string>
+    <string name="theme_paper">paper</string>
+    <string name="slot_row_1">pane 1</string>
+    <string name="slot_row_2">pane 2</string>
+    <string name="slot_row_3">pane 3</string>
+    <string name="slot_row_4">pane 4</string>
+    <string name="slot_summary">summary</string>
+</resources>

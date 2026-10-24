@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The face with the fixture board: time, two waiting rows, a working row, an overflow count. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="450dp"
+    android:height="450dp"
+    android:viewportWidth="450"
+    android:viewportHeight="450">
+    <path android:fillColor="#000000" android:pathData="M225,0 A225,225 0 1,1 225,450 A225,225 0 1,1 225,0 Z" />
+    <path android:fillColor="#39FF14" android:pathData="M110,70h50v56h-50z M172,70h50v56h-50z M232,84h12v12h-12z M232,112h12v12h-12z M258,70h50v56h-50z M320,70h50v56h-50z" />
+    <path android:fillColor="#1F8F14" android:pathData="M160,136h130v10h-130z" />
+    <path android:fillColor="#0F4A0C" android:pathData="M70,160h310v1h-310z M70,376h310v1h-310z" />
+    <path android:fillColor="#FFB000" android:pathData="M60,172h20v20h-20z M90,172h110v20h-110z M80,198h90v16h-90z M60,224h20v20h-20z M90,224h70v20h-70z M80,250h80v16h-80z" />
+    <path android:fillColor="#1F8F14" android:pathData="M60,276h20v20h-20z M90,276h90v20h-90z M80,302h70v16h-70z M60,336h40v16h-40z" />
+    <path android:fillColor="#FFB000" android:pathData="M150,392h150v18h-150z" />
+</vector>

@@ -23,3 +23,4 @@ rootProject.name = "muxway"
 include(":protocol")
 include(":app")
 include(":wear")
+include(":watchface")

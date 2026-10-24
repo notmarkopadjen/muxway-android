@@ -6,7 +6,7 @@
 #   MUXWAY_UI=0  skip the UI tests even with a device
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
-for tool in tmux go python3; do
+for tool in tmux go python3 java curl; do
     command -v "$tool" >/dev/null || { echo "the end-to-end tests need $tool" >&2; exit 1; }
 done
 core=${MUXWAY_CORE:-../muxway}
@@ -22,9 +22,11 @@ mkdir -p "$run/logs"
 { echo "core $(git -C "$core" rev-parse --short HEAD)"; tmux -V; "${JAVA_HOME:-/usr}/bin/java" -version 2>&1 | head -1; uname -sm; } > "$run/environment.txt"
 
 status=0
-MUXWAY_BIN="$run/muxway" MUXWAY_RUN_DIR="$run" ./gradlew --no-daemon -q :protocol:test :app:testDebugUnitTest :app:assembleDebug \
+MUXWAY_BIN="$run/muxway" MUXWAY_RUN_DIR="$run" ./gradlew --no-daemon -q :protocol:test :app:testDebugUnitTest :wear:testDebugUnitTest :app:assembleDebug :wear:assembleDebug :watchface:assembleDebug \
     > "$run/logs/gradle.log" 2>&1 || status=$?
-results=(protocol/build/test-results/test app/build/test-results/testDebugUnitTest)
+results=(protocol/build/test-results/test app/build/test-results/testDebugUnitTest wear/build/test-results/testDebugUnitTest)
+scripts/validate-face.sh "$run" > "$run/logs/face-check.log" 2>&1 || status=$?
+results+=("$run/face-check.xml")
 
 export PATH="$PATH:${ANDROID_HOME:-/opt/android-sdk}/platform-tools"
 device=$(adb devices 2>/dev/null | awk 'NR>1 && $2=="device"{print $1; exit}' || true)

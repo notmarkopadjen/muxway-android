@@ -1,0 +1,467 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    muxway: the time and the board. Four rows are complication slots bound to the
+    muxway app's row complications, the foot to its summary; any face with slots can
+    show the same. The face has no code: colour comes from the value each row carries
+    (0 dim, 1 ink, 2 attention). Virtual canvas 450 x 450, round.
+-->
+<WatchFace width="450" height="450" clipShape="CIRCLE">
+    <Metadata key="CLOCK_TYPE" value="DIGITAL"/>
+    <Metadata key="PREVIEW_TIME" value="14:07:00"/>
+
+    <!-- ink, dim, attention, faint, background -->
+    <UserConfigurations>
+        <ColorConfiguration id="theme" displayName="theme_label" defaultValue="0">
+            <ColorOption id="0" displayName="theme_green" colors="#39FF14 #1F8F14 #FFB000 #0F4A0C #050806"/>
+            <ColorOption id="1" displayName="theme_amber" colors="#FFB000 #A06C00 #FFD36B #4A3200 #0A0603"/>
+            <ColorOption id="2" displayName="theme_paper" colors="#1F2A1F #5A6A5A #9A5B00 #B9B39F #F1EAD8"/>
+        </ColorConfiguration>
+    </UserConfigurations>
+
+    <Scene backgroundColor="#FF000000">
+        <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+            <Variant mode="AMBIENT" target="alpha" value="0"/>
+            <Rectangle x="0" y="0" width="450" height="450">
+                <Fill color="[CONFIGURATION.theme.4]"/>
+            </Rectangle>
+        </PartDraw>
+
+        <DigitalClock x="0" y="52" width="450" height="76">
+            <TimeText format="hh:mm" hourFormat="SYNC_TO_DEVICE" align="CENTER" x="0" y="0" width="450" height="76" alpha="255">
+                <Variant mode="AMBIENT" target="alpha" value="130"/>
+                <Font family="press_start_2p" size="54" color="[CONFIGURATION.theme.0]"/>
+            </TimeText>
+        </DigitalClock>
+
+        <PartText x="0" y="130" width="450" height="26" alpha="255">
+            <Variant mode="AMBIENT" target="alpha" value="90"/>
+            <Text align="CENTER" maxLines="1">
+                <Font family="dejavu_sans_mono" size="19" color="[CONFIGURATION.theme.1]">
+                    <Template>%s %d %s<Parameter expression="[DAY_OF_WEEK_S]"/><Parameter expression="[DAY]"/><Parameter expression="[MONTH_S]"/></Template>
+                </Font>
+            </Text>
+        </PartText>
+
+        <PartDraw x="0" y="0" width="450" height="450" alpha="255">
+            <Variant mode="AMBIENT" target="alpha" value="90"/>
+            <Line startX="70" startY="160" endX="380" endY="160">
+                <Stroke color="[CONFIGURATION.theme.3]" thickness="1"/>
+            </Line>
+            <Line startX="70" startY="380" endX="380" endY="380">
+                <Stroke color="[CONFIGURATION.theme.3]" thickness="1"/>
+            </Line>
+        </PartDraw>
+
+        <ComplicationSlot x="55" y="168" width="340" height="52" slotId="1" displayName="slot_row_1" supportedTypes="RANGED_VALUE SHORT_TEXT LONG_TEXT EMPTY" isCustomizable="TRUE" alpha="255">
+            <Variant mode="AMBIENT" target="alpha" value="110"/>
+            <DefaultProviderPolicy primaryProvider="app.muxway.android/app.muxway.android.wear.Row1Complication" primaryProviderType="RANGED_VALUE" defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"/>
+            <BoundingBox x="0" y="0" width="340" height="52"/>
+            <!-- muxway's own rows: the value says how to colour the line. -->
+            <Complication type="RANGED_VALUE">
+                <Condition>
+                    <Expressions>
+                        <Expression name="waiting"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 2]]></Expression>
+                        <Expression name="quiet"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 1]]></Expression>
+                    </Expressions>
+                    <Compare expression="waiting">
+                        <PartText x="0" y="2" width="340" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.2]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="24" y="27" width="316" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.2]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Compare expression="quiet">
+                        <PartText x="0" y="2" width="340" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.0]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="24" y="27" width="316" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.1]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Default>
+                        <PartText x="0" y="2" width="340" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.1]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="24" y="27" width="316" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.1]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Default>
+                </Condition>
+            </Complication>
+            <!-- Anything else a user puts in the slot. -->
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="2" width="340" height="24">
+                    <Text align="START" ellipsis="TRUE" maxLines="1">
+                        <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.0]">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+                <PartText x="24" y="27" width="316" height="24">
+                    <Text align="START" ellipsis="TRUE" maxLines="1">
+                        <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.1]">
+                            <Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="LONG_TEXT">
+                <PartText x="0" y="2" width="340" height="48">
+                    <Text align="START" ellipsis="TRUE" maxLines="2">
+                        <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.0]">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+        </ComplicationSlot>
+        <ComplicationSlot x="55" y="220" width="340" height="52" slotId="2" displayName="slot_row_2" supportedTypes="RANGED_VALUE SHORT_TEXT LONG_TEXT EMPTY" isCustomizable="TRUE" alpha="255">
+            <Variant mode="AMBIENT" target="alpha" value="110"/>
+            <DefaultProviderPolicy primaryProvider="app.muxway.android/app.muxway.android.wear.Row2Complication" primaryProviderType="RANGED_VALUE" defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"/>
+            <BoundingBox x="0" y="0" width="340" height="52"/>
+            <!-- muxway's own rows: the value says how to colour the line. -->
+            <Complication type="RANGED_VALUE">
+                <Condition>
+                    <Expressions>
+                        <Expression name="waiting"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 2]]></Expression>
+                        <Expression name="quiet"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 1]]></Expression>
+                    </Expressions>
+                    <Compare expression="waiting">
+                        <PartText x="0" y="2" width="340" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.2]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="24" y="27" width="316" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.2]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Compare expression="quiet">
+                        <PartText x="0" y="2" width="340" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.0]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="24" y="27" width="316" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.1]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Default>
+                        <PartText x="0" y="2" width="340" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.1]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="24" y="27" width="316" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.1]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Default>
+                </Condition>
+            </Complication>
+            <!-- Anything else a user puts in the slot. -->
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="2" width="340" height="24">
+                    <Text align="START" ellipsis="TRUE" maxLines="1">
+                        <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.0]">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+                <PartText x="24" y="27" width="316" height="24">
+                    <Text align="START" ellipsis="TRUE" maxLines="1">
+                        <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.1]">
+                            <Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="LONG_TEXT">
+                <PartText x="0" y="2" width="340" height="48">
+                    <Text align="START" ellipsis="TRUE" maxLines="2">
+                        <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.0]">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+        </ComplicationSlot>
+        <ComplicationSlot x="55" y="272" width="340" height="52" slotId="3" displayName="slot_row_3" supportedTypes="RANGED_VALUE SHORT_TEXT LONG_TEXT EMPTY" isCustomizable="TRUE" alpha="255">
+            <Variant mode="AMBIENT" target="alpha" value="110"/>
+            <DefaultProviderPolicy primaryProvider="app.muxway.android/app.muxway.android.wear.Row3Complication" primaryProviderType="RANGED_VALUE" defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"/>
+            <BoundingBox x="0" y="0" width="340" height="52"/>
+            <!-- muxway's own rows: the value says how to colour the line. -->
+            <Complication type="RANGED_VALUE">
+                <Condition>
+                    <Expressions>
+                        <Expression name="waiting"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 2]]></Expression>
+                        <Expression name="quiet"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 1]]></Expression>
+                    </Expressions>
+                    <Compare expression="waiting">
+                        <PartText x="0" y="2" width="340" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.2]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="24" y="27" width="316" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.2]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Compare expression="quiet">
+                        <PartText x="0" y="2" width="340" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.0]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="24" y="27" width="316" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.1]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Default>
+                        <PartText x="0" y="2" width="340" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.1]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="24" y="27" width="316" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.1]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Default>
+                </Condition>
+            </Complication>
+            <!-- Anything else a user puts in the slot. -->
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="2" width="340" height="24">
+                    <Text align="START" ellipsis="TRUE" maxLines="1">
+                        <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.0]">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+                <PartText x="24" y="27" width="316" height="24">
+                    <Text align="START" ellipsis="TRUE" maxLines="1">
+                        <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.1]">
+                            <Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="LONG_TEXT">
+                <PartText x="0" y="2" width="340" height="48">
+                    <Text align="START" ellipsis="TRUE" maxLines="2">
+                        <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.0]">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+        </ComplicationSlot>
+        <ComplicationSlot x="55" y="324" width="340" height="52" slotId="4" displayName="slot_row_4" supportedTypes="RANGED_VALUE SHORT_TEXT LONG_TEXT EMPTY" isCustomizable="TRUE" alpha="255">
+            <Variant mode="AMBIENT" target="alpha" value="110"/>
+            <DefaultProviderPolicy primaryProvider="app.muxway.android/app.muxway.android.wear.Row4Complication" primaryProviderType="RANGED_VALUE" defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"/>
+            <BoundingBox x="0" y="0" width="340" height="52"/>
+            <!-- muxway's own rows: the value says how to colour the line. -->
+            <Complication type="RANGED_VALUE">
+                <Condition>
+                    <Expressions>
+                        <Expression name="waiting"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 2]]></Expression>
+                        <Expression name="quiet"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 1]]></Expression>
+                    </Expressions>
+                    <Compare expression="waiting">
+                        <PartText x="0" y="2" width="340" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.2]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="24" y="27" width="316" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.2]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Compare expression="quiet">
+                        <PartText x="0" y="2" width="340" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.0]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="24" y="27" width="316" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.1]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Default>
+                        <PartText x="0" y="2" width="340" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.1]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="24" y="27" width="316" height="24">
+                            <Text align="START" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.1]">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Default>
+                </Condition>
+            </Complication>
+            <!-- Anything else a user puts in the slot. -->
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="2" width="340" height="24">
+                    <Text align="START" ellipsis="TRUE" maxLines="1">
+                        <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.0]">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+                <PartText x="24" y="27" width="316" height="24">
+                    <Text align="START" ellipsis="TRUE" maxLines="1">
+                        <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.1]">
+                            <Template>%s<Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="LONG_TEXT">
+                <PartText x="0" y="2" width="340" height="48">
+                    <Text align="START" ellipsis="TRUE" maxLines="2">
+                        <Font family="dejavu_sans_mono" size="21" color="[CONFIGURATION.theme.0]">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+        </ComplicationSlot>
+
+        <ComplicationSlot x="75" y="388" width="300" height="36" slotId="5" displayName="slot_summary" supportedTypes="RANGED_VALUE SHORT_TEXT LONG_TEXT EMPTY" isCustomizable="TRUE" alpha="255">
+            <Variant mode="AMBIENT" target="alpha" value="110"/>
+            <DefaultProviderPolicy primaryProvider="app.muxway.android/app.muxway.android.wear.SummaryComplication" primaryProviderType="RANGED_VALUE" defaultSystemProvider="WATCH_BATTERY" defaultSystemProviderType="SHORT_TEXT"/>
+            <BoundingBox x="0" y="0" width="300" height="36"/>
+            <Complication type="RANGED_VALUE">
+                <Condition>
+                    <Expressions>
+                        <Expression name="waiting"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 2]]></Expression>
+                        <Expression name="quiet"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 1]]></Expression>
+                    </Expressions>
+                    <Compare expression="waiting">
+                        <PartText x="0" y="4" width="300" height="28">
+                            <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="19" color="[CONFIGURATION.theme.2]">
+                                    <Template>%s · %s<Parameter expression="[COMPLICATION.TEXT]"/><Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Compare expression="quiet">
+                        <PartText x="0" y="4" width="300" height="28">
+                            <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="19" color="[CONFIGURATION.theme.1]">
+                                    <Template>%s · %s<Parameter expression="[COMPLICATION.TEXT]"/><Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Default>
+                        <PartText x="0" y="4" width="300" height="28">
+                            <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                                <Font family="dejavu_sans_mono" size="19" color="[CONFIGURATION.theme.1]">
+                                    <Template>%s · %s<Parameter expression="[COMPLICATION.TEXT]"/><Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Default>
+                </Condition>
+            </Complication>
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="4" width="300" height="28">
+                    <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                        <Font family="dejavu_sans_mono" size="19" color="[CONFIGURATION.theme.1]">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="LONG_TEXT">
+                <PartText x="0" y="4" width="300" height="28">
+                    <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                        <Font family="dejavu_sans_mono" size="19" color="[CONFIGURATION.theme.1]">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]"/></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+        </ComplicationSlot>
+    </Scene>
+</WatchFace>
