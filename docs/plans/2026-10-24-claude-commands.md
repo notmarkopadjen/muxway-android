@@ -115,11 +115,15 @@ this plan.
 
 ## Review (after implementation)
 
-- [ ] Diff matches the plan, deviations explained here
-- [ ] Security rules (AGENTS.md section 2) hold
-- [ ] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
-- [ ] Docs and diagrams updated
+- [x] Diff matches the plan. One deviation: a line is remembered only
+  after the app accepted it for sending (not while the pane is busy).
+- [x] Security rules (AGENTS.md section 2) hold: no new endpoint, no new
+  input shape, the write grant and the host's audit apply as before.
+- [x] Privacy check passed: `scripts/prepush-check.sh` clean and diff read.
+- [x] Docs and diagrams updated.
 
 ## Test run
 
-To be filled in after the run.
+[Run 20261024-154358-8f8bcfd](https://github.com/notmarkopadjen/muxway-android/issues/4): passed, 85 tests, commit
+`8f8bcfd` against core `ef0fe84`; JVM suites only, no device attached,
+so the pane-view UI tests wait for the next device run.
