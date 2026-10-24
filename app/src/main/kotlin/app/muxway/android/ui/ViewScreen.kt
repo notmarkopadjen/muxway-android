@@ -53,6 +53,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -79,7 +80,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -102,6 +105,7 @@ import app.muxway.android.protocol.Ansi
 import app.muxway.android.protocol.Commands
 import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.Lens
+import app.muxway.android.protocol.Links
 import app.muxway.android.protocol.Pane
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -514,9 +518,11 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
             val paging = !scrolls && pane?.writable == true
             val wheel = pane?.mouse == true
             val page = if (wheel) rowPx else heightPx / 3f
-            // A tap is a click at the cell under the finger; the rows sit at the bottom.
+            // A tap is a click at the cell under the finger; the rows sit at the bottom. A tap
+            // on a link is the browser's: the text opens it and the host hears nothing.
             val clickable = pane?.writable == true
             val top = (heightPx - rows.size * rowPx).coerceAtLeast(0f)
+            val shown by rememberUpdatedState(rows)
             Box(Modifier.fillMaxSize().pointerInput(address) { pinch { z -> zoom = (zoom * z).coerceIn(0.5f, 4f) } }
                 .pointerInput(address, clickable, top, colPx, rowPx) {
                     if (!clickable) return@pointerInput
@@ -525,6 +531,8 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
                         val y = ((at.y - top) / rowPx).toInt() + 1
                         val w = pane?.width ?: 0
                         val h = pane?.height ?: 0
+                        val row = shown.getOrNull(y - 1)?.joinToString("") { it.text }
+                        if (row != null && Links.at(row, x - 1) != null) return@detectTapGestures
                         if (at.y >= top && x in 1..w && y in 1..h) model.click(address, x, y)
                     }
                 }
@@ -580,11 +588,15 @@ private suspend fun PointerInputScope.pinch(onZoom: (Float) -> Unit) {
     }
 }
 
+private val linkStyles = TextLinkStyles(SpanStyle(textDecoration = TextDecoration.Underline))
+
+// Colours as the pane gave them; a web address in the row opens through the system.
 private fun styled(row: List<Ansi.Span>, p: Palette): AnnotatedString = buildAnnotatedString {
     for (s in row) {
         val st = spanStyle(s.style, p)
         if (st == null) append(s.text) else withStyle(st) { append(s.text) }
     }
+    for (l in Links.find(toString())) addLink(LinkAnnotation.Url(l.href, linkStyles), l.start, l.end)
     if (length == 0) append(" ")
 }
 

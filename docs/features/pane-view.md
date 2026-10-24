@@ -104,6 +104,12 @@ flowchart LR
   no mouse mode "No mouse in this pane" (from the listing's `mouse` flag
   when the hub sends one, so nothing is sent at all), and nothing is
   typed either way.
+- **Links.** A web address in a row, `http` or `https` and nothing else,
+  is underlined and opens with a tap through the system's handler, in
+  the browser; the punctuation after it stays text, a bracket it opened
+  stays in, and an address wrapped onto a second row opens up to the
+  row's end. A tap on a link is not a tap on the pane: nothing goes to
+  the host, mouse mode or not.
 - **Scrolling.** The body is a list of rows, newest at the bottom; a
   one-finger drag or a wheel scrolls back through the `lines` the hub
   sent (the pane's scrollback), and new output keeps the bottom in view
@@ -192,6 +198,13 @@ anything to it.
   2 MiB and parsing is linear.
 - With **block screenshots** on, the system refuses screenshots and
   recents thumbnails of this screen.
+- A link's target is pane content, so it is untrusted: only `http://`
+  and `https://` runs become links, `javascript:`, `intent:`, `file:`
+  and every other scheme stay text, and the address goes to the system's
+  view intent as the string that was printed, never to the app itself. A
+  tap on a link sends nothing to the host, so a program cannot use one to
+  provoke a click at a cell. A pane can print a misleading address, as
+  any terminal can; the browser shows where it went.
 - A tap sends only a button name and a cell inside the pane; the hub
   checks the grant, the mark and the ranges, and the agent sends nothing
   to a program that has not enabled the mouse.
