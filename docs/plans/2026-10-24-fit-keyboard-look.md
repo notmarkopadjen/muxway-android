@@ -156,6 +156,15 @@ three: plus main-left and main-top; four: plus grid), a header dragged
 onto another tile swaps the panes, and a tap is a click (see
 `2026-10-24-mouse-input.md`).
 
+Round six (0.6.1): on the phone the host pane had been resized by
+another client's window fit (20 rows under a 44-row tile) and the phone,
+having sent 96×44 once, never sent it again. Fit re-sends when the
+listing's size drifts from the last request and that request is older
+than twenty seconds, at once on a tap of `⤢`, and holds still while the
+on-screen keyboard is up (it had been resizing the host pane to 23 rows
+on every keyboard). The listing's `mouse` flag, from the core's mouse
+addition, refuses a tap locally.
+
 ## Test run
 
 Round four: local run `test-runs/20261024-085305-22b4dfa`: **passed**, 62 tests.

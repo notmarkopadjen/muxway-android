@@ -61,14 +61,19 @@ flowchart LR
     A --> T[Text in the bundled monospace font, scaled to fit]
 ```
 
-- **Fit.** With **fit** on (the first button in the key row, on by
-  default for a single pane you may write to), the pane on the host is
-  sized to the columns and rows that fit the tile at the **text** setting,
-  the way a terminal tells tmux its size: `POST .../resize`, debounced,
-  once per distinct size, and `fit: auto` when you leave the view or turn
-  it off, which gives the window back to tmux. The header shows the size.
-  The person at the host sees the change, as with any terminal that
-  attaches. Side-by-side views start with fit off.
+- **Fit.** With **fit** on (`⤢` in the top row, on by default for a
+  single pane you may write to), the pane on the host is sized to the
+  columns and rows that fit the tile at the **text** setting, the way a
+  terminal tells tmux its size: `POST .../resize`, debounced, once per
+  distinct size, and `fit: auto` when you leave the view or turn it off,
+  which gives the window back to tmux. The header shows the size. The
+  person at the host sees the change, as with any terminal that attaches.
+  Side-by-side views start with fit off. While the on-screen keyboard is
+  up the tile is half its height, so the host keeps its size until the
+  keyboard goes. If another terminal sizes the window meanwhile, the
+  phone sends its size again after twenty seconds at the earliest, so
+  two clients cannot fight fast; tapping `⤢` while it is on sends the
+  size once more at once, and holding it turns fit off.
 - **Width.** With fit off, rows are shown at the pane's own width, as tmux
   shows them, and the font is sized so that width fits the tile, never
   larger than the **text** setting. A 96-column pane on a phone comes out
@@ -93,7 +98,9 @@ flowchart LR
   Code's menus, for one). The hub needs the mouse addition to the
   protocol (`docs/plans/2026-10-24-mouse-input.md`); an older hub
   answers "This hub has no mouse support yet", a pane whose program has
-  no mouse mode "No mouse in this pane", and nothing is typed either way.
+  no mouse mode "No mouse in this pane" (from the listing's `mouse` flag
+  when the hub sends one, so nothing is sent at all), and nothing is
+  typed either way.
 - **Scrolling.** The body is a list of rows, newest at the bottom; a
   one-finger drag or a wheel scrolls back through the `lines` the hub
   sent (the pane's scrollback), and new output keeps the bottom in view
