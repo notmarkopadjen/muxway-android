@@ -1,0 +1,6 @@
+<resources>
+    <!-- Lets the watch tell whether a phone with the app is reachable. -->
+    <string-array name="android_wear_capabilities">
+        <item>muxway_phone</item>
+    </string-array>
+</resources>

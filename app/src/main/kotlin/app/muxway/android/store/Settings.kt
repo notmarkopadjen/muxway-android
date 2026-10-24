@@ -14,6 +14,8 @@ data class Settings(
     val hardwareKeyboard: Boolean = false,
     val effects: Boolean = true,
     val reflow: Boolean = false,
+    val watch: Boolean = false,
+    val notifyText: Boolean = false,
 )
 
 /** Everything but the token, in plain app-private preferences. */
@@ -32,6 +34,8 @@ class SettingsStore(context: Context) {
             hardwareKeyboard = prefs.getBoolean("hardware_keyboard", d.hardwareKeyboard),
             effects = prefs.getBoolean("effects", d.effects),
             reflow = prefs.getBoolean("reflow", d.reflow),
+            watch = prefs.getBoolean("watch", d.watch),
+            notifyText = prefs.getBoolean("notify_text", d.notifyText),
         )
     }
 
@@ -46,6 +50,8 @@ class SettingsStore(context: Context) {
             .putBoolean("hardware_keyboard", s.hardwareKeyboard)
             .putBoolean("effects", s.effects)
             .putBoolean("reflow", s.reflow)
+            .putBoolean("watch", s.watch)
+            .putBoolean("notify_text", s.notifyText)
             .apply()
     }
 }

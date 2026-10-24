@@ -1,6 +1,7 @@
 package app.muxway.android
 
 import android.app.Application
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -9,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import app.muxway.android.protocol.Address
 import app.muxway.android.protocol.Api
 import app.muxway.android.protocol.ApiException
 import app.muxway.android.protocol.Host
@@ -20,6 +22,7 @@ import app.muxway.android.protocol.Setup
 import app.muxway.android.store.Settings
 import app.muxway.android.store.SettingsStore
 import app.muxway.android.store.Vault
+import app.muxway.android.watch.AttentionService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -85,6 +88,13 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     /** Why the Connect screen is showing, when the app put the user there. */
     var notice by mutableStateOf<String?>(null)
 
+    /** A pane a link asked for, opened once the listing confirms it exists. */
+    private var pendingOpen: String? = null
+
+    init {
+        AttentionService.apply(app)
+    }
+
     private fun ready() = settings.hubUrl.isNotEmpty() && hasToken
 
     private fun api(): Api {
@@ -119,6 +129,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         }
         settings = s.copy(hubUrl = url)
         store.save(settings)
+        AttentionService.apply(getApplication())
         notice = null
         api = null
         views.clear()
@@ -142,6 +153,25 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         api = null
         views.clear()
         screen = Screen.Connect
+        AttentionService.apply(getApplication())
+    }
+
+    /**
+     * `muxway://open?pane=<address>`, from a notification or the watch. Only a well-formed
+     * address of a listed pane opens anything; the link can set nothing else.
+     */
+    fun openLink(uri: Uri?) {
+        if (uri == null || uri.scheme != "muxway" || uri.host != "open" || !ready()) return
+        val address = uri.getQueryParameter("pane") ?: return
+        if (!Address.valid(address)) return
+        pendingOpen = address
+        if (panes.any { it.address == address }) openPending() else refreshList()
+    }
+
+    private fun openPending() {
+        val address = pendingOpen ?: return
+        pendingOpen = null
+        if (panes.any { it.address == address }) open(Screen.View(listOf(address)))
     }
 
     fun refreshList() {
@@ -153,6 +183,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 hosts = h
                 panes = p
                 listError = null
+                openPending()
             } catch (e: ApiException) {
                 listError = e.message
                 if (e.code == "unauthorized") tokenRefused()
@@ -331,6 +362,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         panes = emptyList()
         notice = "The hub refused the stored token, so it was forgotten. Paste or scan a new one."
         if (screen !is Screen.Connect) screen = Screen.Connect
+        AttentionService.apply(getApplication())
     }
 
     private companion object {

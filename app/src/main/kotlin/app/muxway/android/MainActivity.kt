@@ -1,5 +1,6 @@
 package app.muxway.android
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -23,5 +24,12 @@ class MainActivity : ComponentActivity() {
             }
             App(model)
         }
+        if (savedInstanceState == null) model.openLink(intent?.data)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        model.openLink(intent.data)
     }
 }

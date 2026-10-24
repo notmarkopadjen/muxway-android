@@ -1,5 +1,10 @@
 package app.muxway.android.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,8 +23,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import app.muxway.android.AppModel
 import app.muxway.android.Screen
 import app.muxway.android.store.Theme
@@ -46,6 +53,10 @@ fun ConnectScreen(model: AppModel) {
     var hardware by rememberSaveable { mutableStateOf(saved.hardwareKeyboard) }
     var effects by rememberSaveable { mutableStateOf(saved.effects) }
     var reflow by rememberSaveable { mutableStateOf(saved.reflow) }
+    var watch by rememberSaveable { mutableStateOf(saved.watch) }
+    var notifyText by rememberSaveable { mutableStateOf(saved.notifyText) }
+    val context = LocalContext.current
+    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     var problem by rememberSaveable { mutableStateOf<String?>(null) }
 
     fun save() {
@@ -59,6 +70,8 @@ fun ConnectScreen(model: AppModel) {
             hardwareKeyboard = hardware,
             effects = effects,
             reflow = reflow,
+            watch = watch,
+            notifyText = notifyText,
         )
         problem = model.save(s, token)
         if (problem == null) token = ""
@@ -99,6 +112,14 @@ fun ConnectScreen(model: AppModel) {
         Toggle("assume a hardware keyboard: the on-screen one stays down until asked", hardware) { hardware = it }
         Toggle("effects: glow, scanlines, motion", effects) { effects = it }
         Toggle("reflow long rows to the screen when fit is off (else scale the pane's width)", reflow) { reflow = it }
+        Rule(Modifier.padding(vertical = 6.dp))
+        Toggle("watch and notifications: follow the panes in the background, tell the watch, notify when one waits", watch) {
+            watch = it
+            if (it && Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+        Toggle("notification text: show what a pane asks on the phone and the watch (bystanders can read it)", notifyText) { notifyText = it }
         Rule(Modifier.padding(vertical = 6.dp))
         problem?.let { Text("! $it", color = p.alert, modifier = Modifier.padding(vertical = 4.dp)) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
