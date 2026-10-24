@@ -126,7 +126,24 @@ Round two, after the device test (0.5.1):
   "wrap" became the reflow setting.
 - `Esc` and `Enter` are pinned at the ends of the key row.
 
+Round three (0.5.2):
+
+- The lens no longer reads the listing's `activity`: it is tmux's window
+  activity, the same for every pane of the window, so all four Claude
+  panes read "working" together. Working now comes from the hub's event
+  feed (`working` is an event kind) and from the open pane's own screen
+  changing; the model keeps the last event kind per pane.
+- Claude Code runs on the alternate screen, so the hub has no scrollback
+  to send and a local drag had nothing to show. When the rows fit the
+  tile, a drag pages the program with `PageUp`/`PageDown` (verified on a
+  real Claude pane through tmux); the key row's page keys do the same.
+- `‹` back at the top left replaces the `≡` on the right; with several
+  panes open the tab strip gives way to a count.
+- The selection bar sits under the pane picked last, clear at the left.
+
 ## Test run
+
+Round three: local run `test-runs/20261024-084345-aa1886f`: **passed**, 62 tests.
 
 Round two: local run `test-runs/20261024-082247-55615a6`: **passed**, 62 tests.
 

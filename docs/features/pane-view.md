@@ -4,7 +4,7 @@ One or more panes on one screen, tabs above to switch, one input bar for the
 focused pane.
 
 ```
-[ ⟳ build ][ ! review ][ logs ]            ≡ ⤢ ⌨ ⚙
+[‹] [ ⟳ build ][ ! review ][ logs ]           ⤢ ⌨ ⚙
 ┌──────────────────────────────────────────────────┐
 │ build · claude · write              ⟳ working 96×28│
 │ $ make test                                       │
@@ -18,19 +18,20 @@ focused pane.
 
 ## Layout
 
+- `‹` at the top left goes back to the pane list.
 - The **tab strip** lists every pane the token may read, in listing order,
   by name: the title the program set (Claude Code's is the session's name)
   or `session/window.pane`. Each tab is **painted with its state** from
   the [Claude lens](lenses.md): the attention colour when the pane waits
   for you (`!` `?` `z` `✓`, pulsing), dim when it works (`⟳`), plain when
-  quiet. Selection never changes the colour: open panes have a thick
-  border, the focused one the thickest and its name in bold. Tapping a
-  closed pane swaps it into the focused tile; tapping an open one focuses
-  it. The strip scrolls when the tabs do not fit and keeps the focused
-  one in view.
-- The **controls** sit at the right end of the same row: `≡` the pane
-  list, `⤢` fit on or off, `⌨` the on-screen keyboard (only with the
-  hardware keyboard setting), `⚙` settings.
+  quiet. Selection never changes the colour: the open pane has a thick
+  border and its name in bold. Tapping another tab switches to that pane.
+  The strip scrolls when the tabs do not fit and keeps the open one in
+  view. With several panes open side by side the strip gives way to a
+  count; their headers carry the states instead.
+- The **controls** sit at the right end of the same row: `⤢` fit on or
+  off, `⌨` the on-screen keyboard (only with the hardware keyboard
+  setting), `⚙` settings.
 - A **swipe** left or right across the page moves to the next or previous
   pane in the strip.
 - One pane fills the screen. Several panes sit **side by side in
@@ -85,8 +86,12 @@ flowchart LR
 - **Scrolling.** The body is a list of rows, newest at the bottom; a
   one-finger drag or a wheel scrolls back through the `lines` the hub
   sent (the pane's scrollback), and new output keeps the bottom in view
-  until you scroll up. Programs that scroll themselves take the `PgUp`
-  and `PgDn` keys from the key row, or page keys from a hardware keyboard.
+  until you scroll up. A full-screen program on the alternate screen
+  (Claude Code is one) has no scrollback to fetch, so when the rows fit
+  the tile a drag **pages the program instead**: every third of the
+  tile's height sends `PageUp` or `PageDown`, one key per answered
+  request. Claude Code scrolls its transcript on those keys; so do most
+  pagers and editors.
 
 ## Reading
 
