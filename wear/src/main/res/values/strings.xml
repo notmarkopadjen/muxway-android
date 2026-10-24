@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">muxway</string>
+    <string name="row_1">muxway · pane 1</string>
+    <string name="row_2">muxway · pane 2</string>
+    <string name="row_3">muxway · pane 3</string>
+    <string name="row_4">muxway · pane 4</string>
+    <string name="summary">muxway · waiting</string>
+    <string name="tile">muxway panes</string>
+</resources>
