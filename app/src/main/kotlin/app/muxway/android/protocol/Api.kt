@@ -38,6 +38,12 @@ class Api(private val baseUrl: String, private val token: String, private val us
         post("panes/${encode(address)}/input", Json.key(name))
     }
 
+    /** A mouse button at a cell (1-based) of the pane; a hub without mouse input answers bad_json. */
+    fun mouse(address: String, button: String, x: Int, y: Int) {
+        require(button in Input.BUTTONS && x in 1..500 && y in 1..300) { "mouse" }
+        post("panes/${encode(address)}/input", Json.mouse(button, x, y))
+    }
+
     /** Sizes the pane on the host, as a terminal would; answers the pane as listed afterwards. */
     fun resize(address: String, cols: Int, rows: Int): Pane {
         require(cols in 20..500 && rows in 5..300) { "size" }

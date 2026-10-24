@@ -35,6 +35,9 @@ object Json {
 
     fun key(name: String): String = JSONObject().put("key", name).toString()
 
+    fun mouse(button: String, x: Int, y: Int): String =
+        JSONObject().put("mouse", JSONObject().put("button", button).put("x", x).put("y", y)).toString()
+
     fun size(cols: Int, rows: Int): String = JSONObject().put("cols", cols).put("rows", rows).toString()
 
     fun fitAuto(): String = JSONObject().put("fit", "auto").toString()

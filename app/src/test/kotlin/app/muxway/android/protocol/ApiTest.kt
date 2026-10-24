@@ -54,6 +54,19 @@ class ApiTest {
     }
 
     @Test
+    fun mouseSendsButtonAndCellAndRefusesNonsenseLocally() {
+        answer = { Response(204, ByteArray(0), emptyMap()) }
+        api().mouse("h/w/0.0", "left", 39, 9)
+        val sent = org.json.JSONObject(String(seen.single().body)).getJSONObject("mouse")
+        assertEquals("left", sent.getString("button"))
+        assertEquals(39, sent.getInt("x"))
+        assertEquals(9, sent.getInt("y"))
+        assertThrows(IllegalArgumentException::class.java) { api().mouse("h/w/0.0", "laser", 1, 1) }
+        assertThrows(IllegalArgumentException::class.java) { api().mouse("h/w/0.0", "left", 0, 1) }
+        assertThrows(IllegalArgumentException::class.java) { api().mouse("h/w/0.0", "left", 1, 301) }
+    }
+
+    @Test
     fun errorsBecomeCodesWithoutTheToken() {
         answer = { json(401, """{"error":"unauthorized"}""") }
         val e = assertThrows(ApiException::class.java) { api().panes() }

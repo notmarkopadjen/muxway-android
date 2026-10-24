@@ -55,6 +55,14 @@ class E2ETest {
 
     private fun waitPane(contains: String) = waitFor("pane shows $contains") { core.pane().contains(contains) }
 
+    /** Null when this hub has mouse input, else the reason to skip: an older hub answers bad_json. */
+    private fun mouseUnsupported(api: Api, address: String): Boolean = try {
+        api.mouse(address, "left", 1, 1)
+        false
+    } catch (e: ApiException) {
+        e.code == "bad_json"
+    }
+
     // --- security ---
 
     @Test
@@ -107,6 +115,20 @@ class E2ETest {
         val before = api.panes().single().width
         assertEquals("read_only", assertThrows(ApiException::class.java) { api.resize("$HOST/work/0.0", 40, 12) }.code)
         assertEquals(before, api.panes().single().width)
+    }
+
+    @Test
+    fun s04c_mouseIsRefusedWhereTheProgramHasNoMouseAndOnReadOnlyPanes() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        assumeTrue("hub without mouse input", !mouseUnsupported(api, address))
+        val before = core.pane()
+        assertEquals("bad_input", assertThrows(ApiException::class.java) { api.mouse(address, "left", 2, 2) }.code)
+        Thread.sleep(300)
+        assertEquals(before, core.pane())
+        assertFalse(core.pane().contains("[<"))
+        val ro = Api(relay.url, core.token(write = null), "muxway-android-e2e")
+        assertEquals("read_only", assertThrows(ApiException::class.java) { ro.mouse(address, "left", 2, 2) }.code)
     }
 
     @Test
@@ -270,6 +292,21 @@ class E2ETest {
         assertTrue(api.read(address, 20, null)!!.content.contains("x".repeat(50)))
         api.release(address)
         waitFor("tmux is back to its own size") { core.width() == before.width }
+    }
+
+    @Test
+    fun f16_aClickReachesAProgramThatAskedForTheMouse() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        assumeTrue("hub without mouse input", !mouseUnsupported(api, address))
+        api.type(address, "printf '\\033[?1000h\\033[?1006h'; cat -v")
+        api.key(address, "Enter")
+        waitFor("cat running") { core.command() == "cat" }
+        api.mouse(address, "left", 5, 3)
+        waitPane("^[[<0;5;3M")
+        waitPane("^[[<0;5;3m")
+        api.key(address, "C-c")
+        waitFor("shell back") { core.command() == "bash" }
     }
 
     @Test

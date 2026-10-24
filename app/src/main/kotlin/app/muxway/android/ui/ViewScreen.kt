@@ -3,14 +3,19 @@ package app.muxway.android.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.draganddrop.dragAndDropSource
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalOverscrollConfiguration
+import android.content.ClipData
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
@@ -48,6 +53,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.DragAndDropTransferData
+import androidx.compose.ui.draganddrop.mimeTypes
+import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -110,8 +120,9 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val keyboard = LocalSoftwareKeyboardController.current
     val fieldFocus = remember { FocusRequester() }
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
-    // Several panes: the arrangement cycles like tmux's next-layout, and the splits can be dragged.
-    var layout by rememberSaveable(addresses) { mutableStateOf(Layout.AUTO) }
+    // Several panes: the arrangement cycles through the ones that make sense for the count, the
+    // splits drag, and a pane's header dragged onto another tile swaps the two.
+    var layout by rememberSaveable(addresses) { mutableStateOf(if (landscape) Layout.ROW else Layout.COLUMN) }
     val writable = state.pane?.writable == true
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
@@ -160,9 +171,12 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         Rule()
         Box(Modifier.weight(1f)) {
             val tile: @Composable (Int, Modifier) -> Unit = { i, m ->
-                PaneTile(model, addresses[i], i == index, addresses.size > 1, fit, now, m) { focusedIndex = i; focus.requestFocus() }
+                PaneTile(model, addresses[i], i == index, addresses.size > 1, fit, now, m, onDrop = { from -> model.swapTiles(addresses, from, addresses[i]) }) {
+                    focusedIndex = i
+                    focus.requestFocus()
+                }
             }
-            Tiles(addresses.size, layout, landscape, tile)
+            Tiles(addresses.size, layout, tile)
         }
         Rule()
         model.sendError?.let { Text(" ! $it", color = p.alert, modifier = Modifier.padding(horizontal = 4.dp)) }
@@ -180,30 +194,38 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     }
 }
 
-/** How several panes share the screen; AUTO is a row in landscape and a column in portrait. */
+/** How several panes share the screen. Which ones apply depends on how many there are. */
 enum class Layout {
-    AUTO, ROW, COLUMN, MAIN, GRID;
+    ROW, COLUMN, GRID, MAIN_LEFT, MAIN_TOP;
 
-    fun next(n: Int): Layout = when (this) {
-        AUTO -> ROW
-        ROW -> COLUMN
-        COLUMN -> MAIN
-        MAIN -> if (n >= 3) GRID else AUTO
-        GRID -> AUTO
+    companion object {
+        /** Two panes split one way or the other; three and four add a main pane and, for four, a grid. */
+        fun options(n: Int): List<Layout> = when {
+            n <= 2 -> listOf(ROW, COLUMN)
+            n == 3 -> listOf(ROW, COLUMN, MAIN_LEFT, MAIN_TOP)
+            else -> listOf(ROW, COLUMN, GRID, MAIN_LEFT, MAIN_TOP)
+        }
+    }
+
+    fun next(n: Int): Layout {
+        val all = options(n)
+        return all[(all.indexOf(this) + 1) % all.size]
     }
 }
 
 /** The tiles in the chosen arrangement, every split draggable. */
 @Composable
-private fun Tiles(n: Int, layout: Layout, landscape: Boolean, tile: @Composable (Int, Modifier) -> Unit) {
+private fun Tiles(n: Int, layout: Layout, tile: @Composable (Int, Modifier) -> Unit) {
     val all = (0 until n).toList()
     val weights = remember(n, layout) { Array(3) { SnapshotStateList<Float>().apply { repeat(n) { add(1f) } } } }
     when (layout) {
-        Layout.AUTO -> Split(!landscape, all, weights[0], Modifier.fillMaxSize(), tile)
         Layout.ROW -> Split(false, all, weights[0], Modifier.fillMaxSize(), tile)
         Layout.COLUMN -> Split(true, all, weights[0], Modifier.fillMaxSize(), tile)
-        Layout.MAIN -> Split(!landscape, listOf(0, 1), weights[0], Modifier.fillMaxSize()) { part, m ->
-            if (part == 0) tile(0, m) else Split(landscape, all.drop(1), weights[1], m, tile)
+        Layout.MAIN_LEFT -> Split(false, listOf(0, 1), weights[0], Modifier.fillMaxSize()) { part, m ->
+            if (part == 0) tile(0, m) else Split(true, all.drop(1), weights[1], m, tile)
+        }
+        Layout.MAIN_TOP -> Split(true, listOf(0, 1), weights[0], Modifier.fillMaxSize()) { part, m ->
+            if (part == 0) tile(0, m) else Split(false, all.drop(1), weights[1], m, tile)
         }
         Layout.GRID -> {
             val top = all.take((n + 1) / 2)
@@ -361,8 +383,9 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FocusRequest
  * back through what the hub sent. With fit the host pane is sized to the tile at the text setting;
  * otherwise the pane's own width is scaled to fit (or reflowed, by setting), pinch zooms.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PaneTile(model: AppModel, address: String, focused: Boolean, several: Boolean, fit: Boolean, now: Long, modifier: Modifier, onFocus: () -> Unit) {
+private fun PaneTile(model: AppModel, address: String, focused: Boolean, several: Boolean, fit: Boolean, now: Long, modifier: Modifier, onDrop: (String) -> Unit, onFocus: () -> Unit) {
     val p = LocalPalette.current
     val state = model.view(address)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -380,10 +403,27 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
     val status = pane?.let { model.status(it, now) }
     val (back, ink) = stateColours(status)
     val edge: Dp = if (several && focused) 3.dp else 1.dp
-    Column(modifier.padding(2.dp).border(edge, if (several && focused) p.ink else p.faint).clickable(onClick = onFocus)) {
+    // Another tile's header dropped here swaps the two panes.
+    val target = remember(address) {
+        object : DragAndDropTarget {
+            override fun onDrop(event: DragAndDropEvent): Boolean {
+                val from = event.toAndroidDragEvent().clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString() ?: return false
+                onDrop(from)
+                return true
+            }
+        }
+    }
+    Column(
+        modifier.padding(2.dp).border(edge, if (several && focused) p.ink else p.faint).clickable(onClick = onFocus)
+            .then(if (several) Modifier.dragAndDropTarget(shouldStartDragAndDrop = { it.mimeTypes().contains(MIME) }, target = target) else Modifier),
+    ) {
         val title = pane?.let { "${it.name} · ${it.command} · ${it.mode}" } ?: address
         val waiting = status == Lens.Status.WAITING
-        Row(Modifier.fillMaxWidth().background(back).padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        val header = Modifier.fillMaxWidth().background(back).padding(horizontal = 4.dp, vertical = 2.dp)
+            .then(if (several) Modifier.dragAndDropSource {
+                detectDragGesturesAfterLongPress { _, _ -> startTransfer(DragAndDropTransferData(ClipData.newPlainText(MIME, address))) }
+            } else Modifier)
+        Row(header, verticalAlignment = Alignment.CenterVertically) {
             Text(
                 title, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                 style = LocalTextStyle.current.copy(fontWeight = if (several && focused) FontWeight.Bold else FontWeight.Normal, shadow = null),
@@ -432,7 +472,20 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
             val scrolls = rows.size > visibleRows
             val paging = !scrolls && pane?.writable == true
             val page = heightPx / 3f
+            // A tap is a click at the cell under the finger; the rows sit at the bottom.
+            val clickable = pane?.writable == true
+            val top = (heightPx - rows.size * rowPx).coerceAtLeast(0f)
             Box(Modifier.fillMaxSize().pointerInput(address) { pinch { z -> zoom = (zoom * z).coerceIn(0.5f, 4f) } }
+                .pointerInput(address, clickable, top, colPx, rowPx) {
+                    if (!clickable) return@pointerInput
+                    detectTapGestures { at ->
+                        val x = (at.x / colPx).toInt() + 1
+                        val y = ((at.y - top) / rowPx).toInt() + 1
+                        val w = pane?.width ?: 0
+                        val h = pane?.height ?: 0
+                        if (at.y >= top && x in 1..w && y in 1..h) model.click(address, x, y)
+                    }
+                }
                 .then(if (sideways) Modifier.horizontalScroll(horizontal) else Modifier)
                 .pointerInput(address, page, paging) {
                     if (!paging) return@pointerInput
@@ -457,6 +510,8 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
         }
     }
 }
+
+private const val MIME = "text/plain"
 
 /** Two fingers zoom; one finger is left to the scroll underneath. */
 private suspend fun PointerInputScope.pinch(onZoom: (Float) -> Unit) {

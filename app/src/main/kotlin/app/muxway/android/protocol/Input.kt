@@ -14,6 +14,9 @@ object Input {
 
     private val names = KEYS.map { it.first }.toSet()
 
+    /** Mouse buttons the protocol names. */
+    val BUTTONS = setOf("left", "middle", "right", "wheelup", "wheeldown")
+
     fun isKey(name: String) = name in names
 
     /** Drops C0, DEL and C1; the hub refuses them. */

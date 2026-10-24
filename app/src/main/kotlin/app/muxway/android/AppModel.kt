@@ -259,8 +259,30 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** A tap on the pane: a left click at the cell, when the pane's program has the mouse. */
+    fun click(address: String, x: Int, y: Int) = send(address) {
+        try {
+            it.mouse(address, "left", x, y)
+        } catch (e: ApiException) {
+            // An older hub refuses the field; a pane without mouse mode refuses the input.
+            throw when (e.code) {
+                "bad_json" -> ApiException(e.status, "no_mouse_hub")
+                "bad_input" -> ApiException(e.status, "no_mouse_pane")
+                else -> e
+            }
+        }
+    }
+
     /** False when the pane is still busy with the previous send. */
     fun key(address: String, name: String) = send(address) { it.key(address, name) }
+
+    /** Swaps two open panes' places. */
+    fun swapTiles(addresses: List<String>, a: String, b: String) {
+        val i = addresses.indexOf(a)
+        val j = addresses.indexOf(b)
+        if (i < 0 || j < 0 || i == j) return
+        screen = Screen.View(addresses.toMutableList().also { it[i] = b; it[j] = a })
+    }
 
     /** Replaces one open pane by another, keeping the others. */
     fun swap(addresses: List<String>, at: Int, address: String) {
