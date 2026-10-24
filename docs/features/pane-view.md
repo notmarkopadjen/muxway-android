@@ -71,9 +71,12 @@ flowchart LR
   Side-by-side views start with fit off. While the on-screen keyboard is
   up the tile is half its height, so the host keeps its size until the
   keyboard goes. If another terminal sizes the window meanwhile, the
-  phone sends its size again after twenty seconds at the earliest, so
-  two clients cannot fight fast; tapping `⤢` while it is on sends the
-  size once more at once, and holding it turns fit off.
+  phone sends its size once more after twenty seconds and then leaves it,
+  because two clients fitting one tmux window can only fight: the header
+  shows the host's size in the alert colour with "held". Tapping `⤢`
+  while it is on sends the size again at once, and holding it turns fit
+  off. A pane shorter than the tile sits at the bottom with empty rows
+  above; nothing can make 27 host rows fill 44.
 - **Width.** With fit off, rows are shown at the pane's own width, as tmux
   shows them, and the font is sized so that width fits the tile, never
   larger than the **text** setting. A 96-column pane on a phone comes out
@@ -106,10 +109,11 @@ flowchart LR
   sent (the pane's scrollback), and new output keeps the bottom in view
   until you scroll up. A full-screen program on the alternate screen
   (Claude Code is one) has no scrollback to fetch, so when the rows fit
-  the tile a vertical drag **pages the program instead**: every third of
-  the tile's height sends `PageUp` or `PageDown`, one key per answered
-  request. Claude Code scrolls its transcript on those keys; so do most
-  pagers and editors. The list underneath takes no drags then, and never
+  the tile a vertical drag **scrolls the program instead**: a wheel
+  notch per row of movement when the program has the mouse (the hub's
+  mouse addition and the listing's `mouse` flag), else a `PageUp` or
+  `PageDown` per third of the tile's height; one request at a time.
+  Claude Code scrolls its transcript on both. The list underneath takes no drags then, and never
   the system's stretch effect, so the drag reaches the pager and a
   sideways swipe reaches the page.
 

@@ -165,6 +165,13 @@ on-screen keyboard is up (it had been resizing the host pane to 23 rows
 on every keyboard). The listing's `mouse` flag, from the core's mouse
 addition, refuses a tap locally.
 
+Round seven (0.6.2): the owner's browser fits the same tmux window to
+its own size, so the phone's size never held and the pane sat in the
+lower part of the tile. Fit now retries once on drift and then shows
+"held" in the header rather than fighting; a tap on `⤢` sends again. A
+drag on a pane whose program has the mouse sends wheel notches per row
+(the core's mouse addition), far smoother than page keys.
+
 ## Test run
 
 Round six: local run `test-runs/20261024-103852-a023f82`: **passed**, 75 tests; the two mouse tests ran against a hub built from the core checkout, which carries mouse input now.

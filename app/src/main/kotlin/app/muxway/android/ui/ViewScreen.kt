@@ -437,7 +437,11 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
             status?.let { Lens.glyph(it, pane?.attention?.kind) }?.let { g ->
                 Text(" $g ${Lens.word(status, pane?.attention?.kind)} ", color = ink, maxLines = 1, modifier = if (waiting) Modifier.alpha(pulse()) else Modifier)
             }
-            if (fit && pane?.writable == true) Text(" ${pane.width}×${pane.height} ", color = ink, maxLines = 1)
+            if (fit && pane?.writable == true) {
+                // Alert colour when the host did not keep this phone's size: another terminal holds it.
+                val held = state.fitKey.isNotEmpty() && state.fitKey != "${pane.width}x${pane.height}"
+                Text(" ${pane.width}×${pane.height}${if (held) " held" else ""} ", color = if (held) p.alert else ink, maxLines = 1)
+            }
         }
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).background(p.panel)) {
             val base = LocalTextStyle.current
@@ -476,12 +480,14 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
             val horizontal = rememberScrollState()
             val body = Modifier.fillMaxHeight().then(if (sideways) Modifier.width(with(density) { (cols * colPx).toDp() } + 4.dp) else Modifier.fillMaxWidth())
             // A full-screen program (alternate screen) leaves nothing to scroll locally, so a
-            // vertical drag pages it instead: a third of the tile per PageUp or PageDown. The list
-            // then takes no drags at all, and never its stretch effect, so the gesture reaches us
-            // and sideways swipes reach the page.
+            // vertical drag scrolls it instead: a wheel notch per row when the program has the
+            // mouse, else a third of the tile per PageUp or PageDown. The list then takes no drags
+            // at all, and never its stretch effect, so the gesture reaches us and sideways swipes
+            // reach the page.
             val scrolls = rows.size > visibleRows
             val paging = !scrolls && pane?.writable == true
-            val page = heightPx / 3f
+            val wheel = pane?.mouse == true
+            val page = if (wheel) rowPx else heightPx / 3f
             // A tap is a click at the cell under the finger; the rows sit at the bottom.
             val clickable = pane?.writable == true
             val top = (heightPx - rows.size * rowPx).coerceAtLeast(0f)
@@ -497,14 +503,24 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
                     }
                 }
                 .then(if (sideways) Modifier.horizontalScroll(horizontal) else Modifier)
-                .pointerInput(address, page, paging) {
+                .pointerInput(address, page, paging, wheel) {
                     if (!paging) return@pointerInput
                     var acc = 0f
-                    detectVerticalDragGestures(onDragStart = { acc = 0f }) { change, dy ->
+                    var cx = 1
+                    var cy = 1
+                    detectVerticalDragGestures(onDragStart = { at ->
+                        acc = 0f
+                        cx = ((at.x / colPx).toInt() + 1).coerceIn(1, (pane?.width ?: 1).coerceAtLeast(1))
+                        cy = (((at.y - top) / rowPx).toInt() + 1).coerceIn(1, (pane?.height ?: 1).coerceAtLeast(1))
+                    }) { change, dy ->
                         change.consume()
-                        acc = (acc + dy).coerceIn(-2 * page, 2 * page)
-                        if (acc >= page && model.key(address, "PageUp")) acc -= page
-                        else if (acc <= -page && model.key(address, "PageDown")) acc += page
+                        acc = (acc + dy).coerceIn(-3 * page, 3 * page)
+                        val up = acc >= page
+                        val down = acc <= -page
+                        if (up || down) {
+                            val sent = if (wheel) model.wheel(address, up, cx, cy) else model.key(address, if (up) "PageUp" else "PageDown")
+                            if (sent) acc += if (up) -page else page
+                        }
                     }
                 }) {
                 // Newest row first in a reversed list: the bottom stays in view until you scroll up.

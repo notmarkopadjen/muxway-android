@@ -53,6 +53,7 @@ class PaneState(val address: String) {
     /** Fit: the last size sent to the host, when, and whether a release is owed. */
     var fitKey = ""
     var fitAt = 0L
+    var fitRetried = false
     var fitted = false
     var fitJob: Job? = null
 }
@@ -253,10 +254,13 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         val v = view(address)
         val key = "${cols}x$rows"
         // Once per size, unless asked again, or the host drifted from it (another terminal sized
-        // the window) and the last request is old enough that two clients cannot fight fast.
+        // the window): then once more, after twenty seconds, and no further on its own, so two
+        // clients never fight over a window; the header shows the drift and a tap sends again.
         val drifted = v.pane?.let { it.width != cols || it.height != rows } == true
         val stale = System.currentTimeMillis() - v.fitAt > 20_000
-        if (v.fitKey == key && !again && !(drifted && stale)) return
+        if (again) v.fitRetried = false
+        if (v.fitKey == key && !again && !(drifted && stale && !v.fitRetried)) return
+        if (v.fitKey == key && !again) v.fitRetried = true
         v.fitJob?.cancel()
         v.fitJob = viewModelScope.launch {
             delay(300)
@@ -289,6 +293,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         v.fitJob?.cancel()
         v.fitKey = ""
         v.fitAt = 0L
+        v.fitRetried = false
         if (!v.fitted) return
         v.fitted = false
         viewModelScope.launch {
@@ -298,10 +303,15 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** A tap on the pane: a left click at the cell, when the pane's program has the mouse. */
-    fun click(address: String, x: Int, y: Int) = send(address) {
+    fun click(address: String, x: Int, y: Int) = mouse(address, "left", x, y)
+
+    /** One wheel notch at the cell; the smooth way to scroll a program that has the mouse. */
+    fun wheel(address: String, up: Boolean, x: Int, y: Int) = mouse(address, if (up) "wheelup" else "wheeldown", x, y)
+
+    private fun mouse(address: String, button: String, x: Int, y: Int) = send(address) {
         if (view(address).pane?.mouse == false) throw ApiException(400, "no_mouse_pane")
         try {
-            it.mouse(address, "left", x, y)
+            it.mouse(address, button, x, y)
         } catch (e: ApiException) {
             // An older hub refuses the field; a pane without mouse mode refuses the input.
             throw when (e.code) {
