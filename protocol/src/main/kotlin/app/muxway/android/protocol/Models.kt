@@ -58,6 +58,7 @@ class ApiException(val status: Int, val code: String) : Exception(messageFor(sta
             "locked_out" -> "Too many failed logins from this network. Wait ten minutes"
             "rate_limited" -> "Too many requests, slow down"
             "host_offline" -> "Host offline"
+            "provider_unavailable" -> "Transcriber unavailable"
             "bad_json", "bad_input", "bad_parameter" -> "The hub refused the request"
             "no_mouse_hub" -> "This hub has no mouse support yet"
             "no_mouse_pane" -> "No mouse in this pane"

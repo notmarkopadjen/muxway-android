@@ -160,6 +160,17 @@ it is writable:
 - **type** sends the text as typed, without `Enter`;
 - **send**, the keyboard's send action, or a hardware `Enter` sends the
   text and then `Enter`;
+- the **microphone**: when the hub has a transcriber (asked once, with
+  the first listing after connecting) a `◉` button sits between the text
+  line and *type*. The first tap asks for the microphone permission. While
+  recording, a level meter in block characters and the seconds take the
+  line's place; `■`, a tap on the meter, or sixty seconds stops the clip,
+  which goes to the hub as a 16 kHz mono WAV, and the words it heard land
+  on the line, after a space when something was typed, with the line
+  focused: nothing is sent until *send*. *cancel* or back drops the clip.
+  A hub without a transcriber shows no button. Refusals show in the
+  status line like a refused send: `Microphone refused`, `No microphone`,
+  `Too short`, `One clip every five seconds`, `Transcriber unavailable`;
 - the **command row**, between the key row and the text line, is for the
   program in the pane and scrolls sideways. Claude Code's pane (the lens
   decides) gets `/clear`, `/compact`, `/rename`, `/model`, `/resume`,
@@ -186,6 +197,15 @@ anything to it.
   request, so it cannot flood the hub.
 - No input bar on a pane the hub marked read-only. If a listing lied, the
   hub refuses the write with `403` and the status row says "Read only".
+- A spoken clip goes to the hub only, with the bearer token, and the hub's
+  checks stand in front of the transcriber: the write grant, the WAV
+  header, the size, one clip per five seconds. The clip lives in memory
+  until the hub has answered and is dropped; nothing is stored or logged.
+  The microphone is open only between the taps, with the permission the
+  system asked for at the first one, and `RECORD_AUDIO` is used for
+  nothing else. The transcript is cleaned as typed text is and shown on
+  the line before anything is sent, so a hostile transcriber gets words
+  on a line you read, nothing more.
 - The command row sends what you could type: a fixed string from the
   app's own list, or a line you sent before, and `Enter`. Nothing from
   a pane, a title or the hub reaches the list; a pane dressed as Claude

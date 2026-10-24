@@ -14,6 +14,8 @@ class Api(private val baseUrl: String, private val token: String, private val us
         const val MAX_BODY = 2 * 1024 * 1024
         private const val CONNECT_TIMEOUT = 10_000
         private const val READ_TIMEOUT = 40_000
+        /** The hub gives the transcriber ninety seconds. */
+        private const val TRANSCRIBE_TIMEOUT = 95_000
     }
 
     fun hosts(): List<Host> = Json.hosts(get("hosts").body)
@@ -55,6 +57,19 @@ class Api(private val baseUrl: String, private val token: String, private val us
         post("panes/${encode(address)}/resize", Json.fitAuto())
     }
 
+    /** Whether the hub has a transcriber: 204 says yes, 404 no. */
+    fun hasTranscriber(): Boolean = try {
+        get("transcribe").status == 204
+    } catch (e: ApiException) {
+        if (e.code == "not_found") false else throw e
+    }
+
+    /** A spoken clip, as [Clip.wav] makes it, to the hub's transcriber; the text it heard. */
+    fun transcribe(wav: ByteArray): String {
+        require(wav.size in 45..(4 shl 20)) { "clip size" }
+        return Json.transcript(call("POST", "transcribe", wav, "audio/wav", null, TRANSCRIBE_TIMEOUT).body)
+    }
+
     fun events(after: Long?, wait: Int, limit: Int = 50): Events {
         val q = StringBuilder("events?wait=$wait&limit=$limit")
         if (after != null) q.append("&after=$after")
@@ -63,11 +78,11 @@ class Api(private val baseUrl: String, private val token: String, private val us
 
     private class Response(val status: Int, val body: String, val etag: String)
 
-    private fun get(path: String, etag: String? = null) = call("GET", path, null, etag)
+    private fun get(path: String, etag: String? = null) = call("GET", path, null, null, etag)
 
-    private fun post(path: String, json: String) = call("POST", path, json, null)
+    private fun post(path: String, json: String) = call("POST", path, json.toByteArray(Charsets.UTF_8), "application/json", null)
 
-    private fun call(method: String, path: String, json: String?, etag: String?): Response {
+    private fun call(method: String, path: String, body: ByteArray?, contentType: String?, etag: String?, readTimeout: Int = READ_TIMEOUT): Response {
         val c = try {
             URL("$baseUrl/v1/$path").openConnection() as HttpURLConnection
         } catch (e: Exception) {
@@ -75,19 +90,18 @@ class Api(private val baseUrl: String, private val token: String, private val us
         }
         try {
             c.connectTimeout = CONNECT_TIMEOUT
-            c.readTimeout = READ_TIMEOUT
+            c.readTimeout = readTimeout
             c.requestMethod = method
             c.instanceFollowRedirects = false
             c.setRequestProperty("Authorization", "Bearer $token")
             c.setRequestProperty("Accept", "application/json")
             c.setRequestProperty("User-Agent", userAgent)
             if (etag != null) c.setRequestProperty("If-None-Match", etag)
-            if (json != null) {
-                val data = json.toByteArray(Charsets.UTF_8)
+            if (body != null) {
                 c.doOutput = true
-                c.setRequestProperty("Content-Type", "application/json")
-                c.setFixedLengthStreamingMode(data.size)
-                c.outputStream.use { it.write(data) }
+                c.setRequestProperty("Content-Type", contentType)
+                c.setFixedLengthStreamingMode(body.size)
+                c.outputStream.use { it.write(body) }
             }
             val status = c.responseCode
             val stream = if (status >= 400) c.errorStream else c.inputStream

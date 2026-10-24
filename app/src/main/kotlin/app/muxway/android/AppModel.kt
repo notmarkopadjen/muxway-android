@@ -87,6 +87,11 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     val lastKind = mutableStateMapOf<String, String>()
     var sendError by mutableStateOf<String?>(null)
 
+    /** Whether the hub has a transcriber, asked once per connection with the first listing. */
+    var transcriber by mutableStateOf(false)
+        private set
+    private var probed = false
+
     /** The last lines sent to a shell, newest first; the command row offers them again. */
     val recent = mutableStateListOf<String>().also { it.addAll(store.recent()) }
 
@@ -137,6 +142,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         AttentionService.apply(getApplication())
         notice = null
         api = null
+        probed = false
+        transcriber = false
         views.clear()
         lastKind.clear()
         panes = emptyList()
@@ -156,6 +163,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         vault.clear()
         hasToken = false
         api = null
+        probed = false
+        transcriber = false
         views.clear()
         screen = Screen.Connect
         AttentionService.apply(getApplication())
@@ -188,6 +197,10 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 hosts = h
                 panes = p
                 listError = null
+                if (!probed) {
+                    transcriber = withContext(Dispatchers.IO) { api().hasTranscriber() }
+                    probed = true
+                }
                 openPending()
             } catch (e: ApiException) {
                 listError = e.message
@@ -341,6 +354,36 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     /** False when the pane is still busy with the previous send. */
     fun key(address: String, name: String) = send(address) { it.key(address, name) }
 
+    /**
+     * A spoken clip to the hub's transcriber; [heard] gets the words, which the bar shows and
+     * never sends by itself. A refusal lands in [sendError] like a refused send. False while
+     * the pane is still busy with a send.
+     */
+    fun transcribe(address: String, wav: ByteArray, heard: (String) -> Unit): Boolean {
+        val v = view(address)
+        if (v.busy) return false
+        viewModelScope.launch {
+            v.busy = true
+            sendError = null
+            try {
+                val text = withContext(Dispatchers.IO) { api().transcribe(wav) }
+                if (text.isNotEmpty()) heard(text)
+            } catch (e: ApiException) {
+                sendError = when (e.code) {
+                    "rate_limited" -> "One clip every five seconds"
+                    "bad_input" -> "Too short"
+                    else -> e.message
+                }
+                if (e.code == "unauthorized") tokenRefused()
+            } catch (e: IllegalArgumentException) {
+                sendError = "Too short"
+            } finally {
+                v.busy = false
+            }
+        }
+        return true
+    }
+
     /** Swaps two open panes' places. */
     fun swapTiles(addresses: List<String>, a: String, b: String) {
         val i = addresses.indexOf(a)
@@ -382,6 +425,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
      */
     private fun tokenRefused() {
         api = null
+        probed = false
+        transcriber = false
         vault.clear()
         hasToken = false
         views.clear()

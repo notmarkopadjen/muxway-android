@@ -148,4 +148,34 @@ class ApiTest {
         assertEquals("wait=30&limit=50&after=5", seen.single().query)
         assertTrue(seen.single().path.endsWith("/v1/events"))
     }
+
+    @Test
+    fun transcriberProbeReadsTheStatus() {
+        answer = { Response(204, ByteArray(0), emptyMap()) }
+        assertTrue(api().hasTranscriber())
+        answer = { json(404, """{"error":"not_found"}""") }
+        assertFalse(api().hasTranscriber())
+        answer = { json(401, """{"error":"unauthorized"}""") }
+        assertThrows(ApiException::class.java) { api().hasTranscriber() }
+        assertEquals(listOf("/v1/transcribe", "/v1/transcribe", "/v1/transcribe"), seen.map { it.path })
+        assertTrue(seen.all { it.method == "GET" })
+    }
+
+    @Test
+    fun transcribeSendsTheWavAndReadsTheText() {
+        answer = { json(200, """{"text":"run the\u0007 tests again"}""") }
+        val wav = Clip.wav(ByteArray(16000))
+        assertEquals("run the tests again", api().transcribe(wav))
+        val r = seen.single()
+        assertEquals("POST", r.method)
+        assertEquals("/v1/transcribe", r.path)
+        assertEquals("audio/wav", r.header("Content-Type"))
+        assertEquals("Bearer $token", r.header("Authorization"))
+        assertTrue(wav.contentEquals(r.body))
+        answer = { json(502, """{"error":"provider_unavailable"}""") }
+        val e = assertThrows(ApiException::class.java) { api().transcribe(wav) }
+        assertEquals("Transcriber unavailable", e.message)
+        assertThrows(IllegalArgumentException::class.java) { api().transcribe(ByteArray(10)) }
+        assertThrows(IllegalArgumentException::class.java) { api().transcribe(ByteArray(5 shl 20)) }
+    }
 }

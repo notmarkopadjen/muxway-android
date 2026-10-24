@@ -25,6 +25,9 @@ object Json {
         }, o.optLong("next"))
     }
 
+    /** The transcriber's text, cleaned as typed text is. */
+    fun transcript(body: String): String = parse(body) { o -> Input.typed(o.optString("text")) }
+
     fun error(body: String): String = try {
         JSONObject(body).optString("error")
     } catch (e: JSONException) {

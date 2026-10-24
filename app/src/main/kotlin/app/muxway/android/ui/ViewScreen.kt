@@ -12,7 +12,15 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.LocalOverscrollConfiguration
+import android.Manifest
 import android.content.ClipData
+import android.content.pm.PackageManager
+import android.os.Handler
+import android.os.Looper
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -77,6 +85,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
@@ -101,7 +110,9 @@ import androidx.lifecycle.repeatOnLifecycle
 import app.muxway.android.AppModel
 import app.muxway.android.PaneState
 import app.muxway.android.Screen
+import app.muxway.android.audio.Recorder
 import app.muxway.android.protocol.Ansi
+import app.muxway.android.protocol.Clip
 import app.muxway.android.protocol.Commands
 import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.Lens
@@ -358,7 +369,8 @@ fun ticker(): Long {
 
 /**
  * Esc pinned left, Enter pinned right, the other keys scrolling between; under them the command
- * row for the program in the pane, when it has one; then the text line.
+ * row for the program in the pane, when it has one; then the text line, with the microphone
+ * button when the hub has a transcriber.
  */
 @Composable
 private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FocusRequester, onFieldFocus: (Boolean) -> Unit) {
@@ -370,6 +382,52 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FocusRequest
         text = ""
     }
     val busy = state.busy
+
+    // The microphone: a clip for the hub's transcriber, its words onto the line to be read
+    // before send. The recorder reports from its own thread; the main one draws.
+    val context = LocalContext.current
+    val main = remember { Handler(Looper.getMainLooper()) }
+    var recorder by remember(state.address) { mutableStateOf<Recorder?>(null) }
+    var meter by remember { mutableStateOf(Clip.meter(emptyList())) }
+    var seconds by remember { mutableIntStateOf(0) }
+    var hearing by remember { mutableStateOf(false) }
+    LaunchedEffect(busy) { if (!busy) hearing = false }
+    fun stopClip() {
+        val r = recorder ?: return
+        recorder = null
+        val clip = r.stop()
+        if (!clip.sendable) {
+            model.sendError = "Too short"
+            return
+        }
+        hearing = model.transcribe(state.address, clip.wav()) { heard ->
+            text = if (text.isEmpty()) heard else "$text $heard"
+            fieldFocus.requestFocus()
+        }
+    }
+    fun startClip() {
+        if (recorder != null) return
+        meter = Clip.meter(emptyList())
+        seconds = 0
+        val r = Recorder(
+            onFrame = { c -> main.post { meter = Clip.meter(c.levels); seconds = c.seconds.toInt() } },
+            onFull = { main.post { stopClip() } },
+        )
+        if (r.start()) recorder = r else model.sendError = "No microphone"
+    }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startClip() else model.sendError = "Microphone refused"
+    }
+    fun speak() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startClip()
+        else ask.launch(Manifest.permission.RECORD_AUDIO)
+    }
+    fun dropClip() {
+        recorder?.cancel()
+        recorder = null
+    }
+    BackHandler(enabled = recorder != null) { dropClip() }
+    DisposableEffect(state.address) { onDispose { dropClip() } }
     Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         Btn("Esc", { model.key(state.address, "Escape") }, enabled = !busy)
         LazyRow(Modifier.weight(1f)) {
@@ -398,19 +456,39 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FocusRequest
         }
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Field(
-            ">", text, { text = Input.typed(it) },
-            Modifier.weight(1f),
-            hint = state.pane?.label ?: "",
-            keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Send),
-            actions = KeyboardActions(onSend = { send(true) }),
-            focusRequester = fieldFocus,
-            onFocus = onFieldFocus,
-            maxLines = 6,
-            onEnter = { send(true) },
-        )
-        Btn("type", { send(false) }, enabled = !busy && text.isNotEmpty())
-        Btn("send", { send(true) }, enabled = !busy)
+        when {
+            recorder != null -> {
+                Text("● ", color = p.alert, maxLines = 1)
+                Text(
+                    "$meter $seconds s · tap to stop", color = p.ink, maxLines = 1,
+                    modifier = Modifier.weight(1f).padding(vertical = 4.dp).border(1.dp, p.ink).clickable { stopClip() }.padding(horizontal = 6.dp, vertical = 6.dp),
+                )
+                Btn("■", { stopClip() })
+                Btn("cancel", { dropClip() })
+            }
+            hearing -> {
+                Text("> ", color = p.dim, maxLines = 1)
+                Text("⟳ hearing…", color = p.dim, maxLines = 1, modifier = Modifier.weight(1f).padding(vertical = 4.dp).border(1.dp, p.dim).padding(horizontal = 6.dp, vertical = 6.dp))
+                Btn("◉", {}, enabled = false)
+                Btn("send", {}, enabled = false)
+            }
+            else -> {
+                Field(
+                    ">", text, { text = Input.typed(it) },
+                    Modifier.weight(1f),
+                    hint = state.pane?.label ?: "",
+                    keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Send),
+                    actions = KeyboardActions(onSend = { send(true) }),
+                    focusRequester = fieldFocus,
+                    onFocus = onFieldFocus,
+                    maxLines = 6,
+                    onEnter = { send(true) },
+                )
+                if (model.transcriber) Btn("◉", { speak() }, enabled = !busy)
+                Btn("type", { send(false) }, enabled = !busy && text.isNotEmpty())
+                Btn("send", { send(true) }, enabled = !busy)
+            }
+        }
     }
 }
 
