@@ -49,24 +49,24 @@ fun PanesScreen(model: AppModel) {
                             PaneRow(pane, model.status(pane, now), pane.address in model.selected,
                                 onTap = { if (model.selected.isEmpty()) model.open(Screen.View(listOf(pane.address))) else model.toggleSelected(pane.address) },
                                 onHold = { model.toggleSelected(pane.address) })
-                            // The way to open a selection sits right under the pane picked last.
-                            if (model.selected.isNotEmpty() && pane.address == model.selected.last()) SelectionBar(model)
                         }
                     }
                 }
             }
             for (h in quiet) item(key = "host:${h.name}") { HostRow(h.name, "online · nothing exposed") }
             for (h in offline) item(key = "host:${h.name}") { HostRow(h.name, "offline") }
+            // The way to open a selection comes right after the list, not pinned to the screen's foot.
+            if (model.selected.isNotEmpty()) item(key = "selection") { SelectionBar(model) }
         }
         Text(if (model.selected.isEmpty()) "  tap to open · hold to pick several" else "  ${model.selected.size}/4 · hold to pick more", color = p.dim, modifier = Modifier.padding(4.dp))
     }
 }
 
-/** `[clear] ………… [open N side by side]`, shown under the pane picked last. */
+/** `[clear] ………… [open N side by side]`, shown under the whole list while something is selected. */
 @Composable
 private fun SelectionBar(model: AppModel) {
     val n = model.selected.size
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Btn("clear", { model.selected.clear() })
         Btn(if (n == 1) "open" else "open $n side by side", { model.open(Screen.View(model.selected.toList())) })
     }

@@ -7,8 +7,11 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalOverscrollConfiguration
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -29,14 +33,17 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -103,6 +110,8 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val keyboard = LocalSoftwareKeyboardController.current
     val fieldFocus = remember { FocusRequester() }
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
+    // Several panes: the arrangement cycles like tmux's next-layout, and the splits can be dragged.
+    var layout by rememberSaveable(addresses) { mutableStateOf(Layout.AUTO) }
     val writable = state.pane?.writable == true
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
@@ -142,8 +151,8 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Btn("‹", { model.open(Screen.Panes) })
-            if (addresses.size == 1) Tabs(model, addresses, focused, now, Modifier.weight(1f), ::show)
-            else Text(" ${addresses.size} panes", color = p.dim, maxLines = 1, modifier = Modifier.weight(1f))
+            Tabs(model, addresses, focused, now, Modifier.weight(1f), ::show)
+            if (addresses.size > 1) Btn("▦", { layout = layout.next(addresses.size) })
             Btn("⤢", { fit = !fit }, selected = fit, enabled = writable)
             if (hardware) Btn("⌨", { ime = !ime; if (ime) { fieldFocus.requestFocus(); keyboard?.show() } else keyboard?.hide() }, selected = ime)
             Btn("⚙", { model.open(Screen.Connect) })
@@ -153,11 +162,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             val tile: @Composable (Int, Modifier) -> Unit = { i, m ->
                 PaneTile(model, addresses[i], i == index, addresses.size > 1, fit, now, m) { focusedIndex = i; focus.requestFocus() }
             }
-            if (landscape || addresses.size == 1) {
-                Row(Modifier.fillMaxSize()) { for (i in addresses.indices) tile(i, Modifier.weight(1f).fillMaxHeight()) }
-            } else {
-                Column(Modifier.fillMaxSize()) { for (i in addresses.indices) tile(i, Modifier.weight(1f).fillMaxWidth()) }
-            }
+            Tiles(addresses.size, layout, landscape, tile)
         }
         Rule()
         model.sendError?.let { Text(" ! $it", color = p.alert, modifier = Modifier.padding(horizontal = 4.dp)) }
@@ -172,6 +177,88 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             color = if (state.error != null) p.alert else p.faint, maxLines = 1,
             style = LocalTextStyle.current.copy(fontSize = 10.sp), modifier = Modifier.padding(horizontal = 6.dp),
         )
+    }
+}
+
+/** How several panes share the screen; AUTO is a row in landscape and a column in portrait. */
+enum class Layout {
+    AUTO, ROW, COLUMN, MAIN, GRID;
+
+    fun next(n: Int): Layout = when (this) {
+        AUTO -> ROW
+        ROW -> COLUMN
+        COLUMN -> MAIN
+        MAIN -> if (n >= 3) GRID else AUTO
+        GRID -> AUTO
+    }
+}
+
+/** The tiles in the chosen arrangement, every split draggable. */
+@Composable
+private fun Tiles(n: Int, layout: Layout, landscape: Boolean, tile: @Composable (Int, Modifier) -> Unit) {
+    val all = (0 until n).toList()
+    val weights = remember(n, layout) { Array(3) { SnapshotStateList<Float>().apply { repeat(n) { add(1f) } } } }
+    when (layout) {
+        Layout.AUTO -> Split(!landscape, all, weights[0], Modifier.fillMaxSize(), tile)
+        Layout.ROW -> Split(false, all, weights[0], Modifier.fillMaxSize(), tile)
+        Layout.COLUMN -> Split(true, all, weights[0], Modifier.fillMaxSize(), tile)
+        Layout.MAIN -> Split(!landscape, listOf(0, 1), weights[0], Modifier.fillMaxSize()) { part, m ->
+            if (part == 0) tile(0, m) else Split(landscape, all.drop(1), weights[1], m, tile)
+        }
+        Layout.GRID -> {
+            val top = all.take((n + 1) / 2)
+            val bottom = all.drop((n + 1) / 2)
+            Split(true, listOf(0, 1), weights[0], Modifier.fillMaxSize()) { part, m ->
+                if (part == 0) Split(false, top, weights[1], m, tile) else Split(false, bottom, weights[2], m, tile)
+            }
+        }
+    }
+}
+
+/**
+ * [items] side by side ([vertical] false) or stacked, sharing the space by [weights] (indexed like
+ * [items]), with a bar between neighbours that drags the split. One item takes it all, no bar.
+ */
+@Composable
+private fun Split(vertical: Boolean, items: List<Int>, weights: SnapshotStateList<Float>, modifier: Modifier, content: @Composable (Int, Modifier) -> Unit) {
+    val p = LocalPalette.current
+    if (items.size == 1) { content(items[0], modifier); return }
+    BoxWithConstraints(modifier) {
+        val total = (if (vertical) constraints.maxHeight else constraints.maxWidth).toFloat().coerceAtLeast(1f)
+        val sum = items.sumOf { weights[it].toDouble() }.toFloat()
+        val least = 0.15f * sum
+        fun drag(k: Int, px: Float) {
+            val a = items[k]
+            val b = items[k + 1]
+            val d = (px / total * sum).coerceIn(-(weights[a] - least), weights[b] - least)
+            weights[a] += d
+            weights[b] -= d
+        }
+        val bar: @Composable (Int) -> Unit = { k ->
+            Box(
+                Modifier.then(if (vertical) Modifier.fillMaxWidth().height(10.dp) else Modifier.fillMaxHeight().width(10.dp))
+                    .background(p.bg)
+                    .pointerInput(k, vertical) { detectDragGestures { change, delta -> change.consume(); drag(k, if (vertical) delta.y else delta.x) } },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(Modifier.then(if (vertical) Modifier.fillMaxWidth(0.3f).height(2.dp) else Modifier.fillMaxHeight(0.3f).width(2.dp)).background(p.dim))
+            }
+        }
+        if (vertical) {
+            Column(Modifier.fillMaxSize()) {
+                for ((k, i) in items.withIndex()) {
+                    content(i, Modifier.fillMaxWidth().weight(weights[i]))
+                    if (k < items.lastIndex) bar(k)
+                }
+            }
+        } else {
+            Row(Modifier.fillMaxSize()) {
+                for ((k, i) in items.withIndex()) {
+                    content(i, Modifier.fillMaxHeight().weight(weights[i]))
+                    if (k < items.lastIndex) bar(k)
+                }
+            }
+        }
     }
 }
 
@@ -339,24 +426,31 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
             val horizontal = rememberScrollState()
             val body = Modifier.fillMaxHeight().then(if (sideways) Modifier.width(with(density) { (cols * colPx).toDp() } + 4.dp) else Modifier.fillMaxWidth())
             // A full-screen program (alternate screen) leaves nothing to scroll locally, so a
-            // drag pages it instead: a third of the tile per PageUp or PageDown.
-            val paging = rows.size <= visibleRows && pane?.writable == true
+            // vertical drag pages it instead: a third of the tile per PageUp or PageDown. The list
+            // then takes no drags at all, and never its stretch effect, so the gesture reaches us
+            // and sideways swipes reach the page.
+            val scrolls = rows.size > visibleRows
+            val paging = !scrolls && pane?.writable == true
             val page = heightPx / 3f
             Box(Modifier.fillMaxSize().pointerInput(address) { pinch { z -> zoom = (zoom * z).coerceIn(0.5f, 4f) } }
                 .then(if (sideways) Modifier.horizontalScroll(horizontal) else Modifier)
-                .then(if (paging) Modifier.pointerInput(address, page) {
+                .pointerInput(address, page, paging) {
+                    if (!paging) return@pointerInput
                     var acc = 0f
-                    detectDragGestures(onDragStart = { acc = 0f }) { change, drag ->
+                    detectVerticalDragGestures(onDragStart = { acc = 0f }) { change, dy ->
                         change.consume()
-                        acc = (acc + drag.y).coerceIn(-2 * page, 2 * page)
+                        acc = (acc + dy).coerceIn(-2 * page, 2 * page)
                         if (acc >= page && model.key(address, "PageUp")) acc -= page
                         else if (acc <= -page && model.key(address, "PageDown")) acc += page
                     }
-                } else Modifier)) {
+                }) {
                 // Newest row first in a reversed list: the bottom stays in view until you scroll up.
-                LazyColumn(body, reverseLayout = true) {
-                    items(lines.size, key = { lines.size - it }) { i ->
-                        Text(lines[i], color = p.ink, style = style, softWrap = false, maxLines = 1, modifier = Modifier.padding(horizontal = 2.dp))
+                @OptIn(ExperimentalFoundationApi::class)
+                CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
+                    LazyColumn(body, reverseLayout = true, userScrollEnabled = scrolls) {
+                        items(lines.size, key = { lines.size - it }) { i ->
+                            Text(lines[i], color = p.ink, style = style, softWrap = false, maxLines = 1, modifier = Modifier.padding(horizontal = 2.dp))
+                        }
                     }
                 }
             }
