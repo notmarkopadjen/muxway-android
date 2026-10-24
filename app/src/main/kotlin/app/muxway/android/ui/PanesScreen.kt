@@ -44,7 +44,8 @@ fun PanesScreen(model: AppModel) {
     val quiet = model.hosts.filter { it.online && it.name !in byHost }
 
     Column(Modifier.fillMaxSize().padding(4.dp)) {
-        Frame("muxway", crumb = "panes") {
+        val hubName = model.settings.hub?.name
+        Frame("muxway", crumb = if (model.settings.hubs.size > 1 && hubName != null) "panes · $hubName" else "panes") {
             Btn(if (model.listing) "…" else "refresh", { model.refreshList() }, enabled = !model.listing)
             Btn("settings", { model.open(Screen.Connect) })
         }

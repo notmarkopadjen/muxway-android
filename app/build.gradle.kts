@@ -12,8 +12,8 @@ android {
         applicationId = "app.muxway.android"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18
-        versionName = "0.7.6"
+        versionCode = 19
+        versionName = "0.7.7"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -59,6 +59,8 @@ dependencies {
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
 
     testImplementation("junit:junit:4.13.2")
+    // The hubs list is JSON in preferences; the JVM tests bring org.json themselves.
+    testImplementation("org.json:json:20240303")
 
     androidTestImplementation(composeBom)
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

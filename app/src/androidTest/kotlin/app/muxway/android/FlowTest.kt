@@ -16,6 +16,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import app.muxway.android.store.Hub
 import app.muxway.android.store.Settings
 import app.muxway.android.store.SettingsStore
 import app.muxway.android.store.Vault
@@ -47,15 +48,15 @@ class FlowTest {
     @Before
     fun seed() {
         assumeTrue("hub and token come from scripts/ui-tests.sh", hub.isNotEmpty() && token.isNotEmpty())
-        SettingsStore(context).save(Settings(hubUrl = hub, refreshSeconds = 1))
-        Vault(context).store(token)
+        SettingsStore(context).save(Settings(hubs = listOf(Hub("test", "test", hub)), current = "test", refreshSeconds = 1))
+        Vault(context).store("test", token)
         File(context.getExternalFilesDir(null), "screens").deleteRecursively()
     }
 
     @After
     fun close() {
         scenario?.close()
-        Vault(context).clear()
+        Vault(context).clear("test")
     }
 
     private fun shot(name: String) {

@@ -5,7 +5,8 @@ import android.content.Context
 enum class Theme { GREEN, AMBER, PAPER }
 
 data class Settings(
-    val hubUrl: String = "",
+    val hubs: List<Hub> = emptyList(),
+    val current: String = "",
     val refreshSeconds: Int = 2,
     val lines: Int = 200,
     val textSp: Int = 12,
@@ -16,7 +17,11 @@ data class Settings(
     val reflow: Boolean = false,
     val watch: Boolean = false,
     val notifyText: Boolean = false,
-)
+) {
+    /** The hub in use, and its URL; empty until one is added. */
+    val hub: Hub? get() = hubs.firstOrNull { it.id == current }
+    val hubUrl: String get() = hub?.url ?: ""
+}
 
 /** Everything but the token, in plain app-private preferences. */
 class SettingsStore(context: Context) {
@@ -24,8 +29,18 @@ class SettingsStore(context: Context) {
 
     fun load(): Settings {
         val d = Settings()
+        var hubs = Hubs.decode(prefs.getString("hubs", null))
+        var current = prefs.getString("current", "") ?: ""
+        // An install from before the list had one hub; it keeps the id its token is adopted under.
+        val legacy = prefs.getString("hub_url", "") ?: ""
+        if (hubs.isEmpty() && legacy.isNotEmpty()) {
+            hubs = listOf(Hub(Hubs.LEGACY_ID, Hubs.defaultName(legacy, emptyList()), legacy))
+            current = Hubs.LEGACY_ID
+        }
+        if (hubs.none { it.id == current }) current = hubs.firstOrNull()?.id ?: ""
         return Settings(
-            hubUrl = prefs.getString("hub_url", d.hubUrl) ?: d.hubUrl,
+            hubs = hubs,
+            current = current,
             refreshSeconds = prefs.getInt("refresh", d.refreshSeconds).coerceIn(1, 60),
             lines = prefs.getInt("lines", d.lines).coerceIn(10, 2000),
             textSp = prefs.getInt("text_sp", d.textSp).coerceIn(6, 24),
@@ -41,7 +56,9 @@ class SettingsStore(context: Context) {
 
     fun save(s: Settings) {
         prefs.edit()
-            .putString("hub_url", s.hubUrl)
+            .putString("hubs", Hubs.encode(s.hubs))
+            .putString("current", s.current)
+            .remove("hub_url")
             .putInt("refresh", s.refreshSeconds)
             .putInt("lines", s.lines)
             .putInt("text_sp", s.textSp)

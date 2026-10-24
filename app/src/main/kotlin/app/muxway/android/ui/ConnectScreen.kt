@@ -5,6 +5,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,7 +26,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import app.muxway.android.AppModel
@@ -39,12 +43,23 @@ private fun Toggle(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
     }
 }
 
+/**
+ * The hubs this phone knows, one in use, and the form that adds or changes one; then the
+ * preferences. With no hub yet it is the form alone, as the first screen.
+ */
 @Composable
 fun ConnectScreen(model: AppModel) {
     val p = LocalPalette.current
     val saved = model.settings
-    var url by rememberSaveable { mutableStateOf(saved.hubUrl) }
-    var token by rememberSaveable { mutableStateOf("") }
+    // The form edits one hub, or with null adds a new one.
+    var editing by rememberSaveable { mutableStateOf(saved.current.ifEmpty { null }) }
+    val hub = saved.hubs.firstOrNull { it.id == editing }
+    var name by rememberSaveable(editing) { mutableStateOf(hub?.name ?: "") }
+    var url by rememberSaveable(editing) { mutableStateOf(hub?.url ?: "") }
+    var token by rememberSaveable(editing) { mutableStateOf("") }
+    var problem by rememberSaveable { mutableStateOf<String?>(null) }
+    val stored = hub != null && model.hasTokenFor(hub.id)
+
     var refresh by rememberSaveable { mutableStateOf(saved.refreshSeconds.toString()) }
     var lines by rememberSaveable { mutableStateOf(saved.lines.toString()) }
     var textSp by rememberSaveable { mutableStateOf(saved.textSp.toString()) }
@@ -57,24 +72,31 @@ fun ConnectScreen(model: AppModel) {
     var notifyText by rememberSaveable { mutableStateOf(saved.notifyText) }
     val context = LocalContext.current
     val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
-    var problem by rememberSaveable { mutableStateOf<String?>(null) }
 
-    fun save() {
-        val s = saved.copy(
-            hubUrl = url,
-            refreshSeconds = refresh.toIntOrNull()?.coerceIn(1, 60) ?: saved.refreshSeconds,
-            lines = lines.toIntOrNull()?.coerceIn(10, 2000) ?: saved.lines,
-            textSp = textSp.toIntOrNull()?.coerceIn(6, 24) ?: saved.textSp,
-            theme = theme,
-            blockScreenshots = block,
-            hardwareKeyboard = hardware,
-            effects = effects,
-            reflow = reflow,
-            watch = watch,
-            notifyText = notifyText,
+    fun saveHub() {
+        problem = model.saveHub(editing, name, url, token)
+        if (problem == null) {
+            token = ""
+            editing = model.settings.current
+        }
+    }
+
+    fun saveSettings() {
+        model.saveSettings(
+            saved.copy(
+                refreshSeconds = refresh.toIntOrNull()?.coerceIn(1, 60) ?: saved.refreshSeconds,
+                lines = lines.toIntOrNull()?.coerceIn(10, 2000) ?: saved.lines,
+                textSp = textSp.toIntOrNull()?.coerceIn(6, 24) ?: saved.textSp,
+                theme = theme,
+                blockScreenshots = block,
+                hardwareKeyboard = hardware,
+                effects = effects,
+                reflow = reflow,
+                watch = watch,
+                notifyText = notifyText,
+            ),
         )
-        problem = model.save(s, token)
-        if (problem == null) token = ""
+        if (model.hasToken) model.back()
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(4.dp)) {
@@ -83,10 +105,31 @@ fun ConnectScreen(model: AppModel) {
         }
         Spacer(Modifier.height(8.dp))
         model.notice?.let { Text("! $it", color = p.alert, modifier = Modifier.padding(vertical = 4.dp)) }
+        if (saved.hubs.isNotEmpty()) {
+            Panel("hubs", Modifier.padding(vertical = 4.dp), actions = {
+                Text("+ hub", color = p.dim, maxLines = 1, modifier = Modifier.clickable { editing = null; problem = null })
+            }) {
+                for (h in saved.hubs) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (h.id == saved.current) "▸ " else "  ", color = p.accent, maxLines = 1)
+                        Text(h.name, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Text(h.url, color = p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(2f))
+                        if (h.id != saved.current) Btn("use", { model.useHub(h.id) })
+                        Btn("edit", { editing = h.id; problem = null }, selected = editing == h.id)
+                        Btn("×", { if (editing == h.id) editing = null; model.removeHub(h.id) })
+                    }
+                }
+            }
+        }
+        Text(if (hub == null) "new hub" else "hub ${hub.name}", color = p.dim, modifier = Modifier.padding(top = 6.dp))
+        Field(
+            "name  ", name, { name = it.lowercase().take(32) }, hint = "home (from the address when empty)",
+            keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None, keyboardType = KeyboardType.Ascii),
+        )
         Field("hub   ", url, { url = it }, hint = "https://hub.example.com", keyboard = KeyboardOptions(keyboardType = KeyboardType.Uri))
         Field(
             "token ", token, { token = it }, secret = true,
-            hint = if (model.hasToken) "stored · paste to replace" else "mxt_…",
+            hint = if (stored) "stored · paste to replace" else "mxt_…",
             keyboard = KeyboardOptions(keyboardType = KeyboardType.Password),
         )
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -98,6 +141,8 @@ fun ConnectScreen(model: AppModel) {
             color = p.dim,
             modifier = Modifier.padding(vertical = 4.dp),
         )
+        problem?.let { Text("! $it", color = p.alert, modifier = Modifier.padding(vertical = 4.dp)) }
+        Btn("save and connect", ::saveHub)
         Rule(Modifier.padding(vertical = 6.dp))
         Row(Modifier.fillMaxWidth()) {
             Field("every ", refresh, { refresh = it.filter(Char::isDigit).take(2) }, Modifier.weight(1f), hint = "2 s", keyboard = KeyboardOptions(keyboardType = KeyboardType.Number))
@@ -121,12 +166,10 @@ fun ConnectScreen(model: AppModel) {
         }
         Toggle("notification text: show what a pane asks on the phone and the watch (bystanders can read it)", notifyText) { notifyText = it }
         Rule(Modifier.padding(vertical = 6.dp))
-        problem?.let { Text("! $it", color = p.alert, modifier = Modifier.padding(vertical = 4.dp)) }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
-            Btn("save and connect", ::save)
-            if (model.hasToken) Btn("forget token", { model.forgetToken() })
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Btn("save settings", ::saveSettings)
         }
         Spacer(Modifier.height(12.dp))
-        Text("  https only. plain http reaches localhost alone.\n  the token is kept in the keystore and never shown again.", color = p.dim)
+        Text("  https only. plain http reaches localhost alone.\n  each hub's token is kept in the keystore and never shown again.", color = p.dim)
     }
 }

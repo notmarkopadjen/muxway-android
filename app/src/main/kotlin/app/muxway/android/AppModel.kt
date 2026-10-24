@@ -20,6 +20,8 @@ import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Pane
 import app.muxway.android.protocol.Setup
+import app.muxway.android.store.Hub
+import app.muxway.android.store.Hubs
 import app.muxway.android.store.Settings
 import app.muxway.android.store.SettingsStore
 import app.muxway.android.store.Vault
@@ -66,7 +68,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     var settings by mutableStateOf(store.load())
         private set
-    var hasToken by mutableStateOf(vault.hasToken())
+    var hasToken by mutableStateOf(vault.hasToken(settings.current))
         private set
     private var api: Api? = null
 
@@ -98,6 +100,10 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     /** Why the Connect screen is showing, when the app put the user there. */
     var notice by mutableStateOf<String?>(null)
 
+    /** A scanned code for a hub that already has a token, until the person says which to keep. */
+    var pendingCode by mutableStateOf<Pair<Setup.Code, Hub>?>(null)
+        private set
+
     /** A pane a link asked for, opened once the listing confirms it exists. */
     private var pendingOpen: String? = null
 
@@ -115,7 +121,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     private fun api(): Api {
         api?.let { return it }
-        val token = vault.token() ?: throw ApiException(401, "unauthorized")
+        val token = vault.token(settings.current) ?: throw ApiException(401, "unauthorized")
         return Api(settings.hubUrl, token, userAgent).also { api = it }
     }
 
@@ -131,22 +137,71 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    /** Saves settings and, when given, a new token. Returns a message when something is wrong. */
-    fun save(s: Settings, newToken: String): String? {
-        val (url, why) = HubUrl.check(s.hubUrl)
-        if (url == null) return why
-        val tok = newToken.trim()
-        if (tok.isNotEmpty()) {
-            if (Input.printable(tok) != tok || tok.length > 200) return "That is not a token"
-            vault.store(tok)
-            hasToken = true
-        } else if (!hasToken) {
-            return "Paste a token"
-        }
-        settings = s.copy(hubUrl = url)
+    /** Saves the preferences; the hubs are changed through [saveHub], [useHub] and [removeHub]. */
+    fun saveSettings(s: Settings) {
+        settings = s.copy(hubs = settings.hubs, current = settings.current)
         store.save(settings)
         AttentionService.apply(getApplication())
+    }
+
+    fun hasTokenFor(id: String) = vault.hasToken(id)
+
+    /**
+     * Adds a hub, or with [id] changes one, and switches to it. A token given replaces the one
+     * stored; a name left empty comes from the host. Returns a message when something is wrong.
+     */
+    fun saveHub(id: String?, name: String, url: String, newToken: String): String? {
+        val (u, why) = HubUrl.check(url)
+        if (u == null) return why
+        val others = settings.hubs.filter { it.id != id }
+        val n = name.trim().ifEmpty { Hubs.defaultName(u, others) }
+        if (!Hubs.NAME.matches(n)) return "Name: a-z, 0-9 and -, up to 32"
+        if (others.any { it.name == n }) return "That name is taken"
+        if (others.any { it.url == u }) return "That hub is in the list"
+        if (id == null && settings.hubs.size >= Hubs.MAX) return "Up to ${Hubs.MAX} hubs"
+        val tok = newToken.trim()
+        if (tok.isNotEmpty() && (Input.printable(tok) != tok || tok.length > 200)) return "That is not a token"
+        val hubId = id ?: Hubs.newId(settings.hubs)
+        if (tok.isEmpty() && !vault.hasToken(hubId)) return "Paste a token"
+        if (tok.isNotEmpty()) vault.store(hubId, tok)
+        val hub = Hub(hubId, n, u)
+        settings = settings.copy(hubs = if (id == null) settings.hubs + hub else settings.hubs.map { if (it.id == id) hub else it })
+        useHub(hubId)
+        return null
+    }
+
+    /** Makes [id] the hub the app talks to: the client, the list and the watch follow. */
+    fun useHub(id: String) {
+        val hub = settings.hubs.firstOrNull { it.id == id } ?: return
+        settings = settings.copy(current = id)
+        store.save(settings)
+        reset()
+        hasToken = vault.hasToken(id)
+        AttentionService.apply(getApplication())
+        if (hasToken) {
+            notice = null
+            open(Screen.Panes)
+        } else {
+            notice = "Paste or scan a token for ${hub.name}."
+            screen = Screen.Connect
+        }
+    }
+
+    /** Drops a hub and its token; the next in the list takes over when it was the current one. */
+    fun removeHub(id: String) {
+        vault.clear(id)
+        val wasCurrent = settings.current == id
+        val hubs = settings.hubs.filter { it.id != id }
+        settings = settings.copy(hubs = hubs, current = if (wasCurrent) hubs.firstOrNull()?.id ?: "" else settings.current)
+        store.save(settings)
+        if (wasCurrent) reset()
+        hasToken = settings.current.isNotEmpty() && vault.hasToken(settings.current)
         notice = null
+        AttentionService.apply(getApplication())
+        if (!ready()) screen = Screen.Connect
+    }
+
+    private fun reset() {
         api = null
         probed = false
         transcriber = false
@@ -154,26 +209,38 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         lastKind.clear()
         panes = emptyList()
         hosts = emptyList()
+        listError = null
+        selected.clear()
         cursor = null
-        open(Screen.Panes)
-        return null
     }
 
-    /** A scanned connect code: hub and token go through the same checks as typed ones. */
+    /**
+     * A scanned connect code adds a hub, or gives a known one its token; hub and token go
+     * through the same checks as typed ones. A hub that has a token already is not changed
+     * until [replaceWithCode] says so.
+     */
     fun connectWithCode(text: String): String? {
         val code = Setup.parse(text) ?: return "That is not a muxway code"
-        return save(settings.copy(hubUrl = code.hub), code.token)
+        val (u, why) = HubUrl.check(code.hub)
+        if (u == null) return why
+        val have = settings.hubs.firstOrNull { it.url == u }
+        if (have != null && vault.hasToken(have.id)) {
+            pendingCode = code to have
+            return null
+        }
+        return saveHub(have?.id, have?.name ?: "", u, code.token)
     }
 
-    fun forgetToken() {
-        vault.clear()
-        hasToken = false
-        api = null
-        probed = false
-        transcriber = false
-        views.clear()
-        screen = Screen.Connect
-        AttentionService.apply(getApplication())
+    fun replaceWithCode(): String? {
+        val (code, hub) = pendingCode ?: return null
+        pendingCode = null
+        return saveHub(hub.id, hub.name, hub.url, code.token)
+    }
+
+    fun keepToken() {
+        val (_, hub) = pendingCode ?: return
+        pendingCode = null
+        useHub(hub.id)
     }
 
     /**
@@ -466,7 +533,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         api = null
         probed = false
         transcriber = false
-        vault.clear()
+        vault.clear(settings.current)
         hasToken = false
         views.clear()
         panes = emptyList()

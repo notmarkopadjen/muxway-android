@@ -13,6 +13,7 @@ import androidx.camera.view.PreviewView
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -42,7 +43,10 @@ import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.common.HybridBinarizer
 import java.util.concurrent.Executors
 
-/** Points the camera at a connect code; a good one saves hub and token and opens the panes. */
+/**
+ * Points the camera at a connect code; a good one adds the hub with its token and opens the
+ * panes. For a hub that has a token already, the person says whether the new one replaces it.
+ */
 @Composable
 fun ScanScreen(model: AppModel) {
     val p = LocalPalette.current
@@ -65,6 +69,13 @@ fun ScanScreen(model: AppModel) {
                 }
                 asked -> Text("camera refused · paste the token instead", color = p.dim)
                 else -> Text("camera permission…", color = p.dim)
+            }
+        }
+        model.pendingCode?.let { (_, hub) ->
+            Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("${hub.name} has a token: ", color = p.ink)
+                Btn("replace it", { model.replaceWithCode()?.let { status = "! $it" } })
+                Btn("keep it", { model.keepToken() })
             }
         }
         Text(" $status", color = if (status.startsWith("!")) p.alert else p.dim, modifier = Modifier.padding(4.dp))

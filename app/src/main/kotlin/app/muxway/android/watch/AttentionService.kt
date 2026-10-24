@@ -50,7 +50,7 @@ class AttentionService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        val token = Vault(this).token()
+        val token = Vault(this).token(settings.current)
         if (token == null || settings.hubUrl.isEmpty() || !settings.watch) {
             stopSelf()
             return START_NOT_STICKY
@@ -76,7 +76,7 @@ class AttentionService : Service() {
             } catch (e: ApiException) {
                 if (e.code == "unauthorized") {
                     // Final, as in the app: a refused token is forgotten so nothing retries it.
-                    Vault(this).clear()
+                    Vault(this).clear(settings.current)
                     notifier.say("the hub refused the token; open muxway")
                     stopSelf()
                     return
@@ -101,7 +101,8 @@ class AttentionService : Service() {
         /** Starts or stops the service to match the setting and whether a token is stored. */
         fun apply(context: Context) {
             val intent = Intent(context, AttentionService::class.java)
-            if (SettingsStore(context).load().watch && Vault(context).hasToken()) context.startForegroundService(intent)
+            val s = SettingsStore(context).load()
+            if (s.watch && s.current.isNotEmpty() && Vault(context).hasToken(s.current)) context.startForegroundService(intent)
             else context.stopService(intent)
         }
     }
