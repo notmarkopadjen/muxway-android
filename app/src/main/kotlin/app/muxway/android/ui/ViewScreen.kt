@@ -193,8 +193,11 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         }
         Rule()
         Box(Modifier.weight(1f)) {
+            // Tiles of one window share one fit; the others of it are held.
+            val windowOf = { a: String -> model.panes.firstOrNull { it.address == a }?.let { "${it.host}/${it.session}/${it.windowIndex}" } ?: a }
+            val held = TileFit.held(addresses, focused, windowOf)
             val tile: @Composable (Int, Modifier) -> Unit = { i, m ->
-                PaneTile(model, addresses[i], i == index, addresses.size > 1, fit, fitAgain, now, m, onDrop = { from -> model.swapTiles(addresses, from, addresses[i]) }) {
+                PaneTile(model, addresses[i], i == index, addresses.size > 1, fit, addresses[i] in held, fitAgain, now, m, onDrop = { from -> model.swapTiles(addresses, from, addresses[i]) }) {
                     focusedIndex = i
                     focus.requestFocus()
                 }
@@ -499,7 +502,9 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FocusRequest
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
-private fun PaneTile(model: AppModel, address: String, focused: Boolean, several: Boolean, fit: Boolean, fitAgain: Int, now: Long, modifier: Modifier, onDrop: (String) -> Unit, onFocus: () -> Unit) {
+private fun PaneTile(model: AppModel, address: String, focused: Boolean, several: Boolean, fitAsked: Boolean, shared: Boolean, fitAgain: Int, now: Long, modifier: Modifier, onDrop: (String) -> Unit, onFocus: () -> Unit) {
+    // Another tile of this window carries the fit: this one is held.
+    val fit = fitAsked && !shared
     val p = LocalPalette.current
     val state = model.view(address)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -545,9 +550,10 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
             status?.let { Lens.glyph(it, pane?.attention?.kind) }?.let { g ->
                 Text(" $g ${Lens.word(status, pane?.attention?.kind)} ", color = ink, maxLines = 1, modifier = if (waiting) Modifier.alpha(pulse()) else Modifier)
             }
-            if (fit && pane?.writable == true) {
-                // Alert colour when the host did not keep this phone's size: another terminal holds it.
-                val held = state.fitKey.isNotEmpty() && state.fitKey != "${pane.width}x${pane.height}"
+            if (fitAsked && pane?.writable == true) {
+                // Alert colour when the host did not keep this phone's size: another terminal holds
+                // it, or another tile of the window carries the fit.
+                val held = shared || (state.fitKey.isNotEmpty() && state.fitKey != "${pane.width}x${pane.height}")
                 Text(" ${pane.width}×${pane.height}${if (held) " held" else ""} ", color = if (held) p.alert else ink, maxLines = 1)
             }
         }

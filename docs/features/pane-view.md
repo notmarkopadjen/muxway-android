@@ -76,7 +76,12 @@ flowchart LR
   shows the host's size in the alert colour with "held". Tapping `⤢`
   while it is on sends the size again at once, and holding it turns fit
   off. A pane shorter than the tile sits at the bottom with empty rows
-  above; nothing can make 27 host rows fill 44.
+  above; nothing can make 27 host rows fill 44. Tiles that are panes of
+  one tmux window share one fit, because two fits on one row can only
+  undo each other: the focused tile's pane fits (or the first of them,
+  when the focus is in another window) and the others say "held", keep
+  fit off and are scaled to their tile; the focus moving to another tile
+  of the window moves the fit there, releasing the previous pane.
 - **Width.** With fit off, rows are shown at the pane's own width, as tmux
   shows them, and the font is sized so that width fits the tile, never
   larger than the **text** setting. A 96-column pane on a phone comes out
