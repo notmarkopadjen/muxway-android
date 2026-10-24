@@ -3,6 +3,8 @@ package app.muxway.android.e2e
 import app.muxway.android.protocol.Ansi
 import app.muxway.android.protocol.Api
 import app.muxway.android.protocol.ApiException
+import app.muxway.android.protocol.Board
+import app.muxway.android.protocol.Lens
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -307,6 +309,30 @@ class E2ETest {
         waitPane("^[[<0;5;3m")
         api.key(address, "C-c")
         waitFor("shell back") { core.command() == "bash" }
+    }
+
+    @Test
+    fun f17_theBoardRanksANotifiedPaneFirstUntilItIsAnswered() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        core.tmux("split-window", "-t", "work:0", "-h")
+        core.cli("expose", "--tmux-name", core.tmux, "-t", "work:0.1", "--write")
+        waitFor("two panes listed") { api.panes().size == 2 }
+        val quiet = Board.rank(api.panes(), 1, false) { Lens.status(it, null, false) }
+        assertEquals(listOf(Board.QUIET, Board.QUIET), quiet.rows.map { it.state })
+        assertEquals(address, quiet.rows[0].address)
+        core.notify("question", "deploy to staging?")
+        waitFor("attention listed") { api.panes().any { it.attention != null } }
+        val asked = Board.rank(api.panes(), 2, true) { Lens.status(it, null, false) }
+        assertEquals(address, asked.rows[0].address)
+        assertEquals(Board.WAITING, asked.rows[0].state)
+        assertEquals("question", asked.rows[0].kind)
+        assertEquals("deploy to staging?", asked.rows[0].text)
+        assertEquals(1, asked.waiting)
+        assertEquals(asked, Board.parse(asked.json()))
+        api.key(address, "Enter")
+        waitFor("attention cleared") { api.panes().all { it.attention == null } }
+        assertEquals(0, Board.rank(api.panes(), 3, false) { Lens.status(it, null, false) }.waiting)
     }
 
     @Test
