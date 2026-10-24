@@ -63,9 +63,12 @@ fun Frame(title: String, modifier: Modifier = Modifier, crumb: String = "", acti
     }
 }
 
-/** A box-drawn panel with its title sitting on the top edge, as the web client draws them. */
+/**
+ * A box-drawn panel with its title sitting on the top edge, as the web client draws them;
+ * [actions] sit on the same edge at the right.
+ */
 @Composable
-fun Panel(title: String, modifier: Modifier = Modifier, active: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+fun Panel(title: String, modifier: Modifier = Modifier, active: Boolean = false, actions: @Composable RowScope.() -> Unit = {}, content: @Composable ColumnScope.() -> Unit) {
     val p = LocalPalette.current
     Box(modifier.fillMaxWidth().padding(top = 7.dp)) {
         Column(
@@ -76,6 +79,9 @@ fun Panel(title: String, modifier: Modifier = Modifier, active: Boolean = false,
             Text("─ ", color = p.dim, maxLines = 1)
             Text(title, color = p.ink, maxLines = 1, style = LocalTextStyle.current.copy(fontFamily = Pixel, fontSize = 9.sp, letterSpacing = 1.sp, shadow = textGlow(strong = true)))
             Text(" ─", color = p.dim, maxLines = 1)
+        }
+        Row(Modifier.align(Alignment.TopEnd).offset(x = (-12).dp, y = (-7).dp).background(p.panel).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            actions()
         }
     }
 }

@@ -7,7 +7,7 @@ import org.json.JSONObject
 /** The hub's JSON, read defensively: a missing field is a default, a wrong type is an error. */
 object Json {
     fun hosts(body: String): List<Host> = parse(body) { o ->
-        list(o.optJSONArray("hosts")) { Host(it.optString("name"), it.optBoolean("online")) }
+        list(o.optJSONArray("hosts")) { Host(it.optString("name"), it.optBoolean("online"), it.optBoolean("sessions")) }
     }
 
     fun panes(body: String): List<Pane> = parse(body) { o -> list(o.optJSONArray("panes")) { pane(it) } }
@@ -45,6 +45,11 @@ object Json {
 
     fun fitAuto(): String = JSONObject().put("fit", "auto").toString()
 
+    fun direction(d: String): String = JSONObject().put("direction", d).toString()
+
+    fun name(n: String): String = JSONObject().put("name", n).toString()
+
+    /** The pane an answer carries: after a resize, a split or a new session. */
     fun resized(body: String): Pane = parse(body) { o -> pane(o.getJSONObject("pane")) }
 
     private fun pane(o: JSONObject): Pane {

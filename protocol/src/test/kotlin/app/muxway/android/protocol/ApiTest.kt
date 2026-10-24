@@ -37,6 +37,24 @@ class ApiTest {
     }
 
     @Test
+    fun splitAndNewSessionSendTheirBodiesAndTakeThePaneBack() {
+        answer = { json(201, """{"pane":{"host":"alice-laptop","address":"alice-laptop/work/0.1","session":"work","window_index":0,"pane_index":1,"pane_id":"%5","mode":"write","title":"test-pane","command":"bash"}}""") }
+        val p = api().split("alice-laptop", "work", 0, "h")
+        assertEquals("alice-laptop/work/0.1", p.address)
+        assertTrue(p.writable)
+        api().newSession("alice-laptop", "scratch")
+        assertEquals("/v1/windows/alice-laptop/work/0/panes", seen[0].path)
+        assertEquals("""{"direction":"h"}""", String(seen[0].body))
+        assertEquals("/v1/hosts/alice-laptop/sessions", seen[1].path)
+        assertEquals("""{"name":"scratch"}""", String(seen[1].body))
+        for (bad in listOf("Scratch", "a b", "a;b", "../x", "", "a".repeat(33), "=work")) {
+            assertThrows(IllegalArgumentException::class.java) { api().newSession("alice-laptop", bad) }
+        }
+        assertThrows(IllegalArgumentException::class.java) { api().split("alice-laptop", "work", 0, "x") }
+        assertEquals(2, seen.size)
+    }
+
+    @Test
     fun resizeSendsColsAndRowsAndReleaseSendsFitAuto() {
         answer = { json(200, """{"pane":{"address":"h/w/0.0","width":40,"height":12,"mode":"write"}}""") }
         val p = api().resize("h/w/0.0", 40, 12)

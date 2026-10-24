@@ -112,4 +112,32 @@ class FlowTest {
         rule.onAllNodes(hasText(token.substring(4, 20), substring = true)).assertCountEquals(0)
         rule.onAllNodes(hasText("stored", substring = true)).onFirst()
     }
+
+    @Test
+    fun newPaneAndNewSessionFromTheList() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0")
+        await("+ pane").performClick()
+        await("send")
+        await("$ ")
+        shot("new-pane")
+        rule.onNodeWithText("panes").performClick()
+        await("work/0.1")
+
+        await("+ session").performClick()
+        await("cancel")
+        rule.onNode(hasSetTextAction()).performTextInput("Scratch!")
+        rule.onNodeWithText("start").performClick()
+        await("! a-z")
+        shot("new-session-dialog")
+        rule.onNodeWithText("cancel").performClick()
+        // One creation per two seconds per token.
+        Thread.sleep(2100)
+        await("+ session").performClick()
+        rule.onNode(hasSetTextAction()).performTextInput("scratch")
+        rule.onNodeWithText("start").performClick()
+        await("scratch/0.0")
+        await("$ ")
+        shot("new-session")
+    }
 }

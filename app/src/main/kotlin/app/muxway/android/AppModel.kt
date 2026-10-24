@@ -101,6 +101,12 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     /** A pane a link asked for, opened once the listing confirms it exists. */
     private var pendingOpen: String? = null
 
+    /** The host a new session is being named for, while its dialog shows. */
+    var naming by mutableStateOf<String?>(null)
+    var creating by mutableStateOf(false)
+        private set
+    var createError by mutableStateOf<String?>(null)
+
     init {
         AttentionService.apply(app)
     }
@@ -207,6 +213,39 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 if (e.code == "unauthorized") tokenRefused()
             } finally {
                 listing = false
+            }
+        }
+    }
+
+    /** One more pane in the window of [pane], beside a wide pane or below a tall one; it opens. */
+    fun splitWindow(pane: Pane) = create(inDialog = false) {
+        it.split(pane.host, pane.session, pane.windowIndex, if (pane.width > 2 * pane.height) "h" else "v")
+    }
+
+    /** A session named by the person on [host]; its pane opens and the dialog closes. */
+    fun startSession(host: String, name: String) {
+        val n = name.trim()
+        if (!Api.SESSION_NAME.matches(n)) {
+            createError = "a-z, 0-9, _ and -, up to 32"
+            return
+        }
+        create(inDialog = true) { it.newSession(host, n) }
+    }
+
+    private fun create(inDialog: Boolean, action: (Api) -> Pane) {
+        if (creating) return
+        viewModelScope.launch {
+            creating = true
+            createError = null
+            try {
+                val pane = withContext(Dispatchers.IO) { action(api()) }
+                naming = null
+                open(Screen.View(listOf(pane.address)))
+            } catch (e: ApiException) {
+                if (inDialog) createError = e.message else listError = e.message
+                if (e.code == "unauthorized") tokenRefused()
+            } finally {
+                creating = false
             }
         }
     }

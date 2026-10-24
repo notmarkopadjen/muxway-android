@@ -16,6 +16,8 @@ class Api(private val baseUrl: String, private val token: String, private val us
         private const val READ_TIMEOUT = 40_000
         /** The hub gives the transcriber ninety seconds. */
         private const val TRANSCRIBE_TIMEOUT = 95_000
+        /** What a client may name a session it starts. */
+        val SESSION_NAME = Regex("^[a-z0-9_-]{1,32}$")
     }
 
     fun hosts(): List<Host> = Json.hosts(get("hosts").body)
@@ -50,6 +52,18 @@ class Api(private val baseUrl: String, private val token: String, private val us
     fun resize(address: String, cols: Int, rows: Int): Pane {
         require(cols in 20..500 && rows in 5..300) { "size" }
         return Json.resized(post("panes/${encode(address)}/resize", Json.size(cols, rows)).body)
+    }
+
+    /** One more pane in a window, beside ("h") or below ("v") a pane there you may type into; the new pane. */
+    fun split(host: String, session: String, window: Int, direction: String): Pane {
+        require(direction == "h" || direction == "v") { "direction" }
+        return Json.resized(post("windows/${encode("$host/$session")}/$window/panes", Json.direction(direction)).body)
+    }
+
+    /** A session on a host whose agent allows it, named [name]; its first pane. */
+    fun newSession(host: String, name: String): Pane {
+        require(SESSION_NAME.matches(name)) { "session name" }
+        return Json.resized(post("hosts/${encode(host)}/sessions", Json.name(name)).body)
     }
 
     /** Gives the pane and its window back to tmux's own sizing. */
@@ -106,7 +120,7 @@ class Api(private val baseUrl: String, private val token: String, private val us
             val status = c.responseCode
             val stream = if (status >= 400) c.errorStream else c.inputStream
             val body = if (status == 204 || status == 304 || stream == null) "" else readCapped(stream)
-            if (status == 200 || status == 204 || status == 304) {
+            if (status == 200 || status == 201 || status == 204 || status == 304) {
                 return Response(status, body, c.getHeaderField("ETag") ?: "")
             }
             throw ApiException(status, Json.error(body))

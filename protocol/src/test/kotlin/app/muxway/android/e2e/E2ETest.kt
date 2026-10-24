@@ -44,9 +44,9 @@ class E2ETest {
         cleanups.reversed().forEach { runCatching(it) }
     }
 
-    private fun setup(expose: String? = "--write", write: String? = "$HOST/*", revoke: Boolean = false): Pair<Api, String> {
+    private fun setup(expose: String? = "--write", write: String? = "$HOST/*", revoke: Boolean = false, allowSessions: Boolean = false): Pair<Api, String> {
         val logs = Env.logs(name.methodName)
-        core = Core(logs).start(expose)
+        core = Core(logs).start(expose, allowSessions)
         cleanups.add(core::close)
         val tok = core.token(write = write)
         if (revoke) core.revokeAll()
@@ -345,6 +345,43 @@ class E2ETest {
         api.key(address, "Enter")
         waitFor("attention cleared") { api.panes().all { it.attention == null } }
         assertEquals(0, Board.rank(api.panes(), 3, false) { Lens.status(it, null, false) }.waiting)
+    }
+
+    @Test
+    fun f18_aSplitMakesAWritableSiblingAndSessionsNeedTheAgentsFlag() {
+        val (api, _) = setup()
+        assertFalse(api.hosts().single().sessions)
+        val e = assertThrows(ApiException::class.java) { api.newSession(HOST, "scratch") }
+        assertEquals(404, e.status)
+        assertEquals("not_found", e.code)
+        // The mark sits on the pane alone; the split carries it over.
+        val made = api.split(HOST, "work", 0, "v")
+        assertEquals("$HOST/work/0.1", made.address)
+        assertTrue(made.writable)
+        assertEquals(2, api.panes().size)
+        waitFor("the new shell") { core.tmux("capture-pane", "-p", "-t", made.paneId).contains("$") }
+        assertThrows(IllegalArgumentException::class.java) { api.split(HOST, "work", 0, "x") }
+        assertThrows(IllegalArgumentException::class.java) { api.newSession(HOST, "Scratch!") }
+        assertEquals("work", core.tmux("list-sessions", "-F", "#{session_name}"))
+    }
+
+    @Test
+    fun f19_aSessionStartsWhereTheAgentAllowsItAndNotForAReadOnlyToken() {
+        val (api, _) = setup(allowSessions = true)
+        assertTrue(api.hosts().single().sessions)
+        val readOnly = Api(relay.url, core.token(write = null), "muxway-android-e2e")
+        val e = assertThrows(ApiException::class.java) { readOnly.newSession(HOST, "scratch") }
+        assertEquals(403, e.status)
+        assertEquals("read_only", e.code)
+        val made = api.newSession(HOST, "scratch")
+        assertEquals("$HOST/scratch/0.0", made.address)
+        assertTrue(made.writable)
+        waitFor("the session's shell") { core.tmux("capture-pane", "-p", "-t", made.paneId).contains("$") }
+        // The name is taken now; another token, since one creation per two seconds is each one's.
+        val again = assertThrows(ApiException::class.java) { Api(relay.url, core.token(), "muxway-android-e2e").newSession(HOST, "scratch") }
+        assertEquals(409, again.status)
+        assertEquals("exists", again.code)
+        assertEquals(2, api.panes().size)
     }
 
     @Test

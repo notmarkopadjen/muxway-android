@@ -29,7 +29,7 @@ hub_pid=$!
 for _ in $(seq 50); do [ -S "$tmp/hub/admin.sock" ] && break; sleep 0.2; done
 code=$("$bin" hub pair-code --dir "$tmp/hub" --host alice-laptop)
 "$bin" agent pair --dir "$tmp/agent" "$code"
-"$bin" agent run --dir "$tmp/agent" --tmux-name "$tmuxname" >> "$logs/agent.log" 2>&1 &
+"$bin" agent run --dir "$tmp/agent" --tmux-name "$tmuxname" --allow-sessions >> "$logs/agent.log" 2>&1 &
 agent_pid=$!
 for _ in $(seq 50); do "$bin" hub agents --dir "$tmp/hub" | grep -q "alice-laptop	online" && break; sleep 0.2; done
 "$bin" expose --tmux-name "$tmuxname" -t work:0.0 --write

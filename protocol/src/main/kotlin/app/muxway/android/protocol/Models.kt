@@ -1,6 +1,7 @@
 package app.muxway.android.protocol
 
-data class Host(val name: String, val online: Boolean)
+/** [sessions]: the host's agent lets clients start sessions. */
+data class Host(val name: String, val online: Boolean, val sessions: Boolean = false)
 
 data class Attention(val kind: String, val at: Long, val text: String)
 
@@ -58,6 +59,8 @@ class ApiException(val status: Int, val code: String) : Exception(messageFor(sta
             "locked_out" -> "Too many failed logins from this network. Wait ten minutes"
             "rate_limited" -> "Too many requests, slow down"
             "host_offline" -> "Host offline"
+            "exists" -> "That name is taken"
+            "too_many" -> "Too many already: 8 panes a window, 32 sessions"
             "provider_unavailable" -> "Transcriber unavailable"
             "bad_json", "bad_input", "bad_parameter" -> "The hub refused the request"
             "no_mouse_hub" -> "This hub has no mouse support yet"

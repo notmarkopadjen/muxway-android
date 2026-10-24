@@ -69,23 +69,27 @@ class Core(private val logs: File) {
         return out.trim()
     }
 
-    fun start(expose: String? = "--write"): Core {
+    fun start(expose: String? = "--write", allowSessions: Boolean = false): Core {
         val shell = "env -i PATH=/usr/bin:/bin TERM=xterm LANG=C.UTF-8 PS1='$ ' bash --norc --noprofile"
         tmux("-f", "/dev/null", "new-session", "-d", "-s", "work", "-n", "shell", "-x", "80", "-y", "24", shell)
+        // Panes and sessions made later get the same clean shell.
+        tmux("set-option", "-g", "default-command", shell)
         tmux("select-pane", "-t", "work:0.0", "-T", "test-pane")
         spawn("hub", "hub", "serve", "--dir", hubDir.path, "--listen", "127.0.0.1:$port", "--public-url", url)
         waitFor("hub") { File(hubDir, "admin.sock").exists() }
         val code = cli("hub", "pair-code", "--dir", hubDir.path, "--host", HOST)
         cli("agent", "pair", "--dir", agentDir.path, code)
-        startAgent()
+        startAgent(allowSessions)
         val args = arrayListOf("expose", "--tmux-name", tmux, "-t", "work:0.0")
         if (expose != null) args.add(expose)
         cli(*args.toTypedArray())
         return this
     }
 
-    fun startAgent() {
-        spawn("agent", "agent", "run", "--dir", agentDir.path, "--tmux-name", tmux)
+    fun startAgent(allowSessions: Boolean = false) {
+        val args = arrayListOf("agent", "run", "--dir", agentDir.path, "--tmux-name", tmux)
+        if (allowSessions) args.add("--allow-sessions")
+        spawn("agent", *args.toTypedArray())
         waitFor("agent online") { cli("hub", "agents", "--dir", hubDir.path).contains("$HOST\tonline") }
     }
 
