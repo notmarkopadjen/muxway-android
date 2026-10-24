@@ -62,6 +62,7 @@ object Json {
             alias = o.optString("alias"),
             activity = o.optLong("activity"),
             attention = a?.let { Attention(it.optString("kind"), it.optLong("at"), Input.printable(it.optString("text"))) },
+            mouse = if (o.has("mouse")) o.optBoolean("mouse") else null,
         )
     }
 

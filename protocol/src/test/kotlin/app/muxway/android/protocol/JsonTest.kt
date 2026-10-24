@@ -32,6 +32,13 @@ class JsonTest {
     }
 
     @Test
+    fun theMouseFlagIsNullUntilTheHubSaysIt() {
+        assertNull(Json.panes("""{"panes":[{"session":"work"}]}""").single().mouse)
+        assertEquals(true, Json.panes("""{"panes":[{"session":"work","mouse":true}]}""").single().mouse)
+        assertEquals(false, Json.panes("""{"panes":[{"session":"work","mouse":false}]}""").single().mouse)
+    }
+
+    @Test
     fun theNameIsTheCleanedTitleWhenThereIsOne() {
         val p = Json.panes("""{"panes":[{"session":"work","window_index":0,"pane_index":1,"alias":"logs","title":"\u001b]0;x\u0007\u2733 build \u001b[1mserver\u0007"}]}""").single()
         assertEquals("logs", p.label)

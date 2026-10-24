@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.LocalOverscrollConfiguration
 import android.content.ClipData
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -24,7 +25,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -114,6 +118,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val state = model.view(focused)
     // Fit: the host pane follows the tile, as a terminal would. On by default for one pane.
     var fit by rememberSaveable(addresses) { mutableStateOf(addresses.size == 1) }
+    var fitAgain by remember { mutableIntStateOf(0) }
     val hardware = model.settings.hardwareKeyboard
     // With a hardware keyboard assumed the on-screen one stays down until asked for.
     var ime by rememberSaveable(hardware) { mutableStateOf(!hardware) }
@@ -164,14 +169,15 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             Btn("‹", { model.open(Screen.Panes) })
             Tabs(model, addresses, focused, now, Modifier.weight(1f), ::show)
             if (addresses.size > 1) Btn("▦", { layout = layout.next(addresses.size) })
-            Btn("⤢", { fit = !fit }, selected = fit, enabled = writable)
+            // Tap: fit on, or send this size once more when it is on already; hold: fit off.
+            Btn("⤢", { if (fit) fitAgain++ else fit = true }, selected = fit, enabled = writable, onLongClick = { fit = false })
             if (hardware) Btn("⌨", { ime = !ime; if (ime) { fieldFocus.requestFocus(); keyboard?.show() } else keyboard?.hide() }, selected = ime)
             Btn("⚙", { model.open(Screen.Connect) })
         }
         Rule()
         Box(Modifier.weight(1f)) {
             val tile: @Composable (Int, Modifier) -> Unit = { i, m ->
-                PaneTile(model, addresses[i], i == index, addresses.size > 1, fit, now, m, onDrop = { from -> model.swapTiles(addresses, from, addresses[i]) }) {
+                PaneTile(model, addresses[i], i == index, addresses.size > 1, fit, fitAgain, now, m, onDrop = { from -> model.swapTiles(addresses, from, addresses[i]) }) {
                     focusedIndex = i
                     focus.requestFocus()
                 }
@@ -383,9 +389,9 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FocusRequest
  * back through what the hub sent. With fit the host pane is sized to the tile at the text setting;
  * otherwise the pane's own width is scaled to fit (or reflowed, by setting), pinch zooms.
  */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
-private fun PaneTile(model: AppModel, address: String, focused: Boolean, several: Boolean, fit: Boolean, now: Long, modifier: Modifier, onDrop: (String) -> Unit, onFocus: () -> Unit) {
+private fun PaneTile(model: AppModel, address: String, focused: Boolean, several: Boolean, fit: Boolean, fitAgain: Int, now: Long, modifier: Modifier, onDrop: (String) -> Unit, onFocus: () -> Unit) {
     val p = LocalPalette.current
     val state = model.view(address)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -456,8 +462,12 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
             val visibleRows = (heightPx / rowPx).toInt().coerceAtLeast(1)
             val cols = if (fitting || reflow) visibleCols else paneCols
             val rows = remember(state.content, cols) { if (cols == paneCols && pane?.width == null) unwrapped else Ansi.rows(state.content, cols) }
-            LaunchedEffect(fitting, visibleCols, visibleRows) {
-                if (fitting) model.fit(address, visibleCols.coerceIn(20, 500), visibleRows.coerceIn(5, 300)) else model.release(address)
+            // The on-screen keyboard halves the tile for a moment; the host keeps its size then.
+            val imeUp = WindowInsets.isImeVisible
+            val listed = pane?.let { "${it.width}x${it.height}" }
+            LaunchedEffect(fitting, visibleCols, visibleRows, imeUp, fitAgain, listed) {
+                if (!fitting) model.release(address)
+                else if (!imeUp) model.fit(address, visibleCols.coerceIn(20, 500), visibleRows.coerceIn(5, 300), again = fitAgain > 0 && listed != null)
             }
             DisposableEffect(address) { onDispose { model.release(address) } }
             val lines = remember(rows, p) { rows.map { styled(it, p) }.asReversed() }

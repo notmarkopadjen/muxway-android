@@ -20,6 +20,8 @@ data class Pane(
     val alias: String,
     val activity: Long,
     val attention: Attention?,
+    /** Whether the program asked its terminal for the mouse; null when the hub does not say. */
+    val mouse: Boolean? = null,
 ) {
     val writable get() = mode == "write"
 

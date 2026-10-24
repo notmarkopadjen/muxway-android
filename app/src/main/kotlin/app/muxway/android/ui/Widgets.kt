@@ -7,7 +7,9 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -73,9 +75,10 @@ fun Rule(modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().height(1.dp).background(LocalPalette.current.faint))
 }
 
-/** `[label]`: a bordered button; selected is inverted and glows. */
+/** `[label]`: a bordered button; selected is inverted and glows. A long press may do something else. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun Btn(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, selected: Boolean = false, enabled: Boolean = true) {
+fun Btn(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, selected: Boolean = false, enabled: Boolean = true, onLongClick: (() -> Unit)? = null) {
     val p = LocalPalette.current
     val fg = if (selected) p.bg else if (enabled) p.ink else p.faint
     val bg = if (selected) p.ink else p.bg
@@ -88,7 +91,7 @@ fun Btn(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, selec
             .padding(2.dp)
             .border(1.dp, if (selected) p.ink else if (enabled) p.dim else p.faint)
             .background(bg)
-            .clickable(enabled = enabled, onClick = onClick)
+            .then(if (onLongClick == null) Modifier.clickable(enabled = enabled, onClick = onClick) else Modifier.combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongClick))
             .padding(horizontal = 8.dp, vertical = 4.dp),
     )
 }

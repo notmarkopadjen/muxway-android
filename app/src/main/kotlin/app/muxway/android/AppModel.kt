@@ -47,8 +47,9 @@ class PaneState(val address: String) {
     /** When the content last changed, in seconds; the lens counts a recent change as working. */
     var changedAt by mutableLongStateOf(0L)
 
-    /** Fit: the last size sent to the host, and whether a release is owed. */
+    /** Fit: the last size sent to the host, when, and whether a release is owed. */
     var fitKey = ""
+    var fitAt = 0L
     var fitted = false
     var fitJob: Job? = null
 }
@@ -217,10 +218,14 @@ class AppModel(app: Application) : AndroidViewModel(app) {
      * Fit: asks the host to size the pane to [cols] × [rows], debounced, once per distinct size,
      * retried after the hub's one-per-second limit. The answer is the pane as listed afterwards.
      */
-    fun fit(address: String, cols: Int, rows: Int) {
+    fun fit(address: String, cols: Int, rows: Int, again: Boolean = false) {
         val v = view(address)
         val key = "${cols}x$rows"
-        if (v.fitKey == key) return
+        // Once per size, unless asked again, or the host drifted from it (another terminal sized
+        // the window) and the last request is old enough that two clients cannot fight fast.
+        val drifted = v.pane?.let { it.width != cols || it.height != rows } == true
+        val stale = System.currentTimeMillis() - v.fitAt > 20_000
+        if (v.fitKey == key && !again && !(drifted && stale)) return
         v.fitJob?.cancel()
         v.fitJob = viewModelScope.launch {
             delay(300)
@@ -229,6 +234,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 try {
                     val p = withContext(Dispatchers.IO) { api().resize(address, cols, rows) }
                     v.fitKey = key
+                    v.fitAt = System.currentTimeMillis()
                     v.fitted = true
                     v.pane = p
                     v.etag = null
@@ -251,6 +257,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         val v = views[address] ?: return
         v.fitJob?.cancel()
         v.fitKey = ""
+        v.fitAt = 0L
         if (!v.fitted) return
         v.fitted = false
         viewModelScope.launch {
@@ -261,6 +268,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     /** A tap on the pane: a left click at the cell, when the pane's program has the mouse. */
     fun click(address: String, x: Int, y: Int) = send(address) {
+        if (view(address).pane?.mouse == false) throw ApiException(400, "no_mouse_pane")
         try {
             it.mouse(address, "left", x, y)
         } catch (e: ApiException) {
