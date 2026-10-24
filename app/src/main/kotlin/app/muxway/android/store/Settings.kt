@@ -13,6 +13,7 @@ data class Settings(
     val blockScreenshots: Boolean = false,
     val hardwareKeyboard: Boolean = false,
     val effects: Boolean = true,
+    val reflow: Boolean = false,
 )
 
 /** Everything but the token, in plain app-private preferences. */
@@ -30,6 +31,7 @@ class SettingsStore(context: Context) {
             blockScreenshots = prefs.getBoolean("block_screenshots", d.blockScreenshots),
             hardwareKeyboard = prefs.getBoolean("hardware_keyboard", d.hardwareKeyboard),
             effects = prefs.getBoolean("effects", d.effects),
+            reflow = prefs.getBoolean("reflow", d.reflow),
         )
     }
 
@@ -43,6 +45,7 @@ class SettingsStore(context: Context) {
             .putBoolean("block_screenshots", s.blockScreenshots)
             .putBoolean("hardware_keyboard", s.hardwareKeyboard)
             .putBoolean("effects", s.effects)
+            .putBoolean("reflow", s.reflow)
             .apply()
     }
 }

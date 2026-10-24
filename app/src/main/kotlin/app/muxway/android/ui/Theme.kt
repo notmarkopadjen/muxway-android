@@ -62,7 +62,7 @@ val Green = Palette(
 )
 val Amber = Palette(
     bg = Color(0xFF0A0603), panel = Color(0xFF140B05), ink = Color(0xFFFFB000), dim = Color(0xFFA06C00), faint = Color(0xFF4A3200),
-    accent = Color(0xFFFFD36B), attention = Color(0xFF39FF14), alert = Color(0xFFFF3B3B), glow = Color(0xFFFFB000),
+    accent = Color(0xFFFFD36B), attention = Color(0xFFFFD36B), alert = Color(0xFFFF3B3B), glow = Color(0xFFFFB000),
     scan = Color(0f, 0f, 0f, 0.22f), vignette = Color(0f, 0f, 0f, 0.55f), light = false, ansi = darkAnsi,
 )
 val Paper = Palette(

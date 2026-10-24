@@ -26,6 +26,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -101,6 +104,8 @@ fun Field(
     hint: String = "",
     keyboard: KeyboardOptions = KeyboardOptions.Default,
     actions: KeyboardActions = KeyboardActions.Default,
+    focusRequester: FocusRequester? = null,
+    onFocus: ((Boolean) -> Unit)? = null,
 ) {
     val p = LocalPalette.current
     Row(modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -116,7 +121,9 @@ fun Field(
                 visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
                 keyboardOptions = keyboard,
                 keyboardActions = actions,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth()
+                    .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+                    .onFocusChanged { onFocus?.invoke(it.isFocused) },
             )
         }
     }

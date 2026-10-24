@@ -1,14 +1,14 @@
 package app.muxway.android.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -17,12 +17,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,12 +39,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -52,11 +52,9 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.PlatformTextInputInterceptor
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -68,6 +66,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -79,10 +78,15 @@ import app.muxway.android.Screen
 import app.muxway.android.protocol.Ansi
 import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.Lens
-import kotlinx.coroutines.awaitCancellation
+import app.muxway.android.protocol.Pane
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 
-/** One or more panes, side by side in landscape and stacked in portrait, with tabs above and one input bar. */
+/**
+ * One or more panes, side by side in landscape and stacked in portrait. The top row is the tab
+ * strip, coloured by each pane's state, and the controls; a swipe across the page moves to the
+ * neighbouring pane; one input bar serves the focused pane.
+ */
 @Composable
 fun ViewScreen(model: AppModel, addresses: List<String>) {
     val p = LocalPalette.current
@@ -90,15 +94,19 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val index = focusedIndex.coerceIn(0, addresses.lastIndex)
     val focused = addresses[index]
     val state = model.view(focused)
-    var remote by rememberSaveable { mutableStateOf(false) }
-    var wrap by rememberSaveable { mutableStateOf(false) }
     // Fit: the host pane follows the tile, as a terminal would. On by default for one pane.
     var fit by rememberSaveable(addresses) { mutableStateOf(addresses.size == 1) }
+    val hardware = model.settings.hardwareKeyboard
+    // With a hardware keyboard assumed the on-screen one stays down until asked for.
+    var ime by rememberSaveable(hardware) { mutableStateOf(!hardware) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val fieldFocus = remember { FocusRequester() }
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     val writable = state.pane?.writable == true
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     val now = ticker()
+    val order = model.panes.map { it.address }.ifEmpty { addresses }
 
     fun hardKey(e: KeyEvent): Boolean {
         if (e.type != KeyEventType.KeyDown || !writable) return false
@@ -107,15 +115,41 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         return true
     }
 
-    Column(Modifier.fillMaxSize().onKeyEvent(::hardKey).focusRequester(focus).focusable()) {
-        Tabs(model, addresses, focused, now) { tapped ->
-            val at = addresses.indexOf(tapped)
-            if (at >= 0) focusedIndex = at else model.swap(addresses, index, tapped)
-            focus.requestFocus()
+    fun show(address: String) {
+        val at = addresses.indexOf(address)
+        if (at >= 0) focusedIndex = at else model.swap(addresses, index, address)
+        focus.requestFocus()
+    }
+
+    fun neighbour(step: Int) {
+        val at = order.indexOf(focused)
+        if (at < 0) return
+        val next = (at + step).coerceIn(0, order.lastIndex)
+        if (next != at) show(order[next])
+    }
+
+    val swipe = with(LocalDensity.current) { 72.dp.toPx() }
+    Column(
+        Modifier.fillMaxSize().onKeyEvent(::hardKey).focusRequester(focus).focusable()
+            .pointerInput(order, focused, addresses) {
+                var total = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { total = 0f },
+                    onDragEnd = { if (abs(total) > swipe) neighbour(if (total < 0) 1 else -1) },
+                ) { _, dx -> total += dx }
+            },
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Tabs(model, addresses, focused, now, Modifier.weight(1f), ::show)
+            Btn("≡", { model.open(Screen.Panes) })
+            Btn("⤢", { fit = !fit }, selected = fit, enabled = writable)
+            if (hardware) Btn("⌨", { ime = !ime; if (ime) { fieldFocus.requestFocus(); keyboard?.show() } else keyboard?.hide() }, selected = ime)
+            Btn("⚙", { model.open(Screen.Connect) })
         }
+        Rule()
         Box(Modifier.weight(1f)) {
             val tile: @Composable (Int, Modifier) -> Unit = { i, m ->
-                PaneTile(model, addresses[i], i == index && addresses.size > 1, remote && i == index, wrap, fit, now, m) { focusedIndex = i; focus.requestFocus() }
+                PaneTile(model, addresses[i], i == index, addresses.size > 1, fit, now, m) { focusedIndex = i; focus.requestFocus() }
             }
             if (landscape || addresses.size == 1) {
                 Row(Modifier.fillMaxSize()) { for (i in addresses.indices) tile(i, Modifier.weight(1f).fillMaxHeight()) }
@@ -129,51 +163,60 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         when {
             pane == null -> Text(" …", color = p.dim, modifier = Modifier.padding(4.dp))
             !pane.writable -> Text(" read-only · ${pane.address}", color = p.dim, modifier = Modifier.padding(4.dp))
-            else -> InputBar(model, state, remote, wrap, fit, { remote = it }, { wrap = it }, { fit = it })
+            else -> InputBar(model, state, fieldFocus) { gained -> if (gained && hardware && !ime) keyboard?.hide() }
         }
-        Row(Modifier.fillMaxWidth().padding(2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Btn("panes", { model.open(Screen.Panes) })
-            Text(state.error?.let { "! $it" } ?: state.updated.ifEmpty { "connecting" }, color = if (state.error != null) p.alert else p.dim, maxLines = 1)
-            Btn("settings", { model.open(Screen.Connect) })
-        }
+        Text(
+            state.error?.let { "! $it" } ?: state.updated.ifEmpty { "connecting" },
+            color = if (state.error != null) p.alert else p.faint, maxLines = 1,
+            style = LocalTextStyle.current.copy(fontSize = 10.sp), modifier = Modifier.padding(horizontal = 6.dp),
+        )
     }
 }
 
-private class Tab(val address: String, val label: String, val glyph: String?, val waiting: Boolean)
+/** The colours a pane's state paints a tab or header with: background, then ink. */
+@Composable
+private fun stateColours(pane: Pane?, now: Long): Pair<Color, Color> {
+    val p = LocalPalette.current
+    return when (pane?.let { Lens.status(it, now) }) {
+        Lens.Status.WAITING -> p.attention to p.bg
+        Lens.Status.WORKING -> p.dim to p.bg
+        else -> p.panel to p.ink
+    }
+}
 
 /**
- * Every pane the token may read; the open ones inverted. A glyph before the name says what the
- * Claude lens sees: working, or waiting for you. Tapping a closed one swaps it into the focused tile.
+ * Every pane the token may read, each painted with its state: attention colour when it waits for
+ * you, dim when it works, plain when quiet. Open panes have a thick border, the focused one the
+ * thickest and its name in bold. Tapping a closed one swaps it into the focused tile.
  */
 @Composable
-private fun Tabs(model: AppModel, open: List<String>, focused: String, now: Long, onTap: (String) -> Unit) {
+private fun Tabs(model: AppModel, open: List<String>, focused: String, now: Long, modifier: Modifier, onTap: (String) -> Unit) {
     val p = LocalPalette.current
-    val tabs = ArrayList<Tab>()
-    fun add(pane: app.muxway.android.protocol.Pane?, address: String) {
-        if (pane == null) tabs.add(Tab(address, address.substringAfter('/'), null, false))
-        else tabs.add(Tab(address, pane.name, Lens.glyph(pane, now), Lens.status(pane, now) == Lens.Status.WAITING))
-    }
-    for (pane in model.panes) add(pane, pane.address)
-    for (a in open) if (tabs.none { it.address == a }) add(model.view(a).pane, a)
-    LazyRow(Modifier.fillMaxWidth().background(p.bg), verticalAlignment = Alignment.CenterVertically) {
-        items(tabs, key = { it.address }) { t ->
-            val isOpen = t.address in open
-            val fg = if (isOpen) p.bg else p.ink
-            val mark = if (isOpen) p.bg else if (t.waiting) p.attention else p.dim
-            val isFocused = t.address == focused
-            // An open tab is inverted; one that waits for you is inverted in the attention colour.
-            val back = if (!isOpen) p.bg else if (t.waiting) p.attention else p.ink
+    val panes = ArrayList<Pair<String, Pane?>>()
+    for (pane in model.panes) panes.add(pane.address to pane)
+    for (a in open) if (panes.none { it.first == a }) panes.add(a to model.view(a).pane)
+    val list = rememberLazyListState()
+    LaunchedEffect(focused, panes.size) { panes.indexOfFirst { it.first == focused }.takeIf { it >= 0 }?.let { list.animateScrollToItem(it) } }
+    LazyRow(modifier.background(p.bg), state = list, verticalAlignment = Alignment.CenterVertically) {
+        items(panes, key = { it.first }) { (address, pane) ->
+            val isOpen = address in open
+            val isFocused = address == focused
+            val (back, ink) = stateColours(pane, now)
+            val waiting = pane != null && Lens.status(pane, now) == Lens.Status.WAITING
+            val border: Dp = if (isFocused) 3.dp else if (isOpen) 2.dp else 1.dp
             Row(
-                Modifier.background(back).clickable { onTap(t.address) }.padding(horizontal = 4.dp, vertical = 6.dp),
+                Modifier.padding(2.dp).border(border, if (isOpen) p.ink else p.faint).background(back)
+                    .clickable { onTap(address) }.padding(horizontal = 8.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(if (isFocused) "┤ " else "│ ", color = fg, maxLines = 1)
-                t.glyph?.let { Text("$it ", color = mark, maxLines = 1, modifier = if (t.waiting && !isOpen) Modifier.alpha(pulse()) else Modifier) }
-                Text(t.label + if (isFocused) " ├" else " ", color = fg, maxLines = 1)
+                pane?.let { Lens.glyph(it, now) }?.let { Text("$it ", color = ink, maxLines = 1, modifier = if (waiting) Modifier.alpha(pulse()) else Modifier) }
+                Text(
+                    pane?.name ?: address.substringAfter('/'), color = ink, maxLines = 1,
+                    style = LocalTextStyle.current.copy(fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal, shadow = null),
+                )
             }
         }
     }
-    Rule()
 }
 
 /** The current time in seconds, refreshed every few seconds so working marks age out. */
@@ -189,58 +232,47 @@ fun ticker(): Long {
     return now
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
+/** Esc pinned left, Enter pinned right, the other keys scrolling between; then the text line. */
 @Composable
-private fun InputBar(
-    model: AppModel, state: PaneState, remote: Boolean, wrap: Boolean, fit: Boolean,
-    onRemote: (Boolean) -> Unit, onWrap: (Boolean) -> Unit, onFit: (Boolean) -> Unit,
-) {
+private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FocusRequester, onFieldFocus: (Boolean) -> Unit) {
     var text by rememberSaveable(state.address) { mutableStateOf("") }
     fun send(enter: Boolean) {
         if (text.isEmpty() && !enter) return
         model.type(state.address, text, enter)
         text = ""
     }
-    // With a hardware keyboard assumed, the field takes focus without raising the on-screen one;
-    // the kbd button brings it up when wanted.
-    val hardware = model.settings.hardwareKeyboard
-    var ime by rememberSaveable(hardware) { mutableStateOf(!hardware) }
-    val keyboard = LocalSoftwareKeyboardController.current
-    val interceptor = remember(ime) {
-        PlatformTextInputInterceptor { request, next -> if (ime) next.startInputMethod(request) else awaitCancellation() }
-    }
-    LazyRow(Modifier.fillMaxWidth().padding(horizontal = 2.dp)) {
-        item(key = "fit") { Btn("fit", { onFit(!fit) }, selected = fit) }
-        item(key = "wrap") { Btn("wrap", { onWrap(!wrap) }, selected = wrap, enabled = !fit) }
-        item(key = "scroll") { Btn("scroll", { onRemote(!remote) }, selected = remote) }
-        if (hardware) item(key = "kbd") { Btn("kbd", { ime = !ime; if (ime) keyboard?.show() else keyboard?.hide() }, selected = ime) }
-        items(Input.KEYS, key = { it.first }) { (name, label) ->
-            Btn(label, { model.key(state.address, name) }, enabled = !state.busy)
-        }
-    }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.weight(1f)) {
-            InterceptPlatformTextInput(interceptor) {
-                Field(
-                    ">", text, { text = Input.printable(it) },
-                    hint = state.pane?.label ?: "",
-                    keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Send),
-                    actions = KeyboardActions(onSend = { send(true) }),
-                )
+    val busy = state.busy
+    Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Btn("Esc", { model.key(state.address, "Escape") }, enabled = !busy)
+        LazyRow(Modifier.weight(1f)) {
+            items(Input.KEYS.filter { it.first != "Escape" && it.first != "Enter" }, key = { it.first }) { (name, label) ->
+                Btn(label, { model.key(state.address, name) }, enabled = !busy)
             }
         }
-        Btn("type", { send(false) }, enabled = !state.busy && text.isNotEmpty())
-        Btn("send", { send(true) }, enabled = !state.busy)
+        Btn("Enter", { model.key(state.address, "Enter") }, enabled = !busy)
+    }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Field(
+            ">", text, { text = Input.printable(it) },
+            Modifier.weight(1f),
+            hint = state.pane?.label ?: "",
+            keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Send),
+            actions = KeyboardActions(onSend = { send(true) }),
+            focusRequester = fieldFocus,
+            onFocus = onFieldFocus,
+        )
+        Btn("type", { send(false) }, enabled = !busy && text.isNotEmpty())
+        Btn("send", { send(true) }, enabled = !busy)
     }
 }
 
 /**
- * A pane: header, then its rows in colour at the pane's own width, scaled so that width fits the
- * tile (never larger than the text setting), pinch to zoom, bottom-aligned, scrolling locally
- * unless [remote] turns swipes into arrow keys.
+ * A pane: a header painted with its state, then its rows in colour, newest at the bottom, scrolling
+ * back through what the hub sent. With fit the host pane is sized to the tile at the text setting;
+ * otherwise the pane's own width is scaled to fit (or reflowed, by setting), pinch zooms.
  */
 @Composable
-private fun PaneTile(model: AppModel, address: String, focused: Boolean, remote: Boolean, wrap: Boolean, fit: Boolean, now: Long, modifier: Modifier, onFocus: () -> Unit) {
+private fun PaneTile(model: AppModel, address: String, focused: Boolean, several: Boolean, fit: Boolean, now: Long, modifier: Modifier, onFocus: () -> Unit) {
     val p = LocalPalette.current
     val state = model.view(address)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -254,20 +286,22 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, remote:
         }
     }
 
-    Column(modifier.clickable(onClick = onFocus).padding(2.dp)) {
-        val pane = state.pane
+    val pane = state.pane
+    val (back, ink) = stateColours(pane, now)
+    val edge: Dp = if (several && focused) 3.dp else 1.dp
+    Column(modifier.padding(2.dp).border(edge, if (several && focused) p.ink else p.faint).clickable(onClick = onFocus)) {
         val title = pane?.let { "${it.name} · ${it.command} · ${it.mode}" } ?: address
-        val fg = if (focused) p.bg else p.ink
         val waiting = pane != null && Lens.status(pane, now) == Lens.Status.WAITING
-        val back = if (!focused) p.bg else if (waiting) p.attention else p.ink
-        Row(Modifier.fillMaxWidth().background(back), verticalAlignment = Alignment.CenterVertically) {
-            Text("┤ $title ├", color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Row(Modifier.fillMaxWidth().background(back).padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                title, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                style = LocalTextStyle.current.copy(fontWeight = if (several && focused) FontWeight.Bold else FontWeight.Normal, shadow = null),
+            )
             pane?.let { Lens.glyph(it, now) }?.let { g ->
                 val word = if (waiting) pane.attention?.kind ?: "waiting" else "working"
-                Text(" $g $word ", color = if (focused) p.bg else if (waiting) p.attention else p.dim, maxLines = 1, modifier = if (waiting && !focused) Modifier.alpha(pulse()) else Modifier)
+                Text(" $g $word ", color = ink, maxLines = 1, modifier = if (waiting) Modifier.alpha(pulse()) else Modifier)
             }
-            if (fit && pane?.writable == true) Text(" ${pane.width}×${pane.height} ", color = if (focused) p.bg else p.dim, maxLines = 1)
-            if (remote) Text(" scroll ", color = fg, maxLines = 1)
+            if (fit && pane?.writable == true) Text(" ${pane.width}×${pane.height} ", color = ink, maxLines = 1)
         }
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).background(p.panel)) {
             val base = LocalTextStyle.current
@@ -279,33 +313,35 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, remote:
             val heightPx = constraints.maxHeight.coerceAtLeast(1)
             var zoom by remember(address) { mutableFloatStateOf(1f) }
             val maxSp = model.settings.textSp.toFloat()
-            // Fit: the text setting rules and the host pane is asked to be what fits. Wrap: the
-            // setting rules and rows reflow. Otherwise the pane's own width fits the tile, never
-            // larger than the setting.
             val fitting = fit && pane?.writable == true
+            val reflow = model.settings.reflow
             val unwrapped = remember(state.content) { Ansi.rows(state.content, 0) }
             val paneCols = pane?.width?.takeIf { it > 0 } ?: unwrapped.maxOf { r -> r.sumOf { it.text.length } }.coerceIn(1, 400)
             val fitSp = widthPx * 100f / (advance100 * paneCols)
-            val sizeSp = ((if (fitting || wrap) maxSp else minOf(maxSp, fitSp)) * zoom).coerceAtLeast(2f)
-            val visibleCols = (widthPx * 100f / (advance100 * sizeSp)).toInt().coerceAtLeast(8)
-            val visibleRows = (heightPx / with(density) { (sizeSp * 1.2f).sp.toPx() }).toInt().coerceAtLeast(1)
-            val cols = if (fitting || wrap) visibleCols else paneCols
+            val sizeSp = ((if (fitting || reflow) maxSp else minOf(maxSp, fitSp)) * zoom).coerceAtLeast(2f)
+            val lineSp = sizeSp * 1.2f
+            val colPx = advance100 * sizeSp / 100f
+            val rowPx = with(density) { lineSp.sp.toPx() }
+            val visibleCols = (widthPx / colPx).toInt().coerceAtLeast(8)
+            val visibleRows = (heightPx / rowPx).toInt().coerceAtLeast(1)
+            val cols = if (fitting || reflow) visibleCols else paneCols
             val rows = remember(state.content, cols) { if (cols == paneCols && pane?.width == null) unwrapped else Ansi.rows(state.content, cols) }
             LaunchedEffect(fitting, visibleCols, visibleRows) {
                 if (fitting) model.fit(address, visibleCols.coerceIn(20, 500), visibleRows.coerceIn(5, 300)) else model.release(address)
             }
             DisposableEffect(address) { onDispose { model.release(address) } }
-            val lineSp = sizeSp * 1.2f
-            val text = remember(rows, p) { styled(rows, p) }
-            val rowPx = with(density) { lineSp.sp.toPx() }
-            val colPx = advance100 * sizeSp / 100f
-            val vertical = rememberScrollState()
+            val lines = remember(rows, p) { rows.map { styled(it, p) }.asReversed() }
+            val style = base.copy(fontSize = sizeSp.sp, lineHeight = lineSp.sp)
+            val sideways = !fitting && !reflow
             val horizontal = rememberScrollState()
-            var gestures = Modifier.fillMaxSize().pointerInput(address) { pinch { z -> zoom = (zoom * z).coerceIn(0.5f, 4f) } }
-            if (remote) gestures = gestures.pointerInput(address, rowPx, colPx) { swipes(rowPx, colPx) { name -> model.key(address, name) } }
-            Box(gestures, contentAlignment = Alignment.BottomStart) {
-                Column(Modifier.fillMaxWidth().verticalScroll(vertical, reverseScrolling = true, enabled = !remote).horizontalScroll(horizontal, enabled = !remote && !wrap && !fitting)) {
-                    Text(text, color = p.ink, style = base.copy(fontSize = sizeSp.sp, lineHeight = lineSp.sp), softWrap = false, modifier = Modifier.padding(horizontal = 2.dp))
+            val body = Modifier.fillMaxHeight().then(if (sideways) Modifier.width(with(density) { (cols * colPx).toDp() } + 4.dp) else Modifier.fillMaxWidth())
+            Box(Modifier.fillMaxSize().pointerInput(address) { pinch { z -> zoom = (zoom * z).coerceIn(0.5f, 4f) } }
+                .then(if (sideways) Modifier.horizontalScroll(horizontal) else Modifier)) {
+                // Newest row first in a reversed list: the bottom stays in view until you scroll up.
+                LazyColumn(body, reverseLayout = true) {
+                    items(lines.size, key = { lines.size - it }) { i ->
+                        Text(lines[i], color = p.ink, style = style, softWrap = false, maxLines = 1, modifier = Modifier.padding(horizontal = 2.dp))
+                    }
                 }
             }
         }
@@ -327,31 +363,12 @@ private suspend fun PointerInputScope.pinch(onZoom: (Float) -> Unit) {
     }
 }
 
-/** A row of movement is one Up or Down, two columns one Left or Right; a key waits for the previous answer. */
-private suspend fun PointerInputScope.swipes(rowPx: Float, colPx: Float, send: (String) -> Boolean) {
-    var acc = Offset.Zero
-    val stepY = rowPx.coerceAtLeast(8f)
-    val stepX = (colPx * 2).coerceAtLeast(8f)
-    detectDragGestures(onDragStart = { acc = Offset.Zero }) { change, drag ->
-        change.consume()
-        acc = Offset((acc.x + drag.x).coerceIn(-3 * stepX, 3 * stepX), (acc.y + drag.y).coerceIn(-3 * stepY, 3 * stepY))
-        when {
-            acc.y <= -stepY -> if (send("Down")) acc = Offset(acc.x, acc.y + stepY)
-            acc.y >= stepY -> if (send("Up")) acc = Offset(acc.x, acc.y - stepY)
-            acc.x <= -stepX -> if (send("Right")) acc = Offset(acc.x + stepX, acc.y)
-            acc.x >= stepX -> if (send("Left")) acc = Offset(acc.x - stepX, acc.y)
-        }
+private fun styled(row: List<Ansi.Span>, p: Palette): AnnotatedString = buildAnnotatedString {
+    for (s in row) {
+        val st = spanStyle(s.style, p)
+        if (st == null) append(s.text) else withStyle(st) { append(s.text) }
     }
-}
-
-private fun styled(rows: List<List<Ansi.Span>>, p: Palette): AnnotatedString = buildAnnotatedString {
-    rows.forEachIndexed { i, row ->
-        if (i > 0) append('\n')
-        for (s in row) {
-            val st = spanStyle(s.style, p)
-            if (st == null) append(s.text) else withStyle(st) { append(s.text) }
-        }
-    }
+    if (length == 0) append(" ")
 }
 
 private fun spanStyle(s: Ansi.Style, p: Palette): SpanStyle? {

@@ -45,6 +45,7 @@ fun ConnectScreen(model: AppModel) {
     var block by rememberSaveable { mutableStateOf(saved.blockScreenshots) }
     var hardware by rememberSaveable { mutableStateOf(saved.hardwareKeyboard) }
     var effects by rememberSaveable { mutableStateOf(saved.effects) }
+    var reflow by rememberSaveable { mutableStateOf(saved.reflow) }
     var problem by rememberSaveable { mutableStateOf<String?>(null) }
 
     fun save() {
@@ -57,6 +58,7 @@ fun ConnectScreen(model: AppModel) {
             blockScreenshots = block,
             hardwareKeyboard = hardware,
             effects = effects,
+            reflow = reflow,
         )
         problem = model.save(s, token)
         if (problem == null) token = ""
@@ -96,6 +98,7 @@ fun ConnectScreen(model: AppModel) {
         Toggle("block screenshots of panes", block) { block = it }
         Toggle("assume a hardware keyboard: the on-screen one stays down until asked", hardware) { hardware = it }
         Toggle("effects: glow, scanlines, motion", effects) { effects = it }
+        Toggle("reflow long rows to the screen when fit is off (else scale the pane's width)", reflow) { reflow = it }
         Rule(Modifier.padding(vertical = 6.dp))
         problem?.let { Text("! $it", color = p.alert, modifier = Modifier.padding(vertical = 4.dp)) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
