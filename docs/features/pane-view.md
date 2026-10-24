@@ -35,11 +35,13 @@ focused pane.
   pane in the strip.
 - One pane fills the screen. Several panes start **side by side in
   landscape** and **stacked in portrait**, each with an equal share; `▦`
-  cycles the arrangement like tmux's next-layout: row, column, main pane
-  with the others beside it, grid (from three panes), back to automatic.
-  The bar between two panes drags to resize them; no pane goes under
-  fifteen percent. The arrangement is the phone's own and never reaches
-  the host. Each header is painted like its tab, with the pane's name, command and mode,
+  cycles the arrangements that make sense for the count: two panes have
+  a row and a column; three add a main pane on the left with the others
+  stacked beside it, and a main pane on top with the others in a row
+  below; four add a two-by-two grid. The bar between two panes drags to
+  resize them; no pane goes under fifteen percent. Long-press a pane's
+  header and drop it on another tile to swap the two. The arrangement is
+  the phone's own and never reaches the host. Each header is painted like its tab, with the pane's name, command and mode,
   the lens's word (`! permission`, `⟳ working`) and, with fit on, the
   size; the focused one has the thick border and bold name.
 - The line under the input shows the time of the last successful read, or
@@ -86,6 +88,12 @@ flowchart LR
 - **Font.** DejaVu Sans Mono is bundled (`THIRD_PARTY.md`) so box drawing,
   block and symbol glyphs line up. Glyphs it lacks fall back to the system
   fonts; wide characters and emoji may push a row out of line.
+- **Tap.** A tap on the content is a left click at that cell on the
+  host, for a program that asked its terminal for the mouse (Claude
+  Code's menus, for one). The hub needs the mouse addition to the
+  protocol (`docs/plans/2026-10-24-mouse-input.md`); an older hub
+  answers "This hub has no mouse support yet", a pane whose program has
+  no mouse mode "No mouse in this pane", and nothing is typed either way.
 - **Scrolling.** The body is a list of rows, newest at the bottom; a
   one-finger drag or a wheel scrolls back through the `lines` the hub
   sent (the pane's scrollback), and new output keeps the bottom in view
@@ -149,6 +157,9 @@ anything to it.
   2 MiB and parsing is linear.
 - With **block screenshots** on, the system refuses screenshots and
   recents thumbnails of this screen.
+- A tap sends only a button name and a cell inside the pane; the hub
+  checks the grant, the mark and the ranges, and the agent sends nothing
+  to a program that has not enabled the mouse.
 - A resize is a write: it is only sent for a pane the listing marks
   writable, within the protocol's bounds, once per size with a debounce,
   and the hub enforces the grant, the mark and its one-per-second limit.

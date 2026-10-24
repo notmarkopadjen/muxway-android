@@ -151,6 +151,11 @@ bar follows the list. Several panes gained `▦`, cycling row, column, main
 and grid like tmux's next-layout, and draggable bars between tiles; the
 arrangement is local to the phone.
 
+Round five (0.6.0): the arrangements are per count (two: row, column;
+three: plus main-left and main-top; four: plus grid), a header dragged
+onto another tile swaps the panes, and a tap is a click (see
+`2026-10-24-mouse-input.md`).
+
 ## Test run
 
 Round four: local run `test-runs/20261024-085305-22b4dfa`: **passed**, 62 tests.
