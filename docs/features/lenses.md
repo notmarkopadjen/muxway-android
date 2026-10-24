@@ -49,4 +49,7 @@ hooks only the open pane's own screen changes count.
 
 The lens reads three fields the app has already filtered (title, command,
 notification kind) and one number. A pane can at most make itself look
-like Claude Code or look busy; it cannot make the app do anything.
+like Claude Code or look busy; it cannot make the app do anything. The
+command row (`pane-view.md`) asks the lens whether to show Claude's
+commands; a pane that looks like Claude's gets that row, and a tap on it
+sends a fixed slash command, nothing else.

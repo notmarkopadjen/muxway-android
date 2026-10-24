@@ -54,4 +54,11 @@ class SettingsStore(context: Context) {
             .putBoolean("notify_text", s.notifyText)
             .apply()
     }
+
+    /** The last lines sent to a shell, newest first, for the command row. */
+    fun recent(): List<String> = prefs.getString("recent", "")!!.split('\n').filter { it.isNotEmpty() }
+
+    fun saveRecent(lines: List<String>) {
+        prefs.edit().putString("recent", lines.joinToString("\n")).apply()
+    }
 }

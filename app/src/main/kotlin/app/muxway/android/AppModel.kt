@@ -13,6 +13,7 @@ import androidx.lifecycle.viewModelScope
 import app.muxway.android.protocol.Address
 import app.muxway.android.protocol.Api
 import app.muxway.android.protocol.ApiException
+import app.muxway.android.protocol.Commands
 import app.muxway.android.protocol.Host
 import app.muxway.android.protocol.HubUrl
 import app.muxway.android.protocol.Input
@@ -85,6 +86,9 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     /** The kind of the last event the hub sent for each pane; `working` is what the lens wants. */
     val lastKind = mutableStateMapOf<String, String>()
     var sendError by mutableStateOf<String?>(null)
+
+    /** The last lines sent to a shell, newest first; the command row offers them again. */
+    val recent = mutableStateListOf<String>().also { it.addAll(store.recent()) }
 
     /** Why the Connect screen is showing, when the app put the user there. */
     var notice by mutableStateOf<String?>(null)
@@ -240,10 +244,22 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun type(address: String, text: String, enter: Boolean) = send(address) {
+    fun type(address: String, text: String, enter: Boolean): Boolean {
         val clean = Input.printable(text)
-        if (clean.isNotEmpty()) it.type(address, clean)
-        if (enter) it.key(address, "Enter")
+        val sent = send(address) {
+            if (clean.isNotEmpty()) it.type(address, clean)
+            if (enter) it.key(address, "Enter")
+        }
+        if (sent && enter && view(address).pane?.let { Commands.isShell(it.command) } == true) remember(clean)
+        return sent
+    }
+
+    private fun remember(line: String) {
+        val next = Commands.remembered(recent, line)
+        if (next == recent.toList()) return
+        recent.clear()
+        recent.addAll(next)
+        store.saveRecent(next)
     }
 
     /**

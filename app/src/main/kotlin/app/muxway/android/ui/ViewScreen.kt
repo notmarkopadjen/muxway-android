@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
@@ -98,6 +99,7 @@ import app.muxway.android.AppModel
 import app.muxway.android.PaneState
 import app.muxway.android.Screen
 import app.muxway.android.protocol.Ansi
+import app.muxway.android.protocol.Commands
 import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Pane
@@ -350,9 +352,13 @@ fun ticker(): Long {
     return now
 }
 
-/** Esc pinned left, Enter pinned right, the other keys scrolling between; then the text line. */
+/**
+ * Esc pinned left, Enter pinned right, the other keys scrolling between; under them the command
+ * row for the program in the pane, when it has one; then the text line.
+ */
 @Composable
 private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FocusRequester, onFieldFocus: (Boolean) -> Unit) {
+    val p = LocalPalette.current
     var text by rememberSaveable(state.address) { mutableStateOf("") }
     fun send(enter: Boolean) {
         if (text.isEmpty() && !enter) return
@@ -368,6 +374,24 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FocusRequest
             }
         }
         Btn("Enter", { model.key(state.address, "Enter") }, enabled = !busy)
+    }
+    state.pane?.let { Commands.forPane(it, model.recent) }?.let { (kind, commands) ->
+        val claude = kind == Commands.Kind.CLAUDE
+        val fixed = if (claude) commands.size else Commands.SHELL.size
+        Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(if (claude) " ${Lens.MARK} " else " $ ", color = if (claude) p.claude else p.dim, maxLines = 1)
+            LazyRow(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                itemsIndexed(commands, key = { _, c -> c.text }) { i, c ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (i == fixed) Text(" │ ", color = p.faint, maxLines = 1)
+                        Btn(c.label, {
+                            if (c.send) model.type(state.address, c.text, enter = true)
+                            else { text = c.text; fieldFocus.requestFocus() }
+                        }, enabled = !busy)
+                    }
+                }
+            }
+        }
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Field(

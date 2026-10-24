@@ -146,7 +146,16 @@ it is writable:
   it keeps its own keys.
 - **type** sends the text as typed, without `Enter`;
 - **send**, or the keyboard's send action, sends the text and then
-  `Enter`.
+  `Enter`;
+- the **command row**, between the key row and the text line, is for the
+  program in the pane and scrolls sideways. Claude Code's pane (the lens
+  decides) gets `/clear`, `/compact`, `/rename`, `/model`, `/resume`,
+  `/usage`, `/context`, `/help` behind Claude's mark; a shell gets
+  `exit`, `htop`, `claude`, `claude -c`, `codex`, `gemini`, `git status`,
+  `ls`, `clear` behind `$`, then after a bar the last eight lines sent
+  to a shell from this phone, newest first. A tap sends the command and
+  `Enter` as *send* does; `/rename` puts `/rename ` on the text line and
+  focuses it. Any other program has no row.
 
 After anything is sent the pane is read again at once. A read-only pane
 shows `read-only` instead of the bar, and no gesture or hardware key sends
@@ -161,6 +170,11 @@ anything to it.
   request, so it cannot flood the hub.
 - No input bar on a pane the hub marked read-only. If a listing lied, the
   hub refuses the write with `403` and the status row says "Read only".
+- The command row sends what you could type: a fixed string from the
+  app's own list, or a line you sent before, and `Enter`. Nothing from
+  a pane, a title or the hub reaches the list; a pane dressed as Claude
+  Code or a shell only chooses which row shows. The recent lines live in
+  the app's private preferences, with the settings.
 - Pane content is text, never interpreted beyond colours and attributes:
   only `ESC [ <digits ; :> m` survives, with parameters read as bounded
   integers; titles, hyperlinks, cursor movement, DCS and everything else
