@@ -25,6 +25,14 @@ import app.muxway.android.Screen
 import app.muxway.android.store.Theme
 
 @Composable
+private fun Toggle(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Btn(if (on) "[x]" else "[ ]", { onChange(!on) })
+        Text(" $label", color = LocalPalette.current.ink)
+    }
+}
+
+@Composable
 fun ConnectScreen(model: AppModel) {
     val p = LocalPalette.current
     val saved = model.settings
@@ -35,6 +43,8 @@ fun ConnectScreen(model: AppModel) {
     var textSp by rememberSaveable { mutableStateOf(saved.textSp.toString()) }
     var theme by rememberSaveable { mutableStateOf(saved.theme) }
     var block by rememberSaveable { mutableStateOf(saved.blockScreenshots) }
+    var hardware by rememberSaveable { mutableStateOf(saved.hardwareKeyboard) }
+    var effects by rememberSaveable { mutableStateOf(saved.effects) }
     var problem by rememberSaveable { mutableStateOf<String?>(null) }
 
     fun save() {
@@ -45,13 +55,15 @@ fun ConnectScreen(model: AppModel) {
             textSp = textSp.toIntOrNull()?.coerceIn(6, 24) ?: saved.textSp,
             theme = theme,
             blockScreenshots = block,
+            hardwareKeyboard = hardware,
+            effects = effects,
         )
         problem = model.save(s, token)
         if (problem == null) token = ""
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(4.dp)) {
-        Frame("muxway · connect") {
+        Frame("muxway", crumb = "connect") {
             if (model.hasToken && saved.hubUrl.isNotEmpty()) Btn("panes", { model.back() })
         }
         Spacer(Modifier.height(8.dp))
@@ -81,10 +93,9 @@ fun ConnectScreen(model: AppModel) {
             Text("theme  ", color = p.dim)
             for (t in Theme.entries) Btn(t.name.lowercase(), { theme = t }, selected = theme == t)
         }
-        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Btn(if (block) "[x]" else "[ ]", { block = !block })
-            Text(" block screenshots of panes", color = p.ink)
-        }
+        Toggle("block screenshots of panes", block) { block = it }
+        Toggle("assume a hardware keyboard: the on-screen one stays down until asked", hardware) { hardware = it }
+        Toggle("effects: glow, scanlines, motion", effects) { effects = it }
         Rule(Modifier.padding(vertical = 6.dp))
         problem?.let { Text("! $it", color = p.alert, modifier = Modifier.padding(vertical = 4.dp)) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {

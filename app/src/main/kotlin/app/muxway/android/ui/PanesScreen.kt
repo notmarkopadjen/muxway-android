@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.muxway.android.AppModel
@@ -32,7 +33,7 @@ fun PanesScreen(model: AppModel) {
     val quiet = model.hosts.filter { it.online && it.name !in byHost }
 
     Column(Modifier.fillMaxSize().padding(4.dp)) {
-        Frame("muxway · panes") {
+        Frame("muxway", crumb = "panes") {
             Btn(if (model.listing) "…" else "refresh", { model.refreshList() }, enabled = !model.listing)
             Btn("settings", { model.open(Screen.Connect) })
         }
@@ -42,11 +43,14 @@ fun PanesScreen(model: AppModel) {
                 item { Text("  no pane is exposed to this token", color = p.dim, modifier = Modifier.padding(8.dp)) }
             }
             for ((host, panes) in byHost) {
-                item(key = "host:$host") { HostRow(host, "online") }
-                items(panes, key = { it.address }) { pane ->
-                    PaneRow(pane, now, pane.address in model.selected,
-                        onTap = { if (model.selected.isEmpty()) model.open(Screen.View(listOf(pane.address))) else model.toggleSelected(pane.address) },
-                        onHold = { model.toggleSelected(pane.address) })
+                item(key = "host:$host") {
+                    Panel(host, Modifier.padding(vertical = 4.dp)) {
+                        for (pane in panes) {
+                            PaneRow(pane, now, pane.address in model.selected,
+                                onTap = { if (model.selected.isEmpty()) model.open(Screen.View(listOf(pane.address))) else model.toggleSelected(pane.address) },
+                                onHold = { model.toggleSelected(pane.address) })
+                        }
+                    }
                 }
             }
             for (h in quiet) item(key = "host:${h.name}") { HostRow(h.name, "online · nothing exposed") }
@@ -91,7 +95,8 @@ private fun PaneRow(pane: Pane, now: Long, selected: Boolean, onTap: () -> Unit,
         Text("  ${pane.label} · ${pane.command}", color = if (selected) p.bg else p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Lens.glyph(pane, now)?.let { g ->
             val waiting = Lens.status(pane, now) == Lens.Status.WAITING
-            Text(" $g ${if (waiting) pane.attention?.kind ?: "waiting" else "working"}", color = if (selected) p.bg else if (waiting) p.attention else p.dim, maxLines = 1)
+            Text(" $g ${if (waiting) pane.attention?.kind ?: "waiting" else "working"}", color = if (selected) p.bg else if (waiting) p.attention else p.dim, maxLines = 1,
+                modifier = if (waiting && !selected) Modifier.alpha(pulse()) else Modifier)
         }
     }
     Rule()

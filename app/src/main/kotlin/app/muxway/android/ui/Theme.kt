@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -19,14 +20,23 @@ import androidx.compose.ui.unit.sp
 import app.muxway.android.R
 import app.muxway.android.store.Theme
 
-/** A terminal palette: ink on a background, a dim ink for chrome, two signal colours, and the 16 ANSI colours. */
+/**
+ * A terminal palette, the same tokens as the web client: ink on a background, a raised panel,
+ * dim and faint inks for chrome, an accent, two signal colours, the glow, the overlays and the
+ * 16 ANSI colours.
+ */
 data class Palette(
     val bg: Color,
+    val panel: Color,
     val ink: Color,
     val dim: Color,
-    val panel: Color,
+    val faint: Color,
+    val accent: Color,
     val attention: Color,
     val alert: Color,
+    val glow: Color,
+    val scan: Color,
+    val vignette: Color,
     val light: Boolean,
     val ansi: List<Color>,
 )
@@ -45,14 +55,26 @@ private val paperAnsi = colours(
     0x666666, 0xCD3131, 0x1A8A1A, 0xB5BA00, 0x0451A5, 0xBC05BC, 0x0598BC, 0xA5A5A5,
 )
 
-val Green = Palette(Color(0xFF000000), Color(0xFF33FF33), Color(0xFF1E8F1E), Color(0xFF071007), Color(0xFFFFB000), Color(0xFFFF5555), false, darkAnsi)
-val Amber = Palette(Color(0xFF000000), Color(0xFFFFB000), Color(0xFF8A6000), Color(0xFF100C00), Color(0xFF33FF33), Color(0xFFFF5555), false, darkAnsi)
-val Paper = Palette(Color(0xFFF4EFE4), Color(0xFF1A1A1A), Color(0xFF7A7367), Color(0xFFE9E2D3), Color(0xFFB35C00), Color(0xFFA40000), true, paperAnsi)
-
-/** Bundled, so box drawing and block glyphs line up; what it lacks falls back to the system. */
-val Mono = FontFamily(Font(R.font.dejavu_sans_mono))
+val Green = Palette(
+    bg = Color(0xFF050806), panel = Color(0xFF0A120C), ink = Color(0xFF39FF14), dim = Color(0xFF1F8F14), faint = Color(0xFF0F4A0C),
+    accent = Color(0xFFB6FF9E), attention = Color(0xFFFFB000), alert = Color(0xFFFF3B3B), glow = Color(0xFF39FF14),
+    scan = Color(0f, 0f, 0f, 0.22f), vignette = Color(0f, 0f, 0f, 0.55f), light = false, ansi = darkAnsi,
+)
+val Amber = Palette(
+    bg = Color(0xFF0A0603), panel = Color(0xFF140B05), ink = Color(0xFFFFB000), dim = Color(0xFFA06C00), faint = Color(0xFF4A3200),
+    accent = Color(0xFFFFD36B), attention = Color(0xFF39FF14), alert = Color(0xFFFF3B3B), glow = Color(0xFFFFB000),
+    scan = Color(0f, 0f, 0f, 0.22f), vignette = Color(0f, 0f, 0f, 0.55f), light = false, ansi = darkAnsi,
+)
+val Paper = Palette(
+    bg = Color(0xFFF1EAD8), panel = Color(0xFFE8DFC8), ink = Color(0xFF1F2A1F), dim = Color(0xFF5A6A5A), faint = Color(0xFFB9B39F),
+    accent = Color(0xFF0B5D1E), attention = Color(0xFF9A5B00), alert = Color(0xFFA3161B), glow = Color(0xFF1F2A1F),
+    scan = Color(0f, 0f, 0f, 0.04f), vignette = Color(0f, 0f, 0f, 0.08f), light = true, ansi = paperAnsi,
+)
 
 val LocalPalette = staticCompositionLocalOf { Green }
+
+/** Whether glow, scanlines and motion are drawn. */
+val LocalEffects = staticCompositionLocalOf { true }
 
 fun Theme.palette() = when (this) {
     Theme.GREEN -> Green
@@ -60,18 +82,33 @@ fun Theme.palette() = when (this) {
     Theme.PAPER -> Paper
 }
 
+/** Bundled, so box drawing and block glyphs line up; what it lacks falls back to the system. */
+val Mono = FontFamily(Font(R.font.dejavu_sans_mono))
+
+/** The web client's pixel font, for the brand and panel titles. */
+val Pixel = FontFamily(Font(R.font.press_start_2p))
+
+/** The soft text glow of a phosphor screen; none on paper or with effects off. */
+@Composable
+fun textGlow(strong: Boolean = false): Shadow? {
+    val p = LocalPalette.current
+    if (!LocalEffects.current || p.light) return null
+    return Shadow(p.glow.copy(alpha = if (strong) 0.9f else 0.45f), blurRadius = if (strong) 10f else 4f)
+}
+
 private val square = RoundedCornerShape(CornerSize(0))
 
 @Composable
-fun MuxwayTheme(theme: Theme, textSp: Int, content: @Composable () -> Unit) {
+fun MuxwayTheme(theme: Theme, textSp: Int, effects: Boolean, content: @Composable () -> Unit) {
     val p = theme.palette()
     val scheme: ColorScheme = (if (p.light) lightColorScheme() else darkColorScheme()).copy(
         primary = p.ink, onPrimary = p.bg, secondary = p.dim, onSecondary = p.bg,
         background = p.bg, onBackground = p.ink, surface = p.bg, onSurface = p.ink,
         surfaceVariant = p.panel, onSurfaceVariant = p.ink, outline = p.dim, error = p.alert,
     )
-    val body = TextStyle(fontFamily = Mono, fontSize = textSp.sp, lineHeight = (textSp * 1.25f).sp, color = p.ink)
-    CompositionLocalProvider(LocalPalette provides p) {
+    val glow = if (effects && !p.light) Shadow(p.glow.copy(alpha = 0.35f), blurRadius = 3f) else null
+    val body = TextStyle(fontFamily = Mono, fontSize = textSp.sp, lineHeight = (textSp * 1.25f).sp, color = p.ink, shadow = glow)
+    CompositionLocalProvider(LocalPalette provides p, LocalEffects provides effects) {
         MaterialTheme(
             colorScheme = scheme,
             shapes = Shapes(square, square, square, square, square),

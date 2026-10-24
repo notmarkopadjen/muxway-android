@@ -11,6 +11,8 @@ data class Settings(
     val textSp: Int = 12,
     val theme: Theme = Theme.GREEN,
     val blockScreenshots: Boolean = false,
+    val hardwareKeyboard: Boolean = false,
+    val effects: Boolean = true,
 )
 
 /** Everything but the token, in plain app-private preferences. */
@@ -26,6 +28,8 @@ class SettingsStore(context: Context) {
             textSp = prefs.getInt("text_sp", d.textSp).coerceIn(6, 24),
             theme = runCatching { Theme.valueOf(prefs.getString("theme", d.theme.name)!!) }.getOrDefault(d.theme),
             blockScreenshots = prefs.getBoolean("block_screenshots", d.blockScreenshots),
+            hardwareKeyboard = prefs.getBoolean("hardware_keyboard", d.hardwareKeyboard),
+            effects = prefs.getBoolean("effects", d.effects),
         )
     }
 
@@ -37,6 +41,8 @@ class SettingsStore(context: Context) {
             .putInt("text_sp", s.textSp)
             .putString("theme", s.theme.name)
             .putBoolean("block_screenshots", s.blockScreenshots)
+            .putBoolean("hardware_keyboard", s.hardwareKeyboard)
+            .putBoolean("effects", s.effects)
             .apply()
     }
 }

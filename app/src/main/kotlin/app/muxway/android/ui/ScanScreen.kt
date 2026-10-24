@@ -55,7 +55,7 @@ fun ScanScreen(model: AppModel) {
     var last by remember { mutableStateOf<String?>(null) }
 
     Column(Modifier.fillMaxSize().padding(4.dp)) {
-        Frame("muxway · scan") { Btn("back", { model.back() }) }
+        Frame("muxway", crumb = "scan") { Btn("back", { model.back() }) }
         Box(Modifier.fillMaxWidth().weight(1f).padding(4.dp).border(1.dp, p.ink), contentAlignment = Alignment.Center) {
             when {
                 granted -> CameraPreview { text ->

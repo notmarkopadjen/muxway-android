@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -36,7 +37,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -49,8 +52,11 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.PlatformTextInputInterceptor
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -73,6 +79,7 @@ import app.muxway.android.Screen
 import app.muxway.android.protocol.Ansi
 import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.Lens
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 
 /** One or more panes, side by side in landscape and stacked in portrait, with tabs above and one input bar. */
@@ -85,6 +92,8 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val state = model.view(focused)
     var remote by rememberSaveable { mutableStateOf(false) }
     var wrap by rememberSaveable { mutableStateOf(false) }
+    // Fit: the host pane follows the tile, as a terminal would. On by default for one pane.
+    var fit by rememberSaveable(addresses) { mutableStateOf(addresses.size == 1) }
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     val writable = state.pane?.writable == true
     val focus = remember { FocusRequester() }
@@ -106,7 +115,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         }
         Box(Modifier.weight(1f)) {
             val tile: @Composable (Int, Modifier) -> Unit = { i, m ->
-                PaneTile(model, addresses[i], i == index && addresses.size > 1, remote && i == index, wrap, now, m) { focusedIndex = i; focus.requestFocus() }
+                PaneTile(model, addresses[i], i == index && addresses.size > 1, remote && i == index, wrap, fit, now, m) { focusedIndex = i; focus.requestFocus() }
             }
             if (landscape || addresses.size == 1) {
                 Row(Modifier.fillMaxSize()) { for (i in addresses.indices) tile(i, Modifier.weight(1f).fillMaxHeight()) }
@@ -120,7 +129,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         when {
             pane == null -> Text(" …", color = p.dim, modifier = Modifier.padding(4.dp))
             !pane.writable -> Text(" read-only · ${pane.address}", color = p.dim, modifier = Modifier.padding(4.dp))
-            else -> InputBar(model, state, remote, wrap, { remote = it }, { wrap = it })
+            else -> InputBar(model, state, remote, wrap, fit, { remote = it }, { wrap = it }, { fit = it })
         }
         Row(Modifier.fillMaxWidth().padding(2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Btn("panes", { model.open(Screen.Panes) })
@@ -159,7 +168,7 @@ private fun Tabs(model: AppModel, open: List<String>, focused: String, now: Long
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(if (isFocused) "┤ " else "│ ", color = fg, maxLines = 1)
-                t.glyph?.let { Text("$it ", color = mark, maxLines = 1) }
+                t.glyph?.let { Text("$it ", color = mark, maxLines = 1, modifier = if (t.waiting && !isOpen) Modifier.alpha(pulse()) else Modifier) }
                 Text(t.label + if (isFocused) " ├" else " ", color = fg, maxLines = 1)
             }
         }
@@ -180,29 +189,46 @@ fun ticker(): Long {
     return now
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun InputBar(model: AppModel, state: PaneState, remote: Boolean, wrap: Boolean, onRemote: (Boolean) -> Unit, onWrap: (Boolean) -> Unit) {
+private fun InputBar(
+    model: AppModel, state: PaneState, remote: Boolean, wrap: Boolean, fit: Boolean,
+    onRemote: (Boolean) -> Unit, onWrap: (Boolean) -> Unit, onFit: (Boolean) -> Unit,
+) {
     var text by rememberSaveable(state.address) { mutableStateOf("") }
     fun send(enter: Boolean) {
         if (text.isEmpty() && !enter) return
         model.type(state.address, text, enter)
         text = ""
     }
+    // With a hardware keyboard assumed, the field takes focus without raising the on-screen one;
+    // the kbd button brings it up when wanted.
+    val hardware = model.settings.hardwareKeyboard
+    var ime by rememberSaveable(hardware) { mutableStateOf(!hardware) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val interceptor = remember(ime) {
+        PlatformTextInputInterceptor { request, next -> if (ime) next.startInputMethod(request) else awaitCancellation() }
+    }
     LazyRow(Modifier.fillMaxWidth().padding(horizontal = 2.dp)) {
+        item(key = "fit") { Btn("fit", { onFit(!fit) }, selected = fit) }
+        item(key = "wrap") { Btn("wrap", { onWrap(!wrap) }, selected = wrap, enabled = !fit) }
         item(key = "scroll") { Btn("scroll", { onRemote(!remote) }, selected = remote) }
-        item(key = "wrap") { Btn("wrap", { onWrap(!wrap) }, selected = wrap) }
+        if (hardware) item(key = "kbd") { Btn("kbd", { ime = !ime; if (ime) keyboard?.show() else keyboard?.hide() }, selected = ime) }
         items(Input.KEYS, key = { it.first }) { (name, label) ->
             Btn(label, { model.key(state.address, name) }, enabled = !state.busy)
         }
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Field(
-            ">", text, { text = Input.printable(it) },
-            Modifier.weight(1f),
-            hint = state.pane?.label ?: "",
-            keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Send),
-            actions = KeyboardActions(onSend = { send(true) }),
-        )
+        Box(Modifier.weight(1f)) {
+            InterceptPlatformTextInput(interceptor) {
+                Field(
+                    ">", text, { text = Input.printable(it) },
+                    hint = state.pane?.label ?: "",
+                    keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Send),
+                    actions = KeyboardActions(onSend = { send(true) }),
+                )
+            }
+        }
         Btn("type", { send(false) }, enabled = !state.busy && text.isNotEmpty())
         Btn("send", { send(true) }, enabled = !state.busy)
     }
@@ -214,7 +240,7 @@ private fun InputBar(model: AppModel, state: PaneState, remote: Boolean, wrap: B
  * unless [remote] turns swipes into arrow keys.
  */
 @Composable
-private fun PaneTile(model: AppModel, address: String, focused: Boolean, remote: Boolean, wrap: Boolean, now: Long, modifier: Modifier, onFocus: () -> Unit) {
+private fun PaneTile(model: AppModel, address: String, focused: Boolean, remote: Boolean, wrap: Boolean, fit: Boolean, now: Long, modifier: Modifier, onFocus: () -> Unit) {
     val p = LocalPalette.current
     val state = model.view(address)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -238,8 +264,9 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, remote:
             Text("┤ $title ├", color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             pane?.let { Lens.glyph(it, now) }?.let { g ->
                 val word = if (waiting) pane.attention?.kind ?: "waiting" else "working"
-                Text(" $g $word ", color = if (focused) p.bg else if (waiting) p.attention else p.dim, maxLines = 1)
+                Text(" $g $word ", color = if (focused) p.bg else if (waiting) p.attention else p.dim, maxLines = 1, modifier = if (waiting && !focused) Modifier.alpha(pulse()) else Modifier)
             }
+            if (fit && pane?.writable == true) Text(" ${pane.width}×${pane.height} ", color = if (focused) p.bg else p.dim, maxLines = 1)
             if (remote) Text(" scroll ", color = fg, maxLines = 1)
         }
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).background(p.panel)) {
@@ -249,16 +276,25 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, remote:
             // Glyph advance at 100 sp; the size that fits a number of columns is then a division.
             val advance100 = remember(base) { measurer.measure("M", base.copy(fontSize = 100.sp)).size.width.toFloat().coerceAtLeast(1f) }
             val widthPx = (constraints.maxWidth - with(density) { 4.dp.roundToPx() }).coerceAtLeast(1)
+            val heightPx = constraints.maxHeight.coerceAtLeast(1)
             var zoom by remember(address) { mutableFloatStateOf(1f) }
             val maxSp = model.settings.textSp.toFloat()
-            // Wrap: the text setting rules and rows reflow to what fits. Otherwise the pane's own
-            // width fits the tile, never larger than the setting.
+            // Fit: the text setting rules and the host pane is asked to be what fits. Wrap: the
+            // setting rules and rows reflow. Otherwise the pane's own width fits the tile, never
+            // larger than the setting.
+            val fitting = fit && pane?.writable == true
             val unwrapped = remember(state.content) { Ansi.rows(state.content, 0) }
             val paneCols = pane?.width?.takeIf { it > 0 } ?: unwrapped.maxOf { r -> r.sumOf { it.text.length } }.coerceIn(1, 400)
             val fitSp = widthPx * 100f / (advance100 * paneCols)
-            val sizeSp = ((if (wrap) maxSp else minOf(maxSp, fitSp)) * zoom).coerceAtLeast(2f)
-            val cols = if (wrap) (widthPx * 100f / (advance100 * sizeSp)).toInt().coerceAtLeast(8) else paneCols
+            val sizeSp = ((if (fitting || wrap) maxSp else minOf(maxSp, fitSp)) * zoom).coerceAtLeast(2f)
+            val visibleCols = (widthPx * 100f / (advance100 * sizeSp)).toInt().coerceAtLeast(8)
+            val visibleRows = (heightPx / with(density) { (sizeSp * 1.2f).sp.toPx() }).toInt().coerceAtLeast(1)
+            val cols = if (fitting || wrap) visibleCols else paneCols
             val rows = remember(state.content, cols) { if (cols == paneCols && pane?.width == null) unwrapped else Ansi.rows(state.content, cols) }
+            LaunchedEffect(fitting, visibleCols, visibleRows) {
+                if (fitting) model.fit(address, visibleCols.coerceIn(20, 500), visibleRows.coerceIn(5, 300)) else model.release(address)
+            }
+            DisposableEffect(address) { onDispose { model.release(address) } }
             val lineSp = sizeSp * 1.2f
             val text = remember(rows, p) { styled(rows, p) }
             val rowPx = with(density) { lineSp.sp.toPx() }
@@ -268,7 +304,7 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, remote:
             var gestures = Modifier.fillMaxSize().pointerInput(address) { pinch { z -> zoom = (zoom * z).coerceIn(0.5f, 4f) } }
             if (remote) gestures = gestures.pointerInput(address, rowPx, colPx) { swipes(rowPx, colPx) { name -> model.key(address, name) } }
             Box(gestures, contentAlignment = Alignment.BottomStart) {
-                Column(Modifier.fillMaxWidth().verticalScroll(vertical, reverseScrolling = true, enabled = !remote).horizontalScroll(horizontal, enabled = !remote && !wrap)) {
+                Column(Modifier.fillMaxWidth().verticalScroll(vertical, reverseScrolling = true, enabled = !remote).horizontalScroll(horizontal, enabled = !remote && !wrap && !fitting)) {
                     Text(text, color = p.ink, style = base.copy(fontSize = sizeSp.sp, lineHeight = lineSp.sp), softWrap = false, modifier = Modifier.padding(horizontal = 2.dp))
                 }
             }
