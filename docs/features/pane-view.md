@@ -4,33 +4,42 @@ One or more panes on one screen, tabs above to switch, one input bar for the
 focused pane.
 
 ```
-┤ work/0.0 ├ │ work/0.1 │ │ logs ! │
-┤ work/0.0 · bash · write ├
-$ make test
-ok
-$ █
-──────────────────────────────────────────────
-[scroll][Enter][Tab][S-Tab][Esc][^C][↑][↓] …
+[ ⟳ build ][ ! review ][ logs ]            ≡ ⤢ ⌨ ⚙
+┌──────────────────────────────────────────────────┐
+│ build · claude · write              ⟳ working 96×28│
+│ $ make test                                       │
+│ ok                                                │
+│ $ █                                               │
+└──────────────────────────────────────────────────┘
+[Esc] [Tab][S-Tab][^C][↑][↓][←][→][BS] …   [Enter]
 > ______________________________ [type] [send]
-[panes]            12:00:01           [settings]
+ 12:00:01
 ```
 
 ## Layout
 
 - The **tab strip** lists every pane the token may read, in listing order,
   by name: the title the program set (Claude Code's is the session's name)
-  or `session/window.pane`. A glyph before the name says what the
-  [Claude lens](lenses.md) sees: `⟳` working, `!` `?` `z` `✓` waiting for
-  you. Open panes are inverted, the focused one is marked `┤ ├`. Tapping
-  a closed pane swaps it into the focused tile; tapping an open one
-  focuses it.
+  or `session/window.pane`. Each tab is **painted with its state** from
+  the [Claude lens](lenses.md): the attention colour when the pane waits
+  for you (`!` `?` `z` `✓`, pulsing), dim when it works (`⟳`), plain when
+  quiet. Selection never changes the colour: open panes have a thick
+  border, the focused one the thickest and its name in bold. Tapping a
+  closed pane swaps it into the focused tile; tapping an open one focuses
+  it. The strip scrolls when the tabs do not fit and keeps the focused
+  one in view.
+- The **controls** sit at the right end of the same row: `≡` the pane
+  list, `⤢` fit on or off, `⌨` the on-screen keyboard (only with the
+  hardware keyboard setting), `⚙` settings.
+- A **swipe** left or right across the page moves to the next or previous
+  pane in the strip.
 - One pane fills the screen. Several panes sit **side by side in
-  landscape** and **stacked in portrait**, each with an equal share. The
-  header of the focused pane is inverted; tapping a pane focuses it.
-- Each header shows the pane's name, command and mode, then the lens's
-  glyph and word (`! permission`, `⟳ working`) when there is one.
-- The status row shows the time of the last successful read, or the
-  error.
+  landscape** and **stacked in portrait**, each with an equal share. Each
+  header is painted like its tab, with the pane's name, command and mode,
+  the lens's word (`! permission`, `⟳ working`) and, with fit on, the
+  size; the focused one has the thick border and bold name.
+- The line under the input shows the time of the last successful read, or
+  the error.
 
 ## The body
 
@@ -63,9 +72,9 @@ flowchart LR
   without fit.
 - **Zoom.** Pinch zooms between half and four times the fitted size; when
   the text is wider than the tile it scrolls sideways.
-- **Wrap.** The **wrap** toggle in the key row reflows rows to the columns
-  that fit at the current size instead: the text setting rules, pinch
-  changes the margins, nothing scrolls sideways. For shells and logs; a
+- **Reflow.** The **reflow** setting applies when fit is off: rows reflow
+  to the columns that fit at the current size instead of the pane being
+  scaled; pinch then changes the margins. For shells and logs; a
   full-screen program's layout breaks under it, so it is off by default.
 - **Colour.** The 16 base colours come from the theme (darker variants on
   paper), 16–255 are xterm's cube and grey ramp, true colour is passed
@@ -73,8 +82,11 @@ flowchart LR
 - **Font.** DejaVu Sans Mono is bundled (`THIRD_PARTY.md`) so box drawing,
   block and symbol glyphs line up. Glyphs it lacks fall back to the system
   fonts; wide characters and emoji may push a row out of line.
-- **Scrolling.** A one-finger drag or a wheel scrolls the fetched history,
-  newest row at the bottom until you scroll up.
+- **Scrolling.** The body is a list of rows, newest at the bottom; a
+  one-finger drag or a wheel scrolls back through the `lines` the hub
+  sent (the pane's scrollback), and new output keeps the bottom in view
+  until you scroll up. Programs that scroll themselves take the `PgUp`
+  and `PgDn` keys from the key row, or page keys from a hardware keyboard.
 
 ## Reading
 
@@ -90,17 +102,15 @@ the list stay current.
 The bar at the bottom types into the focused pane, when the listing says
 it is writable:
 
-- **fit** asks the host to size the pane to the tile (above);
-- **kbd**, with "assume a hardware keyboard" on in settings, raises or
-  lowers the on-screen keyboard; without that setting the field raises it
-  on focus as usual;
-- the key row sends one named key at once: `Enter`, `Tab`, `S-Tab`,
-  `Esc`, `^C`, arrows, `BS`, `^D`, `^Z`, `^L`, `PgUp`, `PgDn`, `Home`,
+- the key row sends one named key at once: `Esc` pinned at the left,
+  `Enter` pinned at the right, and between them, scrolling: `Tab`,
+  `S-Tab`, `^C`, arrows, `BS`, `^D`, `^Z`, `^L`, `PgUp`, `PgDn`, `Home`,
   `End`;
-- **scroll** toggles swipe keys: with it on, a row of vertical movement on
-  the focused pane sends `Up` or `Down` and two columns of horizontal
-  movement `Left` or `Right`, the way a terminal turns wheel scrolling
-  into arrows for full-screen programs. Local scrolling is off meanwhile.
+- with **assume a hardware keyboard** on, the text line takes focus
+  without raising the on-screen keyboard, so a physical keyboard or a
+  dictation keyboard types straight in; `⌨` in the top row raises it when
+  wanted. The input connection stays up either way, which is what a
+  dictation app needs;
 - hardware keys reaching the screen (keyboard, D-pad, a glasses touchpad
   mapped to D-pad) send the matching named key: arrows, page up and down,
   home, end, tab, escape, enter, backspace. While the text field has focus

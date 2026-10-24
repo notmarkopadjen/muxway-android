@@ -12,8 +12,9 @@ token are stored, and the Settings screen afterwards.
 | text | Text size in sp, 6 to 24. |
 | theme | `green` (phosphor on black), `amber`, `paper` (dark on light). |
 | block screenshots | Sets `FLAG_SECURE` on the pane screen: no screenshots, no thumbnail in recents. Off by default. |
-| assume a hardware keyboard | The input field takes focus without raising the on-screen keyboard; `kbd` in the key row brings it up. Off by default. |
+| assume a hardware keyboard | The input field takes focus without raising the on-screen keyboard; `⌨` in the pane view's top row brings it up. The input connection stays, so dictation keyboards keep working. Off by default. |
 | effects | Glow, scanlines, vignette, power-on and pulses (see [look](look.md)). On by default. |
+| reflow | With fit off, reflow long rows to the screen instead of scaling the pane's width. Off by default. |
 
 **save and connect** checks the URL, stores the token when one was pasted,
 and opens the pane list. **forget token** deletes the token from the device.

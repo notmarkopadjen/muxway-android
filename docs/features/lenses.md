@@ -19,9 +19,10 @@ name). From the listing alone the lens answers one of three states:
 
 The glyph sits before the pane's name in the tab strip, in the pane's
 header with the word (`! permission`, `⟳ working`), and in the pane list.
-An open tab and a focused header are inverted; when that pane waits for
-you the inversion is in the attention colour, so the state shows even
-while you are looking at it.
+Tabs and headers are painted with the state: the attention colour while
+the pane waits for you, dim while it works, plain when quiet. Selection
+is a border, never a colour, so the state shows even on the pane you are
+looking at.
 The name is the title without the mark, so a tab reads `┤ ⟳ build server ├`
 rather than `┤ ✳ build server ├`. Panes that are not Claude's show
 notifications the same way and never show "working".

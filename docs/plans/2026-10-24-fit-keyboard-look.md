@@ -107,6 +107,27 @@ widgets. 5. Screens. 6. Docs, run, build, hand over.
 - [x] Privacy check: `scripts/prepush-check.sh` clean
 - [x] Docs updated
 
+Round two, after the device test (0.5.1):
+
+- A dictation keyboard stopped working: holding the input session back
+  left it no input connection. The session now always starts; with the
+  setting on, the on-screen keyboard is sent down as the field gains
+  focus and `⌨` raises it. Deviation from the plan's interceptor.
+- Amber painted waiting panes green: the amber palette's attention colour
+  was the green one. It is the amber accent now; no other colour in the
+  UI is hard-coded outside the palette.
+- Tabs and headers are painted by state and selected by border, as the
+  owner asked; the controls (`≡ ⤢ ⌨ ⚙`) moved into the tab row; the
+  bottom row holds only the time. A swipe across the page moves to the
+  neighbouring pane.
+- The body is a reversed lazy list of rows, one `Text` per row, in place
+  of one `Text` under two scroll modifiers: plainer, cheaper, and the
+  scrollback reachable by a drag. The swipe-to-arrows toggle is gone, and
+  "wrap" became the reflow setting.
+- `Esc` and `Enter` are pinned at the ends of the key row.
+
 ## Test run
 
-Local run `test-runs/20261024-080357-c517461`: **passed**, 62 tests (17 end-to-end with the resize security test, the fit round trip and the secret search, 45 unit). The UI test was skipped for lack of a device.
+Round two: local run `test-runs/20261024-082247-55615a6`: **passed**, 62 tests.
+
+Round one: local run `test-runs/20261024-080357-c517461`: **passed**, 62 tests (17 end-to-end with the resize security test, the fit round trip and the secret search, 45 unit). The UI test was skipped for lack of a device.
