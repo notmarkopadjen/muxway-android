@@ -4,7 +4,7 @@
 
 Android client for [muxway](https://github.com/notmarkopadjen/muxway): your tmux panes on a phone, one per screen or side by side.
 
-> Early development. The basics work: connect with a token, list panes, open one or several, switch with tabs, set up by scanning a code, read in colour at the pane's own width with pinch zoom, type, send keys, scroll by swipe, see which pane calls for attention.
+> Early development. The basics work: connect with a token, list panes, open one or several, switch with tabs, set up by scanning a code, size the host pane to the phone (fit) or read it at its own width with pinch zoom, type, send keys, scroll by swipe, see which pane calls for attention.
 
 ## Install
 

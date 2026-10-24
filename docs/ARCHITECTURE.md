@@ -9,7 +9,7 @@ minimum Android 8.0 (API 26).
 ```mermaid
 flowchart LR
     subgraph app[Android app]
-        UI[ui: Connect, Scan, Panes, View] --> M[AppModel]
+        UI[ui: Connect, Scan, Panes, View; Theme and widgets after the web client] --> M[AppModel]
         M --> P[protocol: Api, Json, Input, Ansi, Setup, HubUrl]
         M --> S[store: SettingsStore, Vault]
         S --> KS[(Android Keystore)]

@@ -46,12 +46,21 @@ flowchart LR
     A --> T[Text in the bundled monospace font, scaled to fit]
 ```
 
-- **Width.** Rows are shown at the pane's own width, as tmux shows them,
-  and the font is sized so that width fits the tile, never larger than the
-  **text** setting. A 96-column pane on a phone comes out small but
-  intact, a 194-column one half that size; full-screen programs keep
-  their layout. The pane's size is tmux's and shared with every terminal
-  attached to it; the protocol has no way to resize it from a client.
+- **Fit.** With **fit** on (the first button in the key row, on by
+  default for a single pane you may write to), the pane on the host is
+  sized to the columns and rows that fit the tile at the **text** setting,
+  the way a terminal tells tmux its size: `POST .../resize`, debounced,
+  once per distinct size, and `fit: auto` when you leave the view or turn
+  it off, which gives the window back to tmux. The header shows the size.
+  The person at the host sees the change, as with any terminal that
+  attaches. Side-by-side views start with fit off.
+- **Width.** With fit off, rows are shown at the pane's own width, as tmux
+  shows them, and the font is sized so that width fits the tile, never
+  larger than the **text** setting. A 96-column pane on a phone comes out
+  small but intact, a 194-column one half that size; full-screen programs
+  keep their layout. tmux sizes a window to its smallest attached
+  terminal and fills the rest with dots, which is what a phone sees
+  without fit.
 - **Zoom.** Pinch zooms between half and four times the fitted size; when
   the text is wider than the tile it scrolls sideways.
 - **Wrap.** The **wrap** toggle in the key row reflows rows to the columns
@@ -81,6 +90,10 @@ the list stay current.
 The bar at the bottom types into the focused pane, when the listing says
 it is writable:
 
+- **fit** asks the host to size the pane to the tile (above);
+- **kbd**, with "assume a hardware keyboard" on in settings, raises or
+  lowers the on-screen keyboard; without that setting the field raises it
+  on focus as usual;
 - the key row sends one named key at once: `Enter`, `Tab`, `S-Tab`,
   `Esc`, `^C`, arrows, `BS`, `^D`, `^Z`, `^L`, `PgUp`, `PgDn`, `Home`,
   `End`;
@@ -116,3 +129,6 @@ anything to it.
   2 MiB and parsing is linear.
 - With **block screenshots** on, the system refuses screenshots and
   recents thumbnails of this screen.
+- A resize is a write: it is only sent for a pane the listing marks
+  writable, within the protocol's bounds, once per size with a debounce,
+  and the hub enforces the grant, the mark and its one-per-second limit.
