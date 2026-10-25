@@ -9,6 +9,9 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -79,19 +82,19 @@ class FlowTest {
         rule.onAllNodes(hasText(token.substring(4, 20), substring = true)).assertCountEquals(0)
 
         await("work/0.0").performClick()
-        await("send")
+        await("⏎")
         await("$ ")
         shot("pane")
 
         rule.onNode(hasSetTextAction()).performTextInput("echo from android")
-        rule.onNodeWithText("send").performClick()
+        rule.onNodeWithText("⏎").performClick()
         await("from android")
         shot("typed")
 
         // Two lines go as one paste, then Enter: bash runs both.
         rule.onNode(hasSetTextAction()).performTextInput("echo first-\$((1+1))\necho second-\$((2+2))")
         shot("two-lines")
-        rule.onNodeWithText("send").performClick()
+        rule.onNodeWithText("⏎").performClick()
         await("first-2")
         await("second-4")
 
@@ -118,6 +121,26 @@ class FlowTest {
     }
 
     @Test
+    fun theKeyboardTypesAndSendsChords() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        rule.onNodeWithTag("keyboard-open").performClick()
+        rule.onNodeWithTag("keyboard").assertExists()
+        rule.onNodeWithTag("keyboard-target").assert(hasText("work/0.0", substring = true))
+        shot("keyboard")
+        for (c in listOf("E", "C", "H", "O", "Space", "K", "B", "D", "Enter ⏎")) rule.onNodeWithTag("cap:$c").performClick().also { rule.waitForIdle() }
+        await("kbd")
+        // A latched Ctrl and L: the chord clears the screen.
+        rule.onNodeWithTag("cap:Ctrl").performClick()
+        rule.onNodeWithTag("cap:L").performClick()
+        rule.waitUntil(10_000) { rule.onAllNodes(hasText("kbd", substring = true)).fetchSemanticsNodes().isEmpty() }
+        shot("keyboard-chord")
+        rule.onNodeWithTag("keyboard-close").performClick()
+        rule.onAllNodesWithTag("keyboard").assertCountEquals(0)
+    }
+
+    @Test
     fun adminSectionOnlyForAnAdminToken() {
         assumeTrue("adminToken comes from scripts/ui-tests.sh", adminToken.isNotEmpty())
         Vault(context).store("test", adminToken)
@@ -138,7 +161,7 @@ class FlowTest {
         scenario = ActivityScenario.launch(MainActivity::class.java)
         await("work/0.0")
         await("+ pane").performClick()
-        await("send")
+        await("⏎")
         await("$ ")
         shot("new-pane")
         rule.onNodeWithText("panes").performClick()

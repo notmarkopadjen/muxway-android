@@ -146,7 +146,7 @@ class ApiTest {
         assertEquals("""{"text":"echo hi\n"}""", String(seen.single().body))
         assertThrows(IllegalArgumentException::class.java) { api().type("h/w/0.0", "\u0007\u001b") }
         assertThrows(IllegalArgumentException::class.java) { api().type("h/w/0.0", "x".repeat(4097)) }
-        assertThrows(IllegalArgumentException::class.java) { api().key("h/w/0.0", "C-a") }
+        assertThrows(IllegalArgumentException::class.java) { api().key("h/w/0.0", "C-;") }
         assertEquals(1, seen.size)
     }
 

@@ -1,7 +1,7 @@
 package app.muxway.android.protocol
 
 /** [sessions]: the host's agent lets clients start sessions; [close]: and close writable panes. */
-data class Host(val name: String, val online: Boolean, val sessions: Boolean = false, val close: Boolean = false)
+data class Host(val name: String, val online: Boolean, val sessions: Boolean = false, val close: Boolean = false, val keys: Int = 0)
 
 data class Attention(val kind: String, val at: Long, val text: String)
 

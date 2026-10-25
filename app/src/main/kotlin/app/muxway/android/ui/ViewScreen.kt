@@ -80,6 +80,7 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
@@ -190,7 +191,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             if (addresses.size > 1) Btn("▦", { layout = layout.next(addresses.size) })
             // Tap: fit on, or send this size once more when it is on already; hold: fit off.
             Btn("⤢", { if (fit) fitAgain++ else fit = true }, selected = fit, enabled = writable, onLongClick = { fit = false })
-            if (hardware) Btn("⌨", { ime = !ime; if (ime) { fieldFocus.request(); keyboard?.show() } else keyboard?.hide() }, selected = ime)
+            if (hardware) Btn("abc", { ime = !ime; if (ime) { fieldFocus.request(); keyboard?.show() } else keyboard?.hide() }, selected = ime)
             Btn("⚙", { model.open(Screen.Connect) })
         }
         Rule()
@@ -450,8 +451,13 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
         recorder?.cancel()
         recorder = null
     }
+    // The keyboard panel, for this pane; back closes it.
+    var board by rememberSaveable(state.address) { mutableStateOf(false) }
+    val writable = state.pane?.mode == "write"
+    BackHandler(enabled = board && recorder == null) { board = false }
     BackHandler(enabled = recorder != null) { dropClip() }
     DisposableEffect(state.address) { onDispose { dropClip() } }
+    if (board && writable) state.pane?.let { KeyboardPanel(model, state.address, it.host) { board = false } }
     Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         Btn("Esc", { model.key(state.address, "Escape") }, enabled = !busy)
         LazyRow(Modifier.weight(1f)) {
@@ -523,6 +529,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
                 )
             }
         }
+        Btn("⌨\uFE0E", { board = !board }, selected = board, enabled = writable, modifier = Modifier.testTag("keyboard-open"))
         // Held, it records until the finger lifts; tapped, it records and the next tap stops.
         if (model.transcriber) {
             Btn(
@@ -533,10 +540,10 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
         }
         when {
             recorder != null -> Btn("cancel", { dropClip() })
-            hearing -> Btn("send", {}, enabled = false)
+            hearing -> Btn("⏎", {}, enabled = false)
             else -> {
                 Btn("type", { send(false) }, enabled = !busy && text.isNotEmpty())
-                Btn("send", { send(true) }, enabled = !busy)
+                Btn("⏎", { send(true) }, enabled = !busy, modifier = Modifier.testTag("send"))
             }
         }
     }

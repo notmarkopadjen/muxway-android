@@ -4,7 +4,7 @@ One or more panes on one screen, tabs above to switch, one input bar for the
 focused pane.
 
 ```
-[‹] [ ⟳ build ][ ! review ][ logs ]           ⤢ ⌨ ⚙
+[‹] [ ⟳ build ][ ! review ][ logs ]           ⤢ abc ⚙
 ┌──────────────────────────────────────────────────┐
 │ build · claude · write              ⟳ working 96×28│
 │ $ make test                                       │
@@ -12,7 +12,7 @@ focused pane.
 │ $ █                                               │
 └──────────────────────────────────────────────────┘
 [Esc] [Tab][S-Tab][^C][↑][↓][←][→][BS] …   [Enter]
-> ______________________________ [type] [send]
+> ______________________________ [⌨] [◉] [type] [⏎]
  12:00:01
 ```
 
@@ -29,7 +29,7 @@ focused pane.
   The strip scrolls when the tabs do not fit and keeps the focused one in
   view, with several panes open as well.
 - The **controls** sit at the right end of the same row: `▦` (with
-  several panes) the next arrangement, `⤢` fit on or off, `⌨` the on-screen keyboard (only with the hardware keyboard
+  several panes) the next arrangement, `⤢` fit on or off, `abc` the on-screen keyboard (only with the hardware keyboard
   setting), `⚙` settings.
 - A **swipe** left or right across the page moves to the next or previous
   pane in the strip, coming round at either end as `]` and `[` do in the
@@ -156,7 +156,7 @@ it is writable:
   `End`;
 - with **assume a hardware keyboard** on, the text line takes focus
   without raising the on-screen keyboard, so a physical keyboard or a
-  dictation keyboard types straight in; `⌨` in the top row raises it when
+  dictation keyboard types straight in; `abc` in the top row raises it when
   wanted. The input connection stays up either way, which is what a
   dictation app needs;
 - hardware keys reaching the screen (keyboard, D-pad, a glasses touchpad
@@ -170,9 +170,24 @@ it is writable:
   Claude Code takes it as one message and bash as one block it shows
   before `Enter` runs it. Completion of the first word is on the web
   client for now (#12).
+- right of the line, in this order: `⌨` the keyboard, `◉` the
+  microphone (where the hub has a transcriber), **type**, and `⏎`;
 - **type** sends the text as typed, without `Enter`;
-- **send**, the keyboard's send action, or a hardware `Enter` sends the
+- **`⏎`** (send), the keyboard's send action, or a hardware `Enter` sends the
   text and then `Enter`;
+- the **keyboard**: `⌨` opens the web client's board over the bottom of
+  the pane view, for the focused pane: F1 to F24 (F13 and up go as
+  Shift+F1 to F12), the main block with its shifted legends, latching
+  Shift, Ctrl and Alt (a double tap locks one), Caps and Num Lock, the
+  navigation keys, the keypad and a column of command keys (*Attn* `^C`,
+  *Clr* `^L`, *EOF*, *Susp*, *Kill*, *Word*, *Home*, *End*, *Rev*,
+  *Back*). A tap sends at once, as text or as a key of the protocol's
+  grammar; Ctrl or Alt with `;` is dimmed, and on a host whose agent does
+  not list `keys: 2` so are the keys only the grammar has. The board
+  scrolls sideways on a narrow screen; `_` folds it, `×` or back closes
+  it. A read-only pane has no keyboard. The board and its rules are
+  `Keyboard` in the protocol module, tested on the JVM, and the core
+  repository's `docs/features/keyboard.md` describes them;
 - the **microphone**: when the hub has a transcriber (asked once, with
   the first listing after connecting) a `◉` button sits between the text
   line and *type*, in every state, so a press and its release are one

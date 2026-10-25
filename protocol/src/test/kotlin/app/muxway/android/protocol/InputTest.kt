@@ -34,11 +34,13 @@ class InputTest {
     }
 
     @Test
-    fun onlyTheProtocolsKeysAreKeys() {
+    fun keysAreTheProtocolsGrammar() {
         for ((name, _) in Input.KEYS) assertTrue(name, Input.isKey(name))
-        assertFalse(Input.isKey("C-a"))
-        assertFalse(Input.isKey("S-Tab"))
-        assertFalse(Input.isKey(""))
+        for (name in listOf("C-a", "C-M-Delete", "S-Up", "M-S-F5", "KP7", "C-KPEnter", "M-x", "C-[", "M-\\", "M-'", "S-Tab"))
+            assertTrue(name, Input.isKey(name))
+        for (name in listOf("", "a", "A", "C-", "C-;", "M-;", "F13", "S-a", "M-C-a", "C-C-a", "KP10", "C-\u001b",
+            "C-a;kill-server", "Up\n", "enter", "IC", "C-é", "M-#", "C-".repeat(9) + "a"))
+            assertFalse(name, Input.isKey(name))
     }
 
     @Test

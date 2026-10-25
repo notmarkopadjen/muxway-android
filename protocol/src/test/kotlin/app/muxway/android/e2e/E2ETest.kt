@@ -5,6 +5,7 @@ import app.muxway.android.protocol.Api
 import app.muxway.android.protocol.ApiException
 import app.muxway.android.protocol.Board
 import app.muxway.android.protocol.Clip
+import app.muxway.android.protocol.Keyboard
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.WatchGate
 import app.muxway.android.protocol.Wire
@@ -160,7 +161,7 @@ class E2ETest {
         api.key("$HOST/work/0.0", "Enter")
         waitPane("echo ab")
         assertFalse(core.pane().contains("\u001b"))
-        assertEquals("unknown key", assertThrows(IllegalArgumentException::class.java) { api.key("$HOST/work/0.0", "C-a") }.message)
+        assertEquals("unknown key", assertThrows(IllegalArgumentException::class.java) { api.key("$HOST/work/0.0", "C-;") }.message)
     }
 
     // --- features ---
@@ -525,6 +526,33 @@ class E2ETest {
         api.closePane(made.address)
         waitFor("the pane is gone from the host") { core.tmux("list-panes", "-t", "work", "-F", "#{pane_id}").lines().size == 1 }
         waitFor("and from the listing") { api.panes().size == 1 }
+    }
+
+    @Test
+    fun f23_theKeyboardsKeysReachThePaneAsTheHostTakesThem() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        assertEquals(2, api.hosts().single().keys)
+        // What the board sends for a few taps: text, then Ctrl latched and U kills the line.
+        var s = Keyboard.State()
+        fun tap(label: String) {
+            val cap = Keyboard.CAPS.first { it.label == label }
+            val r = Keyboard.press(cap.act, s, grammar = true)
+            s = r.state
+            when (val x = r.send) {
+                is Keyboard.Text -> api.type(address, x.text)
+                is Keyboard.Key -> api.key(address, x.name)
+                null -> {}
+            }
+        }
+        api.type(address, "echo gone")
+        tap("Ctrl"); tap("U")
+        "echo kbd".forEach { tap(if (it == ' ') "Space" else it.uppercaseChar().toString()) }
+        tap("Enter ⏎")
+        waitPane("kbd")
+        assertFalse(core.pane().contains("gone"))
+        // A chord the earlier list never had goes through too.
+        api.key(address, "C-M-Delete")
     }
 
     @Test

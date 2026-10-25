@@ -12,12 +12,37 @@ object Input {
         "PageUp" to "PgUp", "PageDown" to "PgDn", "Home" to "Home", "End" to "End",
     )
 
-    private val names = KEYS.map { it.first }.toSet()
-
     /** Mouse buttons the protocol names. */
     val BUTTONS = setOf("left", "middle", "right", "wheelup", "wheeldown")
 
-    fun isKey(name: String) = name in names
+    private val NAMED = setOf(
+        "Enter", "Tab", "BTab", "BSpace", "Escape", "Space", "Up", "Down", "Left", "Right",
+        "PageUp", "PageDown", "Home", "End", "Insert", "Delete",
+    ) + (1..12).map { "F$it" } + (0..9).map { "KP$it" } + listOf("KP/", "KP*", "KP-", "KP+", "KP.", "KPEnter")
+
+    // Characters that go with Ctrl or Alt: unshifted, no ';', which tmux reads as a command's end.
+    private const val CHORD_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789`-=[]\\',./"
+
+    /**
+     * The protocol's key grammar: C-, M-, S- in that order, each once, then a named key, a keypad
+     * key, or a character with Ctrl or Alt. The hub and the agent check it again.
+     */
+    fun isKey(name: String): Boolean {
+        if (name.length > 16) return false
+        var rest = name
+        val ctrl = rest.startsWith("C-").also { if (it) rest = rest.drop(2) }
+        val meta = rest.startsWith("M-").also { if (it) rest = rest.drop(2) }
+        val shift = rest.startsWith("S-").also { if (it) rest = rest.drop(2) }
+        if (rest in NAMED) return true
+        return rest.length == 1 && rest[0] in CHORD_CHARS && (ctrl || meta) && !shift
+    }
+
+    /** The names an agent took before the grammar; a host without `keys: 2` refuses the rest. */
+    val OLD_KEYS: Set<String> = setOf(
+        "Enter", "Tab", "BTab", "BSpace", "Escape", "Space", "Up", "Down", "Left", "Right",
+        "PageUp", "PageDown", "Home", "End", "Insert", "Delete",
+        "C-c", "C-d", "C-z", "C-l", "C-a", "C-e", "C-u", "C-k", "C-w", "C-r", "C-x", "C-n", "C-p", "C-f",
+    ) + (1..12).map { "F$it" }
 
     /** Drops C0, DEL and C1; the hub refuses them. */
     fun printable(s: String): String = clean(s, keepNewline = false, tabs = false)
