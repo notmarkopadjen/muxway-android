@@ -13,7 +13,7 @@ name). The lens answers one of three states:
 
 | State | When | Glyph |
 |---|---|---|
-| waiting for you | the listing carries a notification: `permission`, `question`, `idle`, `done` | `!` `?` `z` `✓` in the attention colour |
+| waiting for you | the listing carries a notification: `permission`, `question`, `idle`, `done` | `!` `?` `z` `✓`, the theme's ink inverted |
 | working | the last event the hub sent for the pane was `working` (Claude's hook on a submitted prompt), or the app is reading the pane and its screen changed in the last 10 s | `⟳`, dim |
 | quiet | anything else | nothing |
 
@@ -23,7 +23,7 @@ The name is the title without the mark, so a tab reads `⟳ build server`
 rather than `✳ build server`. Panes that are not Claude's show
 notifications the same way and never show "working".
 
-Tabs and headers are painted with the state: the attention colour while
+Tabs and headers are painted with the state: the theme's ink, inverted, while
 the pane waits for you, dim while it works, plain when quiet. Selection
 is a border, never a colour, so the state shows even on the pane you are
 looking at.

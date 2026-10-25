@@ -7,7 +7,7 @@ import org.json.JSONObject
 /** The hub's JSON, read defensively: a missing field is a default, a wrong type is an error. */
 object Json {
     fun hosts(body: String): List<Host> = parse(body) { o ->
-        list(o.optJSONArray("hosts")) { Host(it.optString("name"), it.optBoolean("online"), it.optBoolean("sessions")) }
+        list(o.optJSONArray("hosts")) { Host(it.optString("name"), it.optBoolean("online"), it.optBoolean("sessions"), it.optBoolean("close")) }
     }
 
     fun panes(body: String): List<Pane> = parse(body) { o -> list(o.optJSONArray("panes")) { pane(it) } }

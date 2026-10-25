@@ -11,7 +11,7 @@ client's pixel font; everything else in DejaVu Sans Mono.
 | panel | `#0a120c` | `#140b05` | `#e8dfc8` |
 | ink | `#39ff14` | `#ffb000` | `#1f2a1f` |
 | dim · faint | `#1f8f14` · `#0f4a0c` | `#a06c00` · `#4a3200` | `#5a6a5a` · `#b9b39f` |
-| attention · alert | `#ffb000` · `#ff3b3b` | `#39ff14` · `#ff3b3b` | `#9a5b00` · `#a3161b` |
+| attention · alert | the ink, inverted · `#ff3b3b` | the ink, inverted · `#ff3b3b` | the ink, inverted · `#a3161b` |
 
 Effects, on by default and off with the **effects** setting:
 

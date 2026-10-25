@@ -193,6 +193,15 @@ anything to it.
 A Wear OS watch shows a pane's tail with a few of these answers, through
 the phone; see [watch.md](watch.md), *The pane screen*.
 
+## Closing a pane
+
+Where the host's agent runs with `--allow-close` and the pane is
+writable, a tile's header has `×`. Tapping it asks on the header,
+`close the pane on alice-laptop? y n`; `y` closes the pane on the host,
+ending what runs in it, and the tile leaves (the list shows when it was
+the last); `n` keeps it. Elsewhere there is no `×`. See the core's
+`docs/features/new-panes.md` (Closing a pane).
+
 ## Security considerations
 
 - Text loses control characters before it leaves, the newline excepted:

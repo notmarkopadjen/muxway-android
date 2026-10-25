@@ -58,17 +58,17 @@ private val paperAnsi = colours(
 
 val Green = Palette(
     bg = Color(0xFF050806), panel = Color(0xFF0A120C), ink = Color(0xFF39FF14), dim = Color(0xFF1F8F14), faint = Color(0xFF0F4A0C),
-    accent = Color(0xFFB6FF9E), attention = Color(0xFFFFB000), alert = Color(0xFFFF3B3B), claude = Color(0xFFD97757), glow = Color(0xFF39FF14),
+    accent = Color(0xFFB6FF9E), attention = Color(0xFF39FF14), alert = Color(0xFFFF3B3B), claude = Color(0xFFD97757), glow = Color(0xFF39FF14),
     scan = Color(0f, 0f, 0f, 0.22f), vignette = Color(0f, 0f, 0f, 0.55f), light = false, ansi = darkAnsi,
 )
 val Amber = Palette(
     bg = Color(0xFF0A0603), panel = Color(0xFF140B05), ink = Color(0xFFFFB000), dim = Color(0xFFA06C00), faint = Color(0xFF4A3200),
-    accent = Color(0xFFFFD36B), attention = Color(0xFFFFD36B), alert = Color(0xFFFF3B3B), claude = Color(0xFFD97757), glow = Color(0xFFFFB000),
+    accent = Color(0xFFFFD36B), attention = Color(0xFFFFB000), alert = Color(0xFFFF3B3B), claude = Color(0xFFD97757), glow = Color(0xFFFFB000),
     scan = Color(0f, 0f, 0f, 0.22f), vignette = Color(0f, 0f, 0f, 0.55f), light = false, ansi = darkAnsi,
 )
 val Paper = Palette(
     bg = Color(0xFFF1EAD8), panel = Color(0xFFE8DFC8), ink = Color(0xFF1F2A1F), dim = Color(0xFF5A6A5A), faint = Color(0xFFB9B39F),
-    accent = Color(0xFF0B5D1E), attention = Color(0xFF9A5B00), alert = Color(0xFFA3161B), claude = Color(0xFFD97757), glow = Color(0xFF1F2A1F),
+    accent = Color(0xFF0B5D1E), attention = Color(0xFF1F2A1F), alert = Color(0xFFA3161B), claude = Color(0xFFD97757), glow = Color(0xFF1F2A1F),
     scan = Color(0f, 0f, 0f, 0.04f), vignette = Color(0f, 0f, 0f, 0.08f), light = true, ansi = paperAnsi,
 )
 

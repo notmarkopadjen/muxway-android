@@ -540,6 +540,24 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Swaps two open panes' places. */
+    /** Whether the pane's host lets clients close panes; the pane must be writable as well. */
+    fun hostCloses(address: String): Boolean = hosts.any { it.name == address.substringBefore('/') && it.close }
+
+    /** Closes the pane on its host; its tile leaves, and with none left the list shows. */
+    fun closePane(addresses: List<String>, address: String) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { api().closePane(address) }
+                val rest = addresses - address
+                views.remove(address)
+                open(if (rest.isEmpty()) Screen.Panes else Screen.View(rest))
+                refreshList()
+            } catch (e: ApiException) {
+                sendError = e.message
+            }
+        }
+    }
+
     fun swapTiles(addresses: List<String>, a: String, b: String) {
         val i = addresses.indexOf(a)
         val j = addresses.indexOf(b)

@@ -67,6 +67,11 @@ class Api(private val baseUrl: String, private val token: String, private val us
         return Json.resized(post("hosts/${encode(host)}/sessions", Json.name(name)).body)
     }
 
+    /** Closes the pane on its host, ending what runs in it; where the agent allows it. */
+    fun closePane(address: String) {
+        post("panes/${encode(address)}/close", "{}")
+    }
+
     /** Gives the pane and its window back to tmux's own sizing. */
     fun release(address: String) {
         post("panes/${encode(address)}/resize", Json.fitAuto())
