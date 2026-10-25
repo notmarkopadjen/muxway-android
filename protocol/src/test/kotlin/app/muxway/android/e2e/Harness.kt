@@ -69,7 +69,7 @@ class Core(private val logs: File) {
         return out.trim()
     }
 
-    fun start(expose: String? = "--write", allowSessions: Boolean = false, sttUrl: String? = null): Core {
+    fun start(expose: String? = "--write", allowSessions: Boolean = false, sttUrl: String? = null, allowClose: Boolean = false): Core {
         val shell = "env -i PATH=/usr/bin:/bin TERM=xterm LANG=C.UTF-8 PS1='$ ' bash --norc --noprofile"
         tmux("-f", "/dev/null", "new-session", "-d", "-s", "work", "-n", "shell", "-x", "80", "-y", "24", shell)
         // Panes and sessions made later get the same clean shell.
@@ -81,16 +81,17 @@ class Core(private val logs: File) {
         waitFor("hub") { File(hubDir, "admin.sock").exists() }
         val code = cli("hub", "pair-code", "--dir", hubDir.path, "--host", HOST)
         cli("agent", "pair", "--dir", agentDir.path, code)
-        startAgent(allowSessions)
+        startAgent(allowSessions, allowClose)
         val args = arrayListOf("expose", "--tmux-name", tmux, "-t", "work:0.0")
         if (expose != null) args.add(expose)
         cli(*args.toTypedArray())
         return this
     }
 
-    fun startAgent(allowSessions: Boolean = false) {
+    fun startAgent(allowSessions: Boolean = false, allowClose: Boolean = false) {
         val args = arrayListOf("agent", "run", "--dir", agentDir.path, "--tmux-name", tmux)
         if (allowSessions) args.add("--allow-sessions")
+        if (allowClose) args.add("--allow-close")
         spawn("agent", *args.toTypedArray())
         waitFor("agent online") { cli("hub", "agents", "--dir", hubDir.path).contains("$HOST\tonline") }
     }
@@ -114,6 +115,8 @@ class Core(private val logs: File) {
     fun command(): String = tmux("display-message", "-p", "-t", "work:0.0", "#{pane_current_command}")
 
     fun width(): Int = tmux("display-message", "-p", "-t", "work:0.0", "#{pane_width}").trim().toIntOrNull() ?: -1
+
+    fun zoomed(): Boolean = tmux("display-message", "-p", "-t", "work:0.0", "#{window_zoomed_flag}").trim() == "1"
 
     fun notify(kind: String, text: String) = cli("notify", "--dir", agentDir.path, "--pane", paneId(), "--kind", kind, "--text", text)
 

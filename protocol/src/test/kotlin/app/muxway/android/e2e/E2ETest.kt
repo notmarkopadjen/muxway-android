@@ -47,9 +47,9 @@ class E2ETest {
         cleanups.reversed().forEach { runCatching(it) }
     }
 
-    private fun setup(expose: String? = "--write", write: String? = "$HOST/*", revoke: Boolean = false, allowSessions: Boolean = false, sttUrl: String? = null): Pair<Api, String> {
+    private fun setup(expose: String? = "--write", write: String? = "$HOST/*", revoke: Boolean = false, allowSessions: Boolean = false, sttUrl: String? = null, allowClose: Boolean = false): Pair<Api, String> {
         val logs = Env.logs(name.methodName)
-        core = Core(logs).start(expose, allowSessions, sttUrl)
+        core = Core(logs).start(expose, allowSessions, sttUrl, allowClose)
         cleanups.add(core::close)
         val tok = core.token(write = write)
         if (revoke) core.revokeAll()
@@ -479,6 +479,52 @@ class E2ETest {
         assertTrue(gate.text(Wire.Text("t1", address, "", "c1", true)).ok)
         waitPane("heard-on-the-wrist")
         assertEquals(WatchGate.TOO_SHORT, gate.transcribe("c2", Clip.wav(ByteArray(100))).error)
+    }
+
+    @Test
+    fun f22_aPaneAloneSizesItsWindowAndTmuxZoomsItOverItsSiblings() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        api.split(HOST, "work", 0, "v")
+        waitFor("two panes") { api.panes().size == 2 }
+        assertFalse(core.zoomed())
+        val fitted = api.resize(address, 60, 20, window = true, zoom = true)
+        assertEquals(60, fitted.width)
+        assertEquals(20, fitted.height)
+        // Zoomed, the pane has the whole window: its sibling is not squeezed to make room.
+        waitFor("tmux zooms the pane") { core.zoomed() }
+        waitFor("the pane fills the window") { core.width() == 60 }
+        api.release(address)
+        waitFor("the window is unzoomed and back to its own size") { !core.zoomed() && core.width() != 60 }
+    }
+
+    @Test
+    fun s13_closingAPaneNeedsTheAgentsFlagAWriteGrantAndAWritablePane() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        assertFalse("the agent does not close panes", api.hosts().single().close)
+        val refused = assertThrows(ApiException::class.java) { api.closePane(address) }
+        assertEquals(404, refused.status)
+        assertEquals("not_found", refused.code)
+        assertEquals(1, api.panes().size)
+    }
+
+    @Test
+    fun s13b_aPaneClosesWhereTheAgentAllowsItAndNotForAReadOnlyToken() {
+        val (api, _) = setup(allowClose = true)
+        assertTrue("the agent closes panes", api.hosts().single().close)
+        val made = api.split(HOST, "work", 0, "v")
+        waitFor("two panes") { api.panes().size == 2 }
+        val reader = Api(relay.url, core.token(write = null), "muxway-android-e2e")
+        val readOnly = assertThrows(ApiException::class.java) { reader.closePane(made.address) }
+        assertEquals(403, readOnly.status)
+        assertEquals("read_only", readOnly.code)
+        assertEquals(2, api.panes().size)
+        // The creation rate limit is shared, so the split just made is let go of first.
+        Thread.sleep(2_100)
+        api.closePane(made.address)
+        waitFor("the pane is gone from the host") { core.tmux("list-panes", "-t", "work", "-F", "#{pane_id}").lines().size == 1 }
+        waitFor("and from the listing") { api.panes().size == 1 }
     }
 
     @Test
