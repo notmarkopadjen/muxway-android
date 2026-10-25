@@ -49,10 +49,14 @@ class Api(private val baseUrl: String, private val token: String, private val us
         post("panes/${encode(address)}/input", Json.mouse(button, x, y))
     }
 
-    /** Sizes the pane on the host, as a terminal would; answers the pane as listed afterwards. */
-    fun resize(address: String, cols: Int, rows: Int): Pane {
+    /**
+     * Sizes the pane on the host, as a terminal would; answers the pane as listed afterwards.
+     * With [window] the whole window takes the size, and with [zoom] the pane is shown alone in
+     * it, as tmux's own zoom does, so no neighbour is squeezed.
+     */
+    fun resize(address: String, cols: Int, rows: Int, window: Boolean = false, zoom: Boolean = false): Pane {
         require(cols in 20..500 && rows in 5..300) { "size" }
-        return Json.resized(post("panes/${encode(address)}/resize", Json.size(cols, rows)).body)
+        return Json.resized(post("panes/${encode(address)}/resize", Json.size(cols, rows, window, zoom)).body)
     }
 
     /** One more pane in a window, beside ("h") or below ("v") a pane there you may type into; the new pane. */

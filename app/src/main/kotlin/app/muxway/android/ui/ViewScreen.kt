@@ -151,6 +151,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     LaunchedEffect(Unit) { focus.requestFocus() }
     val now = ticker()
     val order = model.panes.map { it.address }.ifEmpty { addresses }
+    DisposableEffect(Unit) { onDispose { model.releaseFits() } }
 
     fun hardKey(e: KeyEvent): Boolean {
         if (e.type != KeyEventType.KeyDown || !writable) return false
@@ -197,8 +198,10 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             // Tiles of one window share one fit; the others of it are held.
             val windowOf = { a: String -> model.panes.firstOrNull { it.address == a }?.let { "${it.host}/${it.session}/${it.windowIndex}" } ?: a }
             val held = TileFit.held(addresses, focused, windowOf)
+            // A pane alone in the view sizes its window, zoomed over its siblings when it has any.
+            val siblings = { a: String -> model.panes.any { it.address != a && windowOf(it.address) == windowOf(a) } }
             val tile: @Composable (Int, Modifier) -> Unit = { i, m ->
-                PaneTile(model, addresses[i], i == index, addresses.size > 1, fit, addresses[i] in held, fitAgain, now, m, onDrop = { from -> model.swapTiles(addresses, from, addresses[i]) }, onClose = { model.closePane(addresses, addresses[i]) }) {
+                PaneTile(model, addresses[i], i == index, addresses.size > 1, fit, addresses[i] in held, siblings(addresses[i]), fitAgain, now, m, onDrop = { from -> model.swapTiles(addresses, from, addresses[i]) }, onClose = { model.closePane(addresses, addresses[i]) }) {
                     focusedIndex = i
                     focus.requestFocus()
                 }
@@ -546,7 +549,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
-private fun PaneTile(model: AppModel, address: String, focused: Boolean, several: Boolean, fitAsked: Boolean, shared: Boolean, fitAgain: Int, now: Long, modifier: Modifier, onDrop: (String) -> Unit, onClose: () -> Unit, onFocus: () -> Unit) {
+private fun PaneTile(model: AppModel, address: String, focused: Boolean, several: Boolean, fitAsked: Boolean, shared: Boolean, siblings: Boolean, fitAgain: Int, now: Long, modifier: Modifier, onDrop: (String) -> Unit, onClose: () -> Unit, onFocus: () -> Unit) {
     // Another tile of this window carries the fit: this one is held.
     val fit = fitAsked && !shared
     var asking by remember(address) { mutableStateOf(false) }
@@ -638,11 +641,16 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
             // The on-screen keyboard halves the tile for a moment; the host keeps its size then.
             val imeUp = WindowInsets.isImeVisible
             val listed = pane?.let { "${it.width}x${it.height}" }
-            LaunchedEffect(fitting, visibleCols, visibleRows, imeUp, fitAgain, listed) {
+            // Alone in the view the window takes the size, with the pane zoomed over its siblings.
+            val fitWindow = !several
+            val fitZoom = fitWindow && siblings
+            LaunchedEffect(fitting, visibleCols, visibleRows, imeUp, fitAgain, listed, fitWindow, fitZoom) {
                 if (!fitting) model.release(address)
-                else if (!imeUp) model.fit(address, visibleCols.coerceIn(20, 500), visibleRows.coerceIn(5, 300), again = fitAgain > 0 && listed != null)
+                else if (!imeUp) model.fit(address, visibleCols.coerceIn(20, 500), visibleRows.coerceIn(5, 300), again = fitAgain > 0 && listed != null, window = fitWindow, zoom = fitZoom)
             }
-            DisposableEffect(address) { onDispose { model.release(address) } }
+            // A tile that gives way to another pane leaves its own at size; the view gives them
+            // all back when it is left.
+            DisposableEffect(address) { onDispose { model.keep(address) } }
             val lines = remember(rows, p) { rows.map { styled(it, p) }.asReversed() }
             val style = base.copy(fontSize = sizeSp.sp, lineHeight = lineSp.sp)
             val sideways = !fitting && !reflow

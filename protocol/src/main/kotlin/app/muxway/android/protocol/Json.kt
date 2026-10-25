@@ -66,7 +66,11 @@ object Json {
     fun mouse(button: String, x: Int, y: Int): String =
         JSONObject().put("mouse", JSONObject().put("button", button).put("x", x).put("y", y)).toString()
 
-    fun size(cols: Int, rows: Int): String = JSONObject().put("cols", cols).put("rows", rows).toString()
+    /** A resize: the pane alone, or its whole window, with the pane zoomed over its siblings. */
+    fun size(cols: Int, rows: Int, window: Boolean = false, zoom: Boolean = false): String =
+        JSONObject().put("cols", cols).put("rows", rows)
+            .apply { if (window) { put("scope", "window"); if (zoom) put("zoom", true) } }
+            .toString()
 
     fun fitAuto(): String = JSONObject().put("fit", "auto").toString()
 

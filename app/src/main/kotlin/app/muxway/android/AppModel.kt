@@ -441,10 +441,12 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     /**
      * Fit: asks the host to size the pane to [cols] × [rows], debounced, once per distinct size,
      * retried after the hub's one-per-second limit. The answer is the pane as listed afterwards.
+     * A pane alone in the view sizes its [window] instead, with the pane [zoom]ed over its
+     * siblings, so none of them is squeezed.
      */
-    fun fit(address: String, cols: Int, rows: Int, again: Boolean = false) {
+    fun fit(address: String, cols: Int, rows: Int, again: Boolean = false, window: Boolean = false, zoom: Boolean = false) {
         val v = view(address)
-        val key = "${cols}x$rows"
+        val key = "${cols}x$rows${if (window) " window" else ""}${if (zoom) " zoom" else ""}"
         // Once per size, unless asked again, or the host drifted from it (another terminal sized
         // the window): then once more, after twenty seconds, and no further on its own, so two
         // clients never fight over a window; the header shows the drift and a tap sends again.
@@ -460,7 +462,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             while (true) {
                 try {
                     v.ownAt = System.currentTimeMillis() / 1000
-                    val p = withContext(Dispatchers.IO) { api().resize(address, cols, rows) }
+                    val p = withContext(Dispatchers.IO) { api().resize(address, cols, rows, window, zoom) }
                     v.fitKey = key
                     v.fitAt = System.currentTimeMillis()
                     v.fitted = true
@@ -478,6 +480,19 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
+    }
+
+    /**
+     * A tile gone while the view stays: the pane keeps the size it was given, so a pane shown
+     * again in its place is not sized twice, and nothing is sent when it comes back at that size.
+     */
+    fun keep(address: String) {
+        views[address]?.fitJob?.cancel()
+    }
+
+    /** Gives back every pane this view sized; the view calls it when it is left. */
+    fun releaseFits() {
+        for (address in views.keys.toList()) release(address)
     }
 
     /** Gives the pane back to tmux, if this app ever sized it. */

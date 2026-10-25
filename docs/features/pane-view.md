@@ -83,6 +83,13 @@ flowchart LR
   when the focus is in another window) and the others say "held", keep
   fit off and are scaled to their tile; the focus moving to another tile
   of the window moves the fit there, releasing the previous pane.
+  A pane **alone in the view** sizes its whole window instead
+  (`"scope": "window"`), with the pane zoomed over its siblings
+  (`"zoom": true`, tmux's own zoom) when the window holds any, so no
+  neighbour is squeezed to make room for the phone's screen. A pane that
+  **gives way to another** in the view keeps the size it was given and is
+  not sized again when it comes back at that size; every pane the view
+  sized is given back when the view is left.
 - **Width.** With fit off, rows are shown at the pane's own width, as tmux
   shows them, and the font is sized so that width fits the tile, never
   larger than the **text** setting. A 96-column pane on a phone comes out

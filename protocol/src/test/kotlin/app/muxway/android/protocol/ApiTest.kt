@@ -72,6 +72,21 @@ class ApiTest {
     }
 
     @Test
+    fun aPaneAloneSizesItsWindowAndIsZoomedOverItsSiblings() {
+        answer = { json(200, """{"pane":{"address":"h/w/0.0","width":40,"height":12,"mode":"write","zoomed":true}}""") }
+        api().resize("h/w/0.0", 40, 12, window = true, zoom = true)
+        api().resize("h/w/0.0", 40, 12, window = true)
+        val zoomed = org.json.JSONObject(String(seen[0].body))
+        assertEquals("window", zoomed.getString("scope"))
+        assertEquals(true, zoomed.getBoolean("zoom"))
+        val plain = org.json.JSONObject(String(seen[1].body))
+        assertEquals("window", plain.getString("scope"))
+        assertEquals(false, plain.has("zoom"))
+        // The size is checked here, whatever the scope, so nothing silly leaves the phone.
+        assertThrows(IllegalArgumentException::class.java) { api().resize("h/w/0.0", 2, 12, window = true, zoom = true) }
+    }
+
+    @Test
     fun mouseSendsButtonAndCellAndRefusesNonsenseLocally() {
         answer = { Response(204, ByteArray(0), emptyMap()) }
         api().mouse("h/w/0.0", "left", 39, 9)
