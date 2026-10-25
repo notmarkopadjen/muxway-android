@@ -14,8 +14,14 @@ name). The lens answers one of three states:
 | State | When | Glyph |
 |---|---|---|
 | waiting for you | the listing carries a notification: `permission`, `question`, `idle`, `done` | `!` `?` `z` `✓`, the theme's ink inverted |
-| working | the last event the hub sent for the pane was `working` (Claude's hook on a submitted prompt), or the app is reading the pane and its screen changed in the last 10 s | `⟳`, dim |
+| working | the last event the hub sent for the pane was `working` (Claude's hook on a submitted prompt), or the app is reading the pane and its screen changed in the last 10 s by itself | `⟳`, dim |
 | quiet | anything else | nothing |
+
+A change this client caused is not the program working: the first read of
+a pane fills its screen, and what a pane prints within three seconds of
+this app typing into it, sizing it or giving it back is this app's own
+doing. The hub's recent events seed the states when the app connects, so
+a pane that was already working says so before the next event arrives.
 
 The glyph sits before the pane's name in the tab strip, in the pane's
 header with the word (`! permission`, `⟳ working`), and in the pane list.

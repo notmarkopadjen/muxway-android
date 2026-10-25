@@ -10,6 +10,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -28,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +45,7 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
@@ -95,10 +100,21 @@ fun Rule(modifier: Modifier = Modifier) {
 /** `[label]`: a bordered button; selected is inverted and glows. A long press may do something else. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun Btn(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, selected: Boolean = false, enabled: Boolean = true, onLongClick: (() -> Unit)? = null) {
+fun Btn(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    enabled: Boolean = true,
+    onLongClick: (() -> Unit)? = null,
+    onDown: (() -> Unit)? = null,
+    onUp: ((held: Boolean) -> Unit)? = null,
+) {
     val p = LocalPalette.current
     val fg = if (selected) p.bg else if (enabled) p.ink else p.faint
     val bg = if (selected) p.ink else p.bg
+    val down by rememberUpdatedState(onDown)
+    val up by rememberUpdatedState(onUp)
     Text(
         label,
         color = fg,
@@ -108,10 +124,29 @@ fun Btn(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, selec
             .padding(2.dp)
             .border(1.dp, if (selected) p.ink else if (enabled) p.dim else p.faint)
             .background(bg)
-            .then(if (onLongClick == null) Modifier.clickable(enabled = enabled, onClick = onClick) else Modifier.combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongClick))
+            .then(
+                when {
+                    // The press itself is the gesture: the caller is told when it starts and
+                    // whether the finger was held down when it ended.
+                    onDown != null -> Modifier.pointerInput(enabled) {
+                        if (!enabled) return@pointerInput
+                        awaitEachGesture {
+                            awaitFirstDown()
+                            val at = System.currentTimeMillis()
+                            down?.invoke()
+                            if (waitForUpOrCancellation() != null) up?.invoke(System.currentTimeMillis() - at >= HOLD_MS)
+                        }
+                    }
+                    onLongClick == null -> Modifier.clickable(enabled = enabled, onClick = onClick)
+                    else -> Modifier.combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongClick)
+                },
+            )
             .padding(horizontal = 8.dp, vertical = 4.dp),
     )
 }
+
+/** A press longer than this is a hold, not a tap. */
+const val HOLD_MS = 400L
 
 /**
  * A labelled field with a border; the cursor is the ink colour. With [maxLines] above one it grows

@@ -49,6 +49,16 @@ class LensTest {
     }
 
     @Test
+    fun aChangeThisClientCausedIsNotTheProgramWorking() {
+        val now = 1_767_225_600L
+        assertEquals(false, Lens.changeCounts(firstRead = true, ownAt = 0L, at = now))
+        assertEquals(false, Lens.changeCounts(firstRead = false, ownAt = now, at = now))
+        assertEquals(false, Lens.changeCounts(firstRead = false, ownAt = now - 2, at = now))
+        assertEquals(true, Lens.changeCounts(firstRead = false, ownAt = now - 3, at = now))
+        assertEquals(true, Lens.changeCounts(firstRead = false, ownAt = 0L, at = now))
+    }
+
+    @Test
     fun theNameDropsClaudesMark() {
         assertEquals("muxway android", Lens.name(pane("claude", "✳ muxway android")))
         assertEquals("alice@laptop: ~", Lens.name(pane("bash", "alice@laptop: ~")))

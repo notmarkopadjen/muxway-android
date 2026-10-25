@@ -13,10 +13,19 @@ object Lens {
     /** How recent a content change must be to count as working. */
     const val RECENT_SECONDS = 10L
 
+    /** How long after this client's own input or resize a change of content is its own doing. */
+    const val OWN_SECONDS = 3L
+
     /** Claude Code sets the pane title to a star and the session's name. */
     const val MARK = "✳"
 
     fun isClaude(p: Pane) = p.command == "claude" || p.title.startsWith(MARK)
+
+    /**
+     * Whether a change of content seen at [at] says the program is working: the first read of a
+     * pane fills the screen and a change just after this client typed or resized is its own.
+     */
+    fun changeCounts(firstRead: Boolean, ownAt: Long, at: Long): Boolean = !firstRead && at - ownAt >= OWN_SECONDS
 
     fun status(p: Pane, lastKind: String?, changed: Boolean): Status = when {
         p.attention != null -> Status.WAITING

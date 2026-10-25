@@ -32,7 +32,8 @@ focused pane.
   several panes) the next arrangement, `⤢` fit on or off, `⌨` the on-screen keyboard (only with the hardware keyboard
   setting), `⚙` settings.
 - A **swipe** left or right across the page moves to the next or previous
-  pane in the strip.
+  pane in the strip, coming round at either end as `]` and `[` do in the
+  browser.
 - One pane fills the screen. Several panes start **side by side in
   landscape** and **stacked in portrait**, each with an equal share; `▦`
   cycles the arrangements that make sense for the count: two panes have
@@ -167,9 +168,12 @@ it is writable:
   text and then `Enter`;
 - the **microphone**: when the hub has a transcriber (asked once, with
   the first listing after connecting) a `◉` button sits between the text
-  line and *type*. The first tap asks for the microphone permission. While
+  line and *type*, in every state, so a press and its release are one
+  gesture. The first press asks for the microphone permission. **Held**,
+  it records until the finger lifts; **tapped**, it records and the next
+  tap stops, as the browser's button and `v` do. While
   recording, a level meter in block characters and the seconds take the
-  line's place; `■`, a tap on the meter, or sixty seconds stops the clip,
+  line's place; the button becomes `■`, and it, a tap on the meter, or sixty seconds stops the clip,
   which goes to the hub as a 16 kHz mono WAV, and the words it heard land
   on the line, after a space when something was typed, with the line
   focused: nothing is sent until *send*. *cancel* or back drops the clip.
@@ -192,6 +196,10 @@ anything to it.
 
 A Wear OS watch shows a pane's tail with a few of these answers, through
 the phone; see [watch.md](watch.md), *The pane screen*.
+
+A pane that **exits on its host** is read no more: the tile leaves the
+view by itself when the hub answers `404 not_found`, and with no tiles
+left the pane list shows.
 
 ## Closing a pane
 

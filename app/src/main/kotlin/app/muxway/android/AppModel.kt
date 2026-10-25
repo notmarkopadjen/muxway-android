@@ -55,6 +55,10 @@ class PaneState(val address: String) {
     /** When the content last changed, in seconds; the lens counts a recent change as working. */
     var changedAt by mutableLongStateOf(0L)
 
+    /** Whether anything has been read yet, and when this client last typed into or sized the pane. */
+    var read = false
+    var ownAt = 0L
+
     /** Fit: the last size sent to the host, when, and whether a release is owed. */
     var fitKey = ""
     var fitAt = 0L
@@ -399,16 +403,20 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         try {
             val r = withContext(Dispatchers.IO) { api().read(address, settings.lines, v.etag) }
             if (r != null) {
+                val at = System.currentTimeMillis() / 1000
                 v.pane = r.pane
-                if (r.content != v.content) v.changedAt = System.currentTimeMillis() / 1000
+                if (r.content != v.content && Lens.changeCounts(!v.read, v.ownAt, at)) v.changedAt = at
                 v.content = r.content
                 v.etag = r.etag
+                v.read = true
             }
             v.error = null
             v.updated = LocalTime.now().format(CLOCK)
         } catch (e: ApiException) {
             v.error = e.message
             if (e.code == "unauthorized") tokenRefused()
+            // The pane exited on the host: its tile has nothing left to show.
+            if (e.code == "not_found") drop(address)
         }
     }
 
@@ -451,6 +459,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             var tries = 0
             while (true) {
                 try {
+                    v.ownAt = System.currentTimeMillis() / 1000
                     val p = withContext(Dispatchers.IO) { api().resize(address, cols, rows) }
                     v.fitKey = key
                     v.fitAt = System.currentTimeMillis()
@@ -480,6 +489,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         v.fitRetried = false
         if (!v.fitted) return
         v.fitted = false
+        v.ownAt = System.currentTimeMillis() / 1000
         viewModelScope.launch {
             runCatching { withContext(Dispatchers.IO) { api().release(address) } }
             v.etag = null
@@ -548,14 +558,21 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) { api().closePane(address) }
-                val rest = addresses - address
-                views.remove(address)
-                open(if (rest.isEmpty()) Screen.Panes else Screen.View(rest))
+                drop(address)
                 refreshList()
             } catch (e: ApiException) {
                 sendError = e.message
             }
         }
+    }
+
+    /** Takes a pane out of the view it is open in; the last tile leaves the view for the list. */
+    private fun drop(address: String) {
+        val view = screen as? Screen.View ?: return
+        if (address !in view.addresses) return
+        views.remove(address)
+        val rest = view.addresses - address
+        open(if (rest.isEmpty()) Screen.Panes else Screen.View(rest))
     }
 
     fun swapTiles(addresses: List<String>, a: String, b: String) {
@@ -573,6 +590,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     private fun send(address: String, action: (Api) -> Unit): Boolean {
         val v = view(address)
         if (v.busy) return false
+        // What the pane prints next is this client's doing, not the program working on its own.
+        v.ownAt = System.currentTimeMillis() / 1000
         viewModelScope.launch {
             v.busy = true
             sendError = null

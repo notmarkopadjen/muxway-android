@@ -164,11 +164,11 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         focus.requestFocus()
     }
 
+    // The strip comes round at either end, as ] and [ do in the browser.
     fun neighbour(step: Int) {
         val at = order.indexOf(focused)
-        if (at < 0) return
-        val next = (at + step).coerceIn(0, order.lastIndex)
-        if (next != at) show(order[next])
+        if (at < 0 || order.size < 2) return
+        show(order[(at + step + order.size) % order.size])
     }
 
     val swipe = with(LocalDensity.current) { 72.dp.toPx() }
@@ -475,6 +475,9 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
             }
         }
     }
+    // The microphone sits between the line and the sending keys in every state, so a press and
+    // its release are one gesture even though the line gives way to the meter in between.
+    var pressedIdle by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         when {
             recorder != null -> {
@@ -483,14 +486,10 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
                     "$meter $seconds s · tap to stop", color = p.ink, maxLines = 1,
                     modifier = Modifier.weight(1f).padding(vertical = 4.dp).border(1.dp, p.ink).clickable { stopClip() }.padding(horizontal = 6.dp, vertical = 6.dp),
                 )
-                Btn("■", { stopClip() })
-                Btn("cancel", { dropClip() })
             }
             hearing -> {
                 Text("> ", color = p.dim, maxLines = 1)
                 Text("⟳ hearing…", color = p.dim, maxLines = 1, modifier = Modifier.weight(1f).padding(vertical = 4.dp).border(1.dp, p.dim).padding(horizontal = 6.dp, vertical = 6.dp))
-                Btn("◉", {}, enabled = false)
-                Btn("send", {}, enabled = false)
             }
             else -> {
                 LaunchedEffect(fieldFocus.wanted) { if (fieldFocus.wanted) fieldFocus.give() }
@@ -505,7 +504,20 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
                     maxLines = 6,
                     onEnter = { send(true) },
                 )
-                if (model.transcriber) Btn("◉", { speak() }, enabled = !busy)
+            }
+        }
+        // Held, it records until the finger lifts; tapped, it records and the next tap stops.
+        if (model.transcriber) {
+            Btn(
+                if (recorder != null) "■" else "◉", {}, enabled = !busy && !hearing,
+                onDown = { pressedIdle = recorder == null; if (pressedIdle) speak() },
+                onUp = { held -> if (held || !pressedIdle) stopClip() },
+            )
+        }
+        when {
+            recorder != null -> Btn("cancel", { dropClip() })
+            hearing -> Btn("send", {}, enabled = false)
+            else -> {
                 Btn("type", { send(false) }, enabled = !busy && text.isNotEmpty())
                 Btn("send", { send(true) }, enabled = !busy)
             }
