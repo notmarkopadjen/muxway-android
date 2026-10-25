@@ -156,11 +156,15 @@ row, the title, the tail and the note — so nothing is cut by the edge. A
 square watch keeps its corners and the same four bands.
 
 **Two buttons, and the tail.** *reply* and `◉` sit side by side in the
-middle of the top band, large enough for a thumb. Nothing sits under the
-tail but the note line: a row of keys there cost two bands of a round
-screen and said nothing the reply menu does not, so the tail has the rest
-of the glass. On a read-only pane the top band says `read-only` and
-offers *phone* alone.
+middle of the top band: wide to the finger, low in height, so the tail
+keeps the screen. The band sits a little below the top of the glass,
+where the chord is wide enough for both, and its inset is capped so the
+row always keeps 150 dp: a button squeezed to nothing measures its label
+at nothing and draws an empty box, which is how the microphone went
+missing on a 240 dp watch. Nothing sits under the tail but the note line:
+a row of keys there cost two bands of a round screen and said nothing the
+reply menu does not. On a read-only pane the top band says `read-only`
+and offers *phone* alone.
 
 The watch still holds no token and opens no connection. The screen asks
 the phone for the tail every two seconds while it shows, and the phone's

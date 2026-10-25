@@ -363,12 +363,14 @@ class PaneActivity : ComponentActivity() {
             // The glass decides how wide each band of the screen may be. Nothing sits under the
             // tail but the note: every answer is in the reply menu, so the tail has the room.
             val tall = config.screenHeightDp.toFloat()
-            val head = if (round) tall * 0.085f else 22f
+            val head = if (round) tall * 0.12f else 22f
             val foot = if (round) tall * 0.11f else 6f
             val tailTall = (tall - head - TOP - TITLE - NOTE - foot).coerceAtLeast(40f)
             val bands = Bands(tall, round)
             bands.skip(head)
-            val topIn = bands.next(TOP)
+            // The top row must never be squeezed: a button with no room left measures its label
+            // at nothing and draws an empty box, as the microphone did on a 240 dp watch.
+            val topIn = bands.next(TOP).coerceAtMost(((tall - ROW_LEAST) / 2f).coerceAtLeast(0f))
             val titleIn = bands.next(TITLE)
             val tailIn = bands.next(tailTall)
             val noteIn = bands.next(NOTE)
@@ -392,8 +394,8 @@ class PaneActivity : ComponentActivity() {
                             Key("drop", Palette.dim) { draft = null; draftHeard = "" }
                         }
                         writable -> {
-                            Key("reply", Palette.ink, big = true) { menu = true }
-                            if (transcriber) Key("◉", Palette.attention, big = true) { speak() }
+                            Key("reply", Palette.ink, wide = true) { menu = true }
+                            if (transcriber) Key("◉", Palette.attention, wide = true) { speak() }
                         }
                         problem == null -> {
                             Text("read-only ", color = Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp)
@@ -466,13 +468,13 @@ class PaneActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun Key(label: String, colour: Color, big: Boolean = false, onClick: () -> Unit) {
+    private fun Key(label: String, colour: Color, wide: Boolean = false, onClick: () -> Unit) {
         Box(
-            Modifier.padding(horizontal = if (big) 5.dp else 2.dp, vertical = 3.dp).border(1.dp, Palette.faint)
-                .clickable(onClick = onClick).padding(horizontal = if (big) 14.dp else 7.dp, vertical = if (big) 9.dp else 6.dp),
+            Modifier.padding(horizontal = if (wide) 5.dp else 2.dp, vertical = 2.dp).border(1.dp, Palette.faint)
+                .clickable(onClick = onClick).padding(horizontal = if (wide) 14.dp else 7.dp, vertical = if (wide) 1.dp else 6.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text(label, color = colour, fontFamily = Palette.mono, fontSize = if (big) 15.sp else 12.sp, maxLines = 1)
+            Text(label, color = colour, fontFamily = Palette.mono, fontSize = 12.sp, lineHeight = 14.sp, maxLines = 1)
         }
     }
 
@@ -482,8 +484,9 @@ class PaneActivity : ComponentActivity() {
         const val READ_EVERY_MS = 2_000L
         const val HEARD_TIMEOUT_MS = 100_000L
 
-        /** The heights the screen's bands are laid out with, in dp. */
-        const val TOP = 44f
+        /** The heights the screen's bands are laid out with, in dp, and the room the top row keeps. */
+        const val TOP = 26f
+        const val ROW_LEAST = 150f
         const val TITLE = 16f
         const val NOTE = 16f
     }
