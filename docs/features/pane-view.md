@@ -180,6 +180,14 @@ it is writable:
   A hub without a transcriber shows no button. Refusals show in the
   status line like a refused send: `Microphone refused`, `No microphone`,
   `Too short`, `One clip every five seconds`, `Transcriber unavailable`;
+- **completion**: while the first word on the line is being typed, and
+  nothing follows it, a row above the line offers what the program takes
+  — Claude Code's slash commands, or a shell's starters and the lines
+  sent to a shell from this phone — eight at most, marked `⇥`. A tap
+  takes one onto the line with a space after it, ready for the rest; the
+  row goes when the word is finished or nothing matches any more.
+  Nothing a pane printed and nothing the hub said is ever offered
+  (`Complete` in the protocol module, the browser's rules);
 - the **command row**, between the key row and the text line, is for the
   program in the pane and scrolls sideways. Claude Code's pane (the lens
   decides) gets `/clear`, `/compact`, `/rename`, `/model`, `/resume`,

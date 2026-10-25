@@ -114,6 +114,7 @@ import app.muxway.android.audio.Recorder
 import app.muxway.android.protocol.Ansi
 import app.muxway.android.protocol.Clip
 import app.muxway.android.protocol.Commands
+import app.muxway.android.protocol.Complete
 import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Links
@@ -471,6 +472,19 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
                             else { text = c.text; fieldFocus.request() }
                         }, enabled = !busy)
                     }
+                }
+            }
+        }
+    }
+    // While the first word is being typed, what the program takes is offered above the line; a
+    // tap takes one. Only constants and this client's own sent lines are ever offered.
+    val picks = if (recorder != null || hearing) emptyList() else state.pane?.let { Complete.forPane(it, text, text.length, model.recent) }.orEmpty()
+    if (picks.isNotEmpty()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(" ⇥ ", color = p.faint, maxLines = 1)
+            LazyRow(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                items(picks, key = { it }) { c ->
+                    Btn(c, { text = Complete.take(text, text.length, c).first; fieldFocus.request() }, enabled = !busy)
                 }
             }
         }
