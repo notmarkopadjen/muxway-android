@@ -137,6 +137,10 @@ class WatchGateTest {
         assertEquals("yes deploy it", h.text)
         assertTrue(g.text(Wire.Text("t1", address, "", "c1", true)).ok)
         assertEquals(listOf("""{"text":"yes deploy it"}""", """{"key":"Enter"}"""), bodies())
+        // Heard once, typed once.
+        now += 2_000
+        assertEquals(WatchGate.REFUSED, g.text(Wire.Text("t2", address, "", "c1", true)).error)
+        assertEquals(2, bodies().size)
         val clip = seen.first { it.path == "/v1/transcribe" && it.method == "POST" }
         assertEquals("audio/wav", clip.header("Content-Type"))
     }

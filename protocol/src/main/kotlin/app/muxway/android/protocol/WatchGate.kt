@@ -39,11 +39,12 @@ class WatchGate(
         }
         return write(r, text) {
             api.type(r.address, it)
+            heard.remove(r.heard)
             if (r.enter) api.key(r.address, "Enter")
         }
     }
 
-    /** A clip to the hub's transcriber; the text is kept under [id] for a [Wire.Text] that names it. */
+    /** A clip to the hub's transcriber; the text is kept under [id] for one [Wire.Text] that names it. */
     fun transcribe(id: String, wav: ByteArray): Wire.Heard {
         if (!allowed()) return Wire.Heard(id, "", REFUSED)
         if (wav.size > Wire.MAX_CLIP_BYTES) return Wire.Heard(id, "", REFUSED)

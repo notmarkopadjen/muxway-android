@@ -315,11 +315,48 @@ pre-push check runs before every push.
 
 ## Review (after implementation)
 
-- [ ] Diff matches the plan, deviations explained here
-- [ ] Security rules (AGENTS.md section 2) hold
-- [ ] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
-- [ ] Docs and diagrams updated
+- [x] Diff matches the plan, with these deviations:
+  - A transcript is typed once: the gate forgets a heard text the moment
+    a `/pane/text` naming it is sent, so a second request under a new id
+    is refused. Stricter than the plan, and tested.
+  - The hub's `bad_input` and `not_found` on a key or text answer
+    `refused`; on a clip, `too short` and `transcriber unavailable`. The
+    plan listed the words without saying which error maps where.
+  - The watch gives the transcriber a hundred seconds, then says
+    `transcriber unavailable` and lets go, so a lost answer cannot leave
+    the screen listening forever.
+  - The watch app is not minified in debug and the recorder is a copy of
+    the phone's (the `app` module cannot be a dependency of `wear`),
+    with a thirty-second cap in place of sixty.
+  - The UI test (13) is not written: no watch emulator on this bench, and
+    an untested UI test is worse than none. First thing to add when one
+    is attached.
+  - Versions: the app had moved to 0.7.9 (21) under another feature while
+    this one was built, so both app and watch app are 0.8.0 (22). The face
+    is unchanged.
+- [x] Security rules hold: the watch still holds no token and makes no
+  request of its own; every write goes through `WatchGate` on the phone
+  (listing, writable, whitelist, the owner's setting off by default, one
+  a second and ten a minute, a repeated id answers without writing); the
+  text typed is a transcript the phone made or `y`/`n`; the tail is
+  memory only on the watch; the clip is capped before the hub and never
+  logged; the messages are read defensively on both ends.
+- [x] Privacy check: `scripts/prepush-check.sh` clean; fixtures are
+  `alice-laptop/work/0.1`, `deploy`, `hub.example.com`; the e2e tests type
+  `Deploy to prod?` and `heard-on-the-wrist` into the throwaway tmux.
+- [x] Docs updated: features/watch.md (the pane screen, the messages, the
+  setting, the security decision), features/notifications.md,
+  features/pane-view.md, ARCHITECTURE.md, README.md; the core's
+  ui-guideline.md §1.6 and §3 rows (commit 65c26d4 there).
+
+To verify on a watch, which this bench has none of: that the pane screen
+opens from the face, the tile and the list; that the tail reads at 9 sp
+on a round screen; that the channel delivers the clip and the transcript
+comes back; that `phone` still lands the phone on the pane.
 
 ## Test run
 
-Not yet run.
+First run `test-runs/20261025-000250-2a66a36`, recorded as
+[issue #22](https://github.com/notmarkopadjen/muxway-android/issues/22):
+**passed**, 128 tests, 0 failed, 0 skipped; UI suite skipped on purpose
+(no device). The final run after the review's fixes is recorded below.

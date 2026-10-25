@@ -78,7 +78,7 @@ class PaneActivity : ComponentActivity() {
 
     private val listener = MessageClient.OnMessageReceivedListener { m -> runOnUiThread { arrived(m.path, m.data) } }
     private val askMicrophone = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) startRecording() else say("microphone refused")
+        if (ok) startRecording() else flashNow("microphone refused")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -191,7 +191,7 @@ class PaneActivity : ComponentActivity() {
             onFull = { runOnUiThread { stopRecording() } },
         )
         if (!r.start()) {
-            say("no microphone")
+            flashNow("no microphone")
             return
         }
         recorder = r
