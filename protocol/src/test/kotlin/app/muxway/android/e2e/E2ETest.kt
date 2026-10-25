@@ -452,8 +452,8 @@ class E2ETest {
         assertEquals(WatchGate.NOT_ALLOWED, gate.key(Wire.Key("k0", address, "Enter")).error)
         assertFalse(core.pane().contains("answer=y"))
         allowed = true
-        assertEquals(WatchGate.REFUSED, gate.key(Wire.Key("k1", address, "Up")).error)
-        assertEquals(WatchGate.REFUSED, gate.text(Wire.Text("t1", address, "yes", "", true)).error)
+        assertEquals(WatchGate.REFUSED, gate.key(Wire.Key("k1", address, "F1")).error)
+        assertEquals(WatchGate.REFUSED, gate.text(Wire.Text("t1", address, "\u0007", "", true)).error)
         assertTrue(gate.text(Wire.Text("t2", address, "y", "", true)).ok)
         waitPane("answer=y")
         waitFor("attention cleared") { api.panes().all { it.attention == null } }

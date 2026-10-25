@@ -48,7 +48,7 @@ class WatchGateTest {
     @Test
     fun aKeyOutsideTheWhitelistOrAnUnknownPaneNeverReachesTheHub() {
         val g = gate()
-        for (bad in listOf("Up", "C-d", "F1", "\u001b[A", "", "x".repeat(10_000))) {
+        for (bad in listOf("F1", "C-d", "Left", "\u001b[A", "", "x".repeat(10_000))) {
             assertEquals(WatchGate.REFUSED, g.key(Wire.Key("k-$bad", address, bad)).error)
         }
         assertEquals(WatchGate.REFUSED, g.key(Wire.Key("k-unknown", "alice-laptop/work/9.9", "Enter")).error)
@@ -58,15 +58,17 @@ class WatchGateTest {
     }
 
     @Test
-    fun textIsTwoLettersOrWhatTheHubHeardNeverTheWatchsOwn() {
+    fun textIsCleanedAndCappedAndAHeardIdMustBeKnown() {
         val g = gate()
-        for (bad in listOf("rm -rf /", "yes", "", "\u0007", "y\n", "a".repeat(5000))) {
+        for (bad in listOf("", "\u0007", "\u001b[2J", "a".repeat(5000))) {
             assertEquals(WatchGate.REFUSED, g.text(Wire.Text("t-${bad.hashCode()}", address, bad, "", true)).error)
         }
         assertEquals(WatchGate.REFUSED, g.text(Wire.Text("t-fake", address, "", "never-heard", true)).error)
         assertTrue(seen.isEmpty())
         assertTrue(g.text(Wire.Text("t-y", address, "y", "", true)).ok)
-        assertEquals(listOf("""{"text":"y"}""", """{"key":"Enter"}"""), bodies())
+        now += 2_000
+        assertTrue(g.text(Wire.Text("t-typed", address, "echo hi\u0007\u001b[2J there", "", false)).ok)
+        assertEquals(listOf("""{"text":"y"}""", """{"key":"Enter"}""", """{"text":"echo hi there"}"""), bodies())
     }
 
     @Test
@@ -80,7 +82,7 @@ class WatchGateTest {
         // The tail still comes: the screen shows, it cannot answer.
         val t = g.read(Wire.Read("r1", address, ""))
         assertEquals("", t.error)
-        assertEquals(listOf("$ make deploy", "Deploy to prod? (y/N) "), t.lines)
+        assertEquals(listOf("$ make deploy", "\u001b[33mDeploy to prod? (y/N)\u001b[0m "), t.lines)
         assertTrue(t.writable)
     }
 
@@ -114,7 +116,8 @@ class WatchGateTest {
         val g = gate()
         val t = g.read(Wire.Read("r1", address, ""))
         assertEquals("\"a1\"", t.etag)
-        assertEquals(listOf("$ make deploy", "Deploy to prod? (y/N) "), t.lines)
+        assertEquals(listOf("$ make deploy", "\u001b[33mDeploy to prod? (y/N)\u001b[0m "), t.lines)
+        assertEquals("bash", t.command)
         assertTrue(t.writable)
         assertTrue(t.transcriber)
         val same = g.read(Wire.Read("r2", address, "\"a1\""))

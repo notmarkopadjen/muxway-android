@@ -3,9 +3,10 @@
 A Galaxy Watch, or any Wear OS watch, shows which panes wait for their
 owner: on the muxway watch face, in a complication on any other face, in
 a tile and in a small list. A tap on a pane opens it on the watch: the
-tail of its screen, a row of answers (`Enter`, `Esc`, `y`, `n`, `^C`, a
-spoken line) and *phone*, which makes the phone app open that pane behind
-the lock screen, so unlocking the phone lands on it.
+tail of its screen in colour, with Claude Code's chrome hidden, the
+microphone and a *reply* menu at the top, a row of keys at the bottom,
+and *phone*, which makes the phone app open that pane behind the lock
+screen, so unlocking the phone lands on it.
 
 ```
           ┌───────────────┐
@@ -127,23 +128,50 @@ stateDiagram-v2
 ### The pane screen
 
 ```
-[◉] [Enter] [Esc] [y] [n] [^C] [phone]   the answers, at the top so a round
-┌ ? deploy                               screen shows them without a scroll
-  $ make deploy            the tail: the last 40 lines, plain text,
-  Deploy to prod? (y/N) _  wrapped to the screen, newest at the bottom,
-                           a drag scrolls up
+[◉] [reply]                the microphone and the reply menu, at the top
+┌ ? deploy                 so a round screen shows them without a scroll
+  ● I will run make test   the tail: the last 40 lines, in colour,
+  Do you want to proceed?  wrapped to the screen, newest at the bottom,
+  ❯ 1. Yes                 a drag scrolls up; Claude Code's rules, box
+    2. No                  and footer are hidden by the lens
 └ sent                     the last answer's result, or what is wrong
+[Enter] [Esc] [y] [n] [^C] [phone]
 ```
 
 The watch still holds no token and opens no connection. The screen asks
 the phone for the tail every two seconds while it shows, and the phone's
 service, which holds the hub's `Api`, reads `GET /v1/panes/{address}`
-(40 lines, colour stripped) and answers only when the hub's ETag changed.
-The header is the pane's lens state from the board the watch already has.
+(40 lines, with the colour sequences and nothing else of the escape
+codes) and answers only when the hub's ETag changed. The header is the
+pane's lens state from the board the watch already has.
 
-The answers are what a wrist can give. `Enter` takes the default or says
-yes to Claude Code, `Esc` refuses or cancels, `y` and `n` answer a shell's
-prompts, `^C` stops a command. Each is one message to the phone; the
+**The Claude Code lens.** On a pane whose program is `claude` the tail
+is shaped as the feature-phone and glasses clients shape it: the two
+rules, the footer, the right-aligned notices and the summary of the last
+turn are hidden, the blank rows Claude fills a tall terminal with are
+dropped, and the input box is pinned under the transcript, dimmed, only
+when someone typed into it. The lens (`ClaudeLens` in the protocol
+module, the same rules as the other clients' `ClaudeCode`) works on the
+plain rows and names the rows to keep by index, so the watch draws them
+with their colours: the phone's sixteen-colour table, xterm's cube and
+greys, true colour, bold, italic, underline, inverse and dim. Any other
+program is drawn whole.
+
+**Reply.** *reply* opens a list. First what Claude offers on the screen:
+its numbered choices (`❯ 1. Yes` … `3. No`, read from the last rows of
+the tail, the one marked `❯` first), each sent as its digit alone, which
+is how Claude Code takes it. Then the common answers, the same as on the
+glasses: `Enter`, `y, Enter`, `n, Enter`, `1` `2` `3` when no choices
+were read, `Esc`, `Ctrl-C`, `Tab`, `Shift-Tab`, `Up`, `Down`. Last,
+*type…* opens the watch's own input method through Wear OS remote input
+(the keyboard, handwriting or voice as the watch offers); the line comes
+back as a draft under the top row with *send* (the line, then Enter),
+*type* (the line alone) and *drop*.
+
+The row of keys at the bottom is what a wrist gives in one tap. `Enter`
+takes the default or says yes to Claude Code, `Esc` refuses or cancels,
+`y` and `n` answer a shell's prompts, `^C` stops a command. Each is one
+message to the phone; the
 phone checks it and sends it to the hub; the result flashes under the
 tail: `sent`, or `not allowed: phone setting` (**watch may answer** is
 off), `refused` (not a key or pane the watch may name), `read-only`, `no
@@ -155,10 +183,11 @@ first press asks for the microphone. The watch records 16 kHz mono, shows
 the meter and the seconds as the phone does, and stops at `■`, at *drop*
 or at thirty seconds. The clip streams to the phone on a channel; the
 phone posts it to `POST /v1/transcribe` and sends back the text it heard,
-which the screen shows with *send* (the text, then Enter), *type* (the
-text alone) and *drop*. Nothing reaches the pane until *send* or *type*,
-and even then the watch does not send the text: it names the clip, and
-the phone types what it heard under that name. Refusals flash: `too
+which the screen shows as a draft with *send* (the text, then Enter),
+*type* (the text alone) and *drop*. Nothing reaches the pane until *send*
+or *type*, and even then the watch does not send the text: it names the
+clip, and the phone types what it heard under that name, once. Refusals
+flash: `too
 short`, `one clip every five seconds`, `transcriber unavailable`, `no
 microphone`, `microphone refused`, `clip lost on the way` (the phone did
 not get the whole WAV: it reads as many bytes as the RIFF header
@@ -266,21 +295,29 @@ watch's microphone.
   and, when the owner allows it, the notification text. A lost watch gives
   an attacker what a glance at its face gives. The board is app-private on
   both ends; the Data Layer binds same-signature apps only.
-- **The watch can type, within limits, and only when allowed.** This was
-  decided by the owner for the pane screen: an unlocked watch (on the
-  wrist, or with its PIN) can send five keys and the text the hub's
-  transcriber heard into a writable pane while the phone stays locked in
-  a pocket, as the phone's principal, audit-logged on the host as the
-  phone's writes. What a lost, unlocked watch does not give: the token,
-  the hub's address, any key outside the whitelist, any text of its own,
-  any pane the phone does not list, and nothing at all while **watch may
-  answer** is off, which it is by default. The phone checks every request
-  (address against the grammar and the current listing, key against the
-  whitelist, `writable` on the pane, the rate limit, a repeated id), and
-  the text it types comes only from a transcript it made itself; the
-  watch names the clip, never the words. A hub field naming the device
+- **The watch can type, and only when allowed.** Decided by the owner
+  for the pane screen, and widened on 2026-10-25 to a line typed on the
+  watch: an unlocked watch (on the wrist, or with its PIN) can send seven
+  keys, digits, letters, a line from its own keyboard and the text the
+  hub's transcriber heard into a writable pane while the phone stays
+  locked in a pocket, as the phone's principal, audit-logged on the host
+  as the phone's writes. That is what an unlocked phone gives too. What a
+  lost, unlocked watch does not give: the token, the hub's address, any
+  key outside the whitelist, any pane the phone does not list, and
+  nothing at all while **watch may answer** is off, which it is by
+  default. The phone checks every request (address against the grammar
+  and the current listing, key against the whitelist, `writable` on the
+  pane, the rate limit, a repeated id) and cleans a text as it cleans its
+  own (`Input.typed`, 4096 bytes); a transcript is typed once, by the
+  clip's id, never as words from the watch. A hub field naming the device
   behind a write would let the audit tell the watch from the phone; that
   would be a core change and is not part of this.
+- The Claude lens and the choice reader run over rows already cleaned
+  and capped. A crafted screen can hide its own last rows (the rows
+  after its last rule, an empty box, blank and right-aligned rows above
+  the rule and one summary row) and offer digits one to nine labelled
+  with its own words, cut to sixty characters; it cannot hide a row of
+  the transcript or make the watch send anything but a digit.
 - The tail is plain text from a pane the token may read, held in the
   pane screen's memory only, never in preferences, a complication or the
   tile, gone when the screen closes. Wear OS has no screenshot block;

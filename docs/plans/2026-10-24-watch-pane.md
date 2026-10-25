@@ -311,6 +311,64 @@ pre-push check runs before every push.
 7. The taps: complications, tile and list open the pane screen.
 8. Docs, versions 0.8.0 (21), run, record, review.
 
+## Revision 2: the Claude lens, a reply menu, typing on the watch
+
+Asked by the owner on 2026-10-25 after the first try on a Galaxy Watch.
+
+### Design
+
+- **Two keys at the top**, `◉` (the microphone) and *reply*. The rest
+  (`Enter` `Esc` `y` `n` `^C` *phone*) stays in a row under the tail.
+- **The Claude Code lens on the watch.** When the pane's program is
+  `claude`, the tail is shaped as the feature-phone and glasses clients
+  shape it (their `ClaudeCode` lens, ported to the protocol module as
+  `ClaudeLens`): the two rules, the footer, the notices and the summary
+  of the last turn are hidden, the input box is pinned under the
+  transcript only when someone typed into it, the blank rows Claude
+  fills a tall terminal with are dropped. Unlike those clients the watch
+  keeps the colours: the tail now carries the SGR sequences the hub
+  sends, the lens works on the plain rows and names the rows to keep by
+  index, and the watch draws the kept rows with their spans in the
+  phone's sixteen-colour table.
+- **The reply menu.** *reply* opens a list: first what Claude offers on
+  the screen (its numbered choices, `❯ 1. Yes` … `3. No`, read from the
+  tail; the one marked `❯` first), then the common answers as the
+  glasses have them (`Enter`, `y, Enter`, `n, Enter`, `1` `2` `3` when
+  no choices were read, `Esc`, `Ctrl-C`, `Tab`, `Shift-Tab`, `Up`,
+  `Down`), then *type…*, which opens the watch's own input method
+  (keyboard, handwriting or voice as the watch offers) through Wear OS
+  remote input. A typed line shows with *send*, *type* and *drop* like
+  a transcript. A numbered choice is sent as its digit alone, which is
+  how Claude Code takes it.
+- `Wire.Tail` gains `command`; `Wire.KEYS` gains `Tab`, `BTab`, `Up`,
+  `Down`; `Wire.Text` carries any text.
+
+### Security: the owner's decision
+
+The first plan let the watch type only `y`, `n` and what the hub's
+transcriber heard. **Decided by the owner on 2026-10-25:** the watch may
+also send a line typed on the watch itself, and the digits and keys
+above. The phone still requires *watch may answer* (off by default), the
+pane in the listing and writable, the rate limit, the id check, and
+cleans the text as it cleans its own (`Input.typed`, 4096 bytes). What
+changes for an attacker with the owner's unlocked watch and the setting
+on: they can type a line into a writable pane, as they could on the
+owner's unlocked phone. The transcript path is unchanged: a heard text
+is typed once, by its id. The Claude lens runs over rows already cleaned
+and capped and can only hide rows at the bottom, as on the other
+clients; the choices it reads are digits one to nine, labelled by the
+screen's own words, cleaned and cut.
+
+### Tests added
+
+| # | Test | Kind | Expected |
+|---|------|------|----------|
+| 14 | a typed text with control characters, 5 000 bytes, empty | unit (security) | cleaned and cut, empty refused, nothing posted |
+| 15 | the lens on a crafted screen: a thousand rules, a 400-column rule, a footer after a fake rule | unit (security) | hides only rows after the last rule and the empty box; never a transcript row |
+| 16 | the lens on Claude's screen: transcript, pinned box, empty box, a shell | unit | as the glasses' tests say |
+| 17 | choices read from `❯ 1. Yes` … `3. No`; none from a shell | unit | three, the marked one first |
+| 18 | the tail keeps SGR and drops every other sequence | unit (security) | as `Ansi.keep` |
+
 ---
 
 ## Review (after implementation)

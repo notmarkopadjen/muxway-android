@@ -1,10 +1,12 @@
 package app.muxway.android.wear
 
 import android.Manifest
+import android.app.RemoteInput
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -24,21 +26,30 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.material.Text
+import androidx.wear.input.RemoteInputIntentHelper
 import app.muxway.android.protocol.Address
+import app.muxway.android.protocol.Ansi
 import app.muxway.android.protocol.Board
+import app.muxway.android.protocol.ClaudeLens
 import app.muxway.android.protocol.Clip
+import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.WatchGate
 import app.muxway.android.protocol.Wire
 import com.google.android.gms.wearable.MessageClient
@@ -48,18 +59,25 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * One pane on the watch: its tail, a row of answers and the way to the phone. Everything is
- * asked of the phone; the tail is kept here in memory and nowhere else.
+ * One pane on the watch: its tail in colour (Claude Code's chrome hidden by the lens), the
+ * microphone and *reply* at the top, a row of keys at the bottom, the way to the phone.
+ * Everything is asked of the phone; the tail is kept here in memory and nowhere else.
  */
 class PaneActivity : ComponentActivity() {
+    /** One row of the reply menu. */
+    private class Answer(val label: String, val text: String = "", val key: String = "", val enter: Boolean = false)
+
     private var address = ""
     private var lines by mutableStateOf<List<String>>(emptyList())
+    private var command by mutableStateOf("")
     private var etag = ""
     private var writable by mutableStateOf(false)
     private var transcriber by mutableStateOf(false)
     private var problem by mutableStateOf<String?>("connecting")
     private var flash by mutableStateOf<String?>(null)
-    private var heard by mutableStateOf<String?>(null)
+    private var draft by mutableStateOf<String?>(null)
+    private var draftHeard = ""
+    private var menu by mutableStateOf(false)
     private var recording by mutableStateOf(false)
     private var sending by mutableStateOf(false)
     private var meter by mutableStateOf(Clip.meter(emptyList()))
@@ -78,12 +96,17 @@ class PaneActivity : ComponentActivity() {
     private val askMicrophone = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) startRecording() else flashNow("microphone refused")
     }
+    private val askText = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        val typed = r.data?.let { RemoteInput.getResultsFromIntent(it)?.getCharSequence(TYPED) }?.toString() ?: return@registerForActivityResult
+        val clean = Input.typed(typed).take(Input.MAX_TEXT_BYTES)
+        if (clean.isNotEmpty()) { draftHeard = ""; draft = clean }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         address = intent.getStringExtra(ADDRESS)?.takeIf(Address::valid) ?: run { finish(); return }
         val row = BoardStore.load(this).rows.firstOrNull { it.address == address }
-        setContent { Screen(row) }
+        setContent { if (menu) Menu() else Screen(row) }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 Wearable.getMessageClient(this@PaneActivity).addListener(listener)
@@ -137,6 +160,7 @@ class PaneActivity : ComponentActivity() {
                 etag = t.etag
                 writable = t.writable
                 transcriber = t.transcriber
+                command = t.command
                 t.lines?.let { lines = it }
             }
             Wire.DONE -> {
@@ -149,7 +173,7 @@ class PaneActivity : ComponentActivity() {
                 val h = Wire.heard(bytes) ?: return
                 if (h.id != clipId) return
                 sending = false
-                if (h.error.isNotEmpty()) flashNow(say(h.error)) else heard = h.text
+                if (h.error.isNotEmpty()) flashNow(say(h.error)) else { draftHeard = h.id; draft = h.text }
             }
         }
     }
@@ -167,12 +191,32 @@ class PaneActivity : ComponentActivity() {
 
     private fun key(name: String) = id("k").let { send(Wire.KEY, it, Wire.key(it, address, name)) }
 
-    private fun letter(text: String) = id("t").let { send(Wire.TEXT, it, Wire.text(it, address, text, true)) }
+    private fun text(text: String, enter: Boolean) = id("t").let { send(Wire.TEXT, it, Wire.text(it, address, text, enter)) }
 
-    private fun typeHeard(enter: Boolean) {
-        val h = clipId
-        heard = null
-        id("t").let { send(Wire.TEXT, it, Wire.heardText(it, address, h, enter)) }
+    private fun answer(a: Answer) {
+        menu = false
+        if (a.key.isNotEmpty()) key(a.key) else text(a.text, a.enter)
+    }
+
+    /** The draft is a transcript the phone holds under its clip id, or a line typed here. */
+    private fun sendDraft(enter: Boolean) {
+        val d = draft ?: return
+        val heard = draftHeard
+        draft = null
+        draftHeard = ""
+        if (heard.isNotEmpty()) id("t").let { send(Wire.TEXT, it, Wire.heardText(it, address, heard, enter)) }
+        else text(d, enter)
+    }
+
+    private fun typeOnTheWatch() {
+        menu = false
+        val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
+        RemoteInputIntentHelper.putRemoteInputsExtra(intent, listOf(RemoteInput.Builder(TYPED).setLabel("reply").build()))
+        try {
+            askText.launch(intent)
+        } catch (e: Exception) {
+            flashNow("no keyboard")
+        }
     }
 
     private fun speak() {
@@ -251,58 +295,121 @@ class PaneActivity : ComponentActivity() {
         flashJob = lifecycleScope.launch { delay(2_000); flash = null }
     }
 
-    /**
-     * The answers sit at the top, the microphone first, so nothing needs a scroll on a round
-     * screen; the tail takes the rest; the last result is the bottom line.
-     */
+    /** The rows to draw: Claude Code's screen without its chrome, the typed box pinned; any other program whole. */
+    private fun shaped(): Pair<List<String>, List<String>> {
+        val plain = lines.map { Ansi.plain(it) }
+        val s = if (ClaudeLens.runs(command)) ClaudeLens.shape(plain, true) else null
+        if (s == null) return lines to emptyList()
+        return s.body.map { lines[it] } to s.pinned.map { lines[it] }
+    }
+
+    /** The reply menu: Claude's choices first, then the common answers; the keyboard is the last row. */
+    private fun answers(): List<Answer> {
+        val out = ArrayList<Answer>()
+        val choices = if (ClaudeLens.runs(command)) ClaudeLens.choices(lines.map { Ansi.plain(it) }) else emptyList()
+        for (c in choices) out.add(Answer("${c.digit} · ${c.label}", text = c.digit.toString()))
+        out.add(Answer("Enter", key = "Enter"))
+        out.add(Answer("y, Enter", text = "y", enter = true))
+        out.add(Answer("n, Enter", text = "n", enter = true))
+        if (choices.isEmpty()) {
+            out.add(Answer("1 · first choice", text = "1"))
+            out.add(Answer("2 · second choice", text = "2"))
+            out.add(Answer("3 · third choice", text = "3"))
+        }
+        out.add(Answer("Esc", key = "Escape"))
+        out.add(Answer("Ctrl-C", key = "C-c"))
+        out.add(Answer("Tab", key = "Tab"))
+        out.add(Answer("Shift-Tab", key = "BTab"))
+        out.add(Answer("Up", key = "Up"))
+        out.add(Answer("Down", key = "Down"))
+        return out
+    }
+
+    private fun styled(line: String, ink: Color): AnnotatedString = buildAnnotatedString {
+        for (span in Ansi.rows(line, 0).firstOrNull().orEmpty()) withStyle(Colours.style(span.style, ink)) { append(span.text) }
+    }
+
     @Composable
     private fun Screen(row: app.muxway.android.protocol.Row?) {
         val scroll = rememberScrollState()
         LaunchedEffect(lines) { scroll.scrollTo(scroll.maxValue) }
         val value = when (row?.state) { Board.WAITING -> 2; Board.QUIET -> 1; else -> 0 }
         val name = row?.let { r -> r.glyph?.let { "$it ${r.name}" } ?: r.name } ?: address.substringAfter('/')
+        val (body, pinned) = remember(lines, command) { shaped() }
+        val ink = if (problem == null) Palette.ink else Palette.dim
         Column(Modifier.fillMaxSize().background(Palette.bg).padding(top = 22.dp, bottom = 6.dp)) {
-            when {
-                recording -> Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Key("■", Palette.attention) { stopRecording() }
-                    Text("$meter ${seconds}s", color = Palette.attention, fontFamily = Palette.mono, fontSize = 12.sp, maxLines = 1, modifier = Modifier.weight(1f))
-                    Key("drop", Palette.dim) { dropRecording() }
-                }
-                sending -> Text("◉ listening…", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp))
-                heard != null -> Column(Modifier.padding(horizontal = 24.dp)) {
-                    Row {
-                        Key("send", Palette.attention) { typeHeard(true) }
-                        Key("type", Palette.ink) { typeHeard(false) }
-                        Key("drop", Palette.dim) { heard = null }
+            // The top: the microphone and reply, or what one of them is doing.
+            Row(Modifier.fillMaxWidth().padding(horizontal = 26.dp), verticalAlignment = Alignment.CenterVertically) {
+                when {
+                    recording -> {
+                        Key("■", Palette.attention) { stopRecording() }
+                        Text("$meter ${seconds}s", color = Palette.attention, fontFamily = Palette.mono, fontSize = 12.sp, maxLines = 1, modifier = Modifier.weight(1f))
+                        Key("drop", Palette.dim) { dropRecording() }
                     }
-                    Text(heard!!, color = Palette.ink, fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
-                else -> Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (writable) {
+                    sending -> Text("◉ listening…", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
+                    draft != null -> {
+                        Key("send", Palette.attention) { sendDraft(true) }
+                        Key("type", Palette.ink) { sendDraft(false) }
+                        Key("drop", Palette.dim) { draft = null; draftHeard = "" }
+                    }
+                    writable -> {
                         if (transcriber) Key("◉", Palette.attention) { speak() }
-                        Key("Enter", Palette.ink) { key("Enter") }
-                        Key("Esc", Palette.ink) { key("Escape") }
-                        Key("y", Palette.ink) { letter("y") }
-                        Key("n", Palette.ink) { letter("n") }
-                        Key("^C", Palette.alert) { key("C-c") }
-                    } else if (problem == null) {
-                        Text("read-only ", color = Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp)
+                        Key("reply", Palette.ink) { menu = true }
                     }
-                    Key("phone", Palette.dim) {
-                        startActivity(Intent(this@PaneActivity, OpenPaneActivity::class.java).putExtra(OpenPaneActivity.ADDRESS, address))
-                    }
+                    problem == null -> Text("read-only", color = Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp))
                 }
             }
+            if (draft != null) Text(draft!!, color = Palette.ink, fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 26.dp))
             Text("┌ $name", color = Palette.forValue(value), fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 4.dp))
             Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp).verticalScroll(scroll)) {
                 if (lines.isEmpty()) {
                     Text(problem ?: "empty", color = Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp, modifier = Modifier.padding(4.dp))
                 } else {
-                    Text(lines.joinToString("\n"), color = if (problem == null) Palette.ink else Palette.dim, fontFamily = Palette.mono, fontSize = 9.sp, lineHeight = 11.sp, softWrap = true)
+                    for (l in body) Text(styled(l, ink), fontFamily = Palette.mono, fontSize = 9.sp, lineHeight = 11.sp, softWrap = true)
+                    if (pinned.isNotEmpty()) {
+                        Text("┈".repeat(40), color = Palette.faint, fontFamily = Palette.mono, fontSize = 9.sp, maxLines = 1)
+                        for (l in pinned) Text(styled(l, Palette.dim), fontFamily = Palette.mono, fontSize = 9.sp, lineHeight = 11.sp, softWrap = true)
+                    }
                 }
             }
             val note = flash ?: problem?.takeIf { lines.isNotEmpty() }
-            Text(if (note == null) "└" else "└ $note", color = if (flash != null) Palette.attention else Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(horizontal = 28.dp))
+            Text(if (note == null) "└" else "└ $note", color = if (flash != null) Palette.attention else Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(horizontal = 14.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (writable) {
+                    Key("Enter", Palette.ink) { key("Enter") }
+                    Key("Esc", Palette.ink) { key("Escape") }
+                    Key("y", Palette.ink) { text("y", true) }
+                    Key("n", Palette.ink) { text("n", true) }
+                    Key("^C", Palette.alert) { key("C-c") }
+                }
+                Key("phone", Palette.dim) {
+                    startActivity(Intent(this@PaneActivity, OpenPaneActivity::class.java).putExtra(OpenPaneActivity.ADDRESS, address))
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun Menu() {
+        BackHandler { menu = false }
+        val answers = remember(lines, command) { answers() }
+        ScalingLazyColumn(Modifier.fillMaxSize().background(Palette.bg)) {
+            item { Text("┌─ reply ─┐", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp) }
+            for (a in answers) {
+                item {
+                    Text(
+                        a.label, color = if (a.label.contains('·')) Palette.attention else Palette.ink, fontFamily = Palette.mono, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth().clickable { answer(a) }.padding(horizontal = 16.dp, vertical = 7.dp),
+                    )
+                }
+            }
+            item {
+                Text(
+                    "type…", color = Palette.ink, fontFamily = Palette.mono, fontSize = 14.sp,
+                    modifier = Modifier.fillMaxWidth().clickable { typeOnTheWatch() }.padding(horizontal = 16.dp, vertical = 7.dp),
+                )
+            }
+            item { Text("└ back", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp, modifier = Modifier.clickable { menu = false }.padding(8.dp)) }
         }
     }
 
@@ -318,6 +425,7 @@ class PaneActivity : ComponentActivity() {
 
     companion object {
         const val ADDRESS = "address"
+        const val TYPED = "text"
         const val READ_EVERY_MS = 2_000L
         const val HEARD_TIMEOUT_MS = 100_000L
     }

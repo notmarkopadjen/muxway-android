@@ -3,8 +3,8 @@ package app.muxway.android.protocol
 /**
  * The phone's side of [Wire]: every request from the watch passes here before the hub sees
  * anything. The address must be in the current listing, a write needs the pane writable,
- * the owner's permission and room under the rate limit, and the text typed is only what
- * the hub's transcriber heard or one of two letters. Nothing here logs.
+ * the owner's permission and room under the rate limit, and a text is cleaned as the phone
+ * cleans its own; a heard clip is typed once, by its id. Nothing here logs.
  */
 class WatchGate(
     private val api: Api,
@@ -23,9 +23,9 @@ class WatchGate(
         return try {
             val got = api.read(r.address, Wire.TAIL_LINES, r.etag.ifEmpty { null })
             val lines = got?.let { Wire.lines(it.content) }
-            Wire.Tail(r.id, r.address, got?.etag ?: r.etag, lines, pane.writable, pane.writable && hasTranscriber())
+            Wire.Tail(r.id, r.address, got?.etag ?: r.etag, lines, pane.writable, pane.writable && hasTranscriber(), "", pane.command)
         } catch (e: ApiException) {
-            Wire.Tail(r.id, r.address, "", null, pane.writable, false, reason(e))
+            Wire.Tail(r.id, r.address, "", null, pane.writable, false, reason(e), pane.command)
         }
     }
 
@@ -34,8 +34,7 @@ class WatchGate(
     fun text(r: Wire.Text): Wire.Done {
         val text = when {
             r.heard.isNotEmpty() -> heard[r.heard]
-            r.text in Wire.SHORT_TEXTS -> r.text
-            else -> null
+            else -> Input.typed(r.text).takeIf { it.isNotEmpty() && Input.utf8Length(it) <= Input.MAX_TEXT_BYTES }
         }
         return write(r, text) {
             api.type(r.address, it)

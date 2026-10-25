@@ -13,8 +13,8 @@ android {
         applicationId = "app.muxway.android"
         minSdk = 30
         targetSdk = 34
-        versionCode = 23
-        versionName = "0.8.1"
+        versionCode = 24
+        versionName = "0.9.0"
     }
 
     buildTypes {
@@ -59,6 +59,8 @@ dependencies {
     implementation("androidx.wear.protolayout:protolayout:1.2.1")
     implementation("androidx.wear.protolayout:protolayout-material:1.2.1")
     implementation("androidx.wear:wear-remote-interactions:1.1.0")
+    // The watch's own input method, for a reply typed on the watch.
+    implementation("androidx.wear:wear-input:1.1.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")

@@ -19,6 +19,9 @@ class WireTest {
         assertEquals("Enter", key.key)
         val text = Wire.request(Wire.TEXT, Wire.text("t1", address, "y", false)) as Wire.Text
         assertEquals("y", text.text)
+        val typed = Wire.request(Wire.TEXT, Wire.text("t3", address, "echo hi\u0007\u001b[2J\n" + "a".repeat(5000), true)) as Wire.Text
+        assertEquals(Input.MAX_TEXT_BYTES, typed.text.length)
+        assertTrue(typed.text.startsWith("echo hi\naaa"))
         assertEquals("", text.heard)
         assertFalse(text.enter)
         val heard = Wire.request(Wire.TEXT, Wire.heardText("t2", address, "c1", true)) as Wire.Text
@@ -72,7 +75,7 @@ class WireTest {
         val doc = "{\"id\":\"r1\",\"address\":\"$address\",\"lines\":${org.json.JSONArray(lines)},\"writable\":\"yes\"}".toByteArray()
         val t = Wire.tail(doc)!!
         assertEquals(Wire.MAX_LINES, t.lines!!.size)
-        assertEquals("line 1000 ", t.lines.last())
+        assertEquals("line 1000 \u001b[31m", t.lines.last())
         assertFalse(t.writable)
         val long = Wire.tail(Wire.tail(Wire.Tail("r1", address, "", listOf("y".repeat(5000)), true, true)))!!
         assertEquals(Wire.MAX_LINE, long.lines!![0].length)
@@ -89,12 +92,16 @@ class WireTest {
     }
 
     @Test
-    fun theTailIsThePlainLastLines() {
-        val content = (1..50).joinToString("\n") { "\u001b[32mline $it\u001b[0m" } + "\n\n"
+    fun theTailIsTheLastLinesWithColourAndNothingElse() {
+        val content = (1..50).joinToString("\n") { "\u001b[32mline $it\u001b[0m\u001b]0;title\u0007\u001b[2J" } + "\n\n"
         val lines = Wire.lines(content)
         assertEquals(Wire.TAIL_LINES, lines.size)
-        assertEquals("line 11", lines.first())
-        assertEquals("line 50", lines.last())
+        assertEquals("\u001b[32mline 11\u001b[0m", lines.first())
+        assertEquals("\u001b[32mline 50\u001b[0m", lines.last())
+        val back = Wire.tail(Wire.tail(Wire.Tail("r", address, "", lines, true, true, "", "claude")))!!
+        assertEquals(lines, back.lines)
+        assertEquals("claude", back.command)
+        assertEquals("line 11", Ansi.plain(back.lines!![0]))
         assertEquals(listOf("one"), Wire.lines("one"))
         assertEquals(listOf(""), Wire.lines(""))
     }
