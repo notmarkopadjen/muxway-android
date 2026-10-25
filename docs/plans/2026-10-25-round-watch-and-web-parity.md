@@ -315,7 +315,31 @@ thinks — so every run since the face was added recorded a face check that
 did not run. It parses the version properly now and treats anything but
 `PASSED` as a failure. The face passes for real against format version 1.
 
+### A third pass: the buttons, and why the microphone vanished
+
+0.9.4 (28), `2bd2e13`. The owner's next look showed the two buttons too
+tall and the microphone's box empty. One cause under both: a watch
+reports about **240 dp**, not the 450 px of its screen, so buttons at
+15 sp stood 37 dp tall and the pair of them all but filled the chord of
+the top band — which sits where the glass is narrow. The microphone,
+measured last in the row, was left with no room: its label took no width
+and painted nothing, while its border drew as usual. The glyph was never
+the problem; `◉` is in the bundled font with a real outline, and it drew
+at 12 sp in 0.9.2.
+
+- The buttons keep 12 sp and lose their height (a dp above and below,
+  14 dp either side): low and wide, about half what they were.
+- The top band sits lower, where the chord is wider, and its inset is
+  capped so the row always keeps 150 dp on any watch.
+
+The lesson for this screen: a band of a round layout must be checked
+against the dp the device reports, not the pixels of its screenshot.
+
 ## Test run
+
+[Run 20261025-105506-2bd2e13](https://github.com/notmarkopadjen/muxway-android/issues/29):
+**passed**, 153 tests, 0 failed, at `2bd2e13`, the buttons and the
+microphone.
 
 [Run 20261025-103630-7ac38a5](https://github.com/notmarkopadjen/muxway-android/issues/28):
 **passed**, 153 tests, 0 failed, at `7ac38a5`, the watch's second pass
