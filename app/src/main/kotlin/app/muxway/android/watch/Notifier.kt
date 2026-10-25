@@ -32,10 +32,13 @@ class Notifier(private val context: Context) {
     }
 
     fun summary(board: Board?, state: String): Notification {
-        val text = when {
-            board == null -> state
-            board.waiting == 0 -> "${board.rows.size} panes, none waiting"
-            else -> "${board.waiting} waiting · ${board.rows.size} panes"
+        val text = if (board == null) state else {
+            val panes = if (board.rows.size == 1) "1 pane" else "${board.rows.size} panes"
+            when {
+                board.waiting > 0 -> "${board.waiting} waiting · $panes"
+                board.working > 0 -> "${board.working} working · $panes"
+                else -> "$panes, all quiet"
+            }
         }
         val open = Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val stop = Intent(context, AttentionService::class.java).setAction(AttentionService.ACTION_STOP)

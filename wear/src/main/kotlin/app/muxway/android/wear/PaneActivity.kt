@@ -13,11 +13,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -30,18 +33,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.wear.compose.foundation.lazy.AutoCenteringParams
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
+import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
+import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
+import androidx.wear.compose.foundation.rotary.rotaryScrollable
+import androidx.wear.compose.material.PositionIndicator
+import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
 import androidx.wear.input.RemoteInputIntentHelper
 import app.muxway.android.protocol.Address
@@ -66,6 +78,9 @@ import kotlinx.coroutines.launch
 class PaneActivity : ComponentActivity() {
     /** One row of the reply menu. */
     private class Answer(val label: String, val text: String = "", val key: String = "", val enter: Boolean = false)
+
+    /** One key of the row under the tail. */
+    private class Press(val label: String, val colour: Color, val press: () -> Unit)
 
     private var address = ""
     private var lines by mutableStateOf<List<String>>(emptyList())
@@ -303,6 +318,22 @@ class PaneActivity : ComponentActivity() {
         return s.body.map { lines[it] } to s.pinned.map { lines[it] }
     }
 
+    /** The keys under the tail, in the order they are drawn; a round watch wraps them. */
+    private fun presses(): List<Press> {
+        val out = ArrayList<Press>()
+        if (writable) {
+            out.add(Press("Enter", Palette.ink) { key("Enter") })
+            out.add(Press("Esc", Palette.ink) { key("Escape") })
+            out.add(Press("y", Palette.ink) { text("y", true) })
+            out.add(Press("n", Palette.ink) { text("n", true) })
+            out.add(Press("^C", Palette.alert) { key("C-c") })
+        }
+        out.add(Press("phone", Palette.dim) {
+            startActivity(Intent(this, OpenPaneActivity::class.java).putExtra(OpenPaneActivity.ADDRESS, address))
+        })
+        return out
+    }
+
     /** The reply menu: Claude's choices first, then the common answers; the keyboard is the last row. */
     private fun answers(): List<Answer> {
         val out = ArrayList<Answer>()
@@ -332,58 +363,88 @@ class PaneActivity : ComponentActivity() {
     @Composable
     private fun Screen(row: app.muxway.android.protocol.Row?) {
         val scroll = rememberScrollState()
+        val wheel = remember { FocusRequester() }
         LaunchedEffect(lines) { scroll.scrollTo(scroll.maxValue) }
+        LaunchedEffect(Unit) { runCatching { wheel.requestFocus() } }
         val value = when (row?.state) { Board.WAITING -> 2; Board.QUIET -> 1; else -> 0 }
         val name = row?.let { r -> r.glyph?.let { "$it ${r.name}" } ?: r.name } ?: address.substringAfter('/')
         val (body, pinned) = remember(lines, command) { shaped() }
         val ink = if (problem == null) Palette.ink else Palette.dim
-        Column(Modifier.fillMaxSize().background(Palette.bg).padding(top = 22.dp, bottom = 6.dp)) {
-            // The top: the microphone and reply, or what one of them is doing.
-            Row(Modifier.fillMaxWidth().padding(horizontal = 26.dp), verticalAlignment = Alignment.CenterVertically) {
-                when {
-                    recording -> {
-                        Key("■", Palette.attention) { stopRecording() }
-                        Text("$meter ${seconds}s", color = Palette.attention, fontFamily = Palette.mono, fontSize = 12.sp, maxLines = 1, modifier = Modifier.weight(1f))
-                        Key("drop", Palette.dim) { dropRecording() }
+        val config = LocalConfiguration.current
+        val round = config.isScreenRound
+        Box(Modifier.fillMaxSize().background(Palette.bg)) {
+            // The glass decides how wide each band of the screen may be. The keys take two rows on
+            // a round watch, where the bottom of the circle has room for about three.
+            val tall = config.screenHeightDp.toFloat()
+            val presses = presses()
+            val keyRows = if (round && presses.size > KEYS_ACROSS) 2 else 1
+            val head = if (round) tall * 0.10f else 22f
+            val foot = if (round) tall * 0.04f else 6f
+            val keysTall = KEYS * keyRows
+            val tailTall = (tall - head - TOP - TITLE - NOTE - keysTall - foot).coerceAtLeast(40f)
+            val bands = Bands(tall, round)
+            bands.skip(head)
+            val topIn = bands.next(TOP)
+            val titleIn = bands.next(TITLE)
+            val tailIn = bands.next(tailTall)
+            val noteIn = bands.next(NOTE)
+            val keysIn = bands.next(KEYS)
+            val keysIn2 = bands.next(KEYS)
+            fun side(inset: Float, flat: Float): Dp = (if (round) inset + 3f else flat).dp
+            Column(Modifier.fillMaxSize().padding(top = head.dp, bottom = foot.dp)) {
+                // The top: the microphone and reply, or what one of them is doing.
+                Row(Modifier.fillMaxWidth().padding(horizontal = side(topIn, 26f)), verticalAlignment = Alignment.CenterVertically) {
+                    when {
+                        recording -> {
+                            Key("■", Palette.attention) { stopRecording() }
+                            Text("$meter ${seconds}s", color = Palette.attention, fontFamily = Palette.mono, fontSize = 12.sp, maxLines = 1, modifier = Modifier.weight(1f))
+                            Key("drop", Palette.dim) { dropRecording() }
+                        }
+                        sending -> Text("◉ listening…", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
+                        draft != null -> {
+                            Key("send", Palette.attention) { sendDraft(true) }
+                            Key("type", Palette.ink) { sendDraft(false) }
+                            Key("drop", Palette.dim) { draft = null; draftHeard = "" }
+                        }
+                        writable -> {
+                            if (transcriber) Key("◉", Palette.attention) { speak() }
+                            Key("reply", Palette.ink) { menu = true }
+                        }
+                        problem == null -> Text("read-only", color = Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp))
                     }
-                    sending -> Text("◉ listening…", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
-                    draft != null -> {
-                        Key("send", Palette.attention) { sendDraft(true) }
-                        Key("type", Palette.ink) { sendDraft(false) }
-                        Key("drop", Palette.dim) { draft = null; draftHeard = "" }
-                    }
-                    writable -> {
-                        if (transcriber) Key("◉", Palette.attention) { speak() }
-                        Key("reply", Palette.ink) { menu = true }
-                    }
-                    problem == null -> Text("read-only", color = Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp))
                 }
-            }
-            if (draft != null) Text(draft!!, color = Palette.ink, fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 26.dp))
-            Text("┌ $name", color = Palette.forValue(value), fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 4.dp))
-            Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp).verticalScroll(scroll)) {
-                if (lines.isEmpty()) {
-                    Text(problem ?: "empty", color = Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp, modifier = Modifier.padding(4.dp))
+                if (draft != null) Text(draft!!, color = Palette.ink, fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = side(topIn, 26f)))
+                Text("┌ $name", color = Palette.forValue(value), fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = side(titleIn, 14f), end = side(titleIn, 14f), top = 4.dp))
+                Column(
+                    Modifier.weight(1f).fillMaxWidth().padding(horizontal = side(tailIn, 12f))
+                        .verticalScroll(scroll).rotaryScrollable(RotaryScrollableDefaults.behavior(scroll), wheel),
+                ) {
+                    if (lines.isEmpty()) {
+                        Text(problem ?: "empty", color = Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp, modifier = Modifier.padding(4.dp))
+                    } else {
+                        for (l in body) Text(styled(l, ink), fontFamily = Palette.mono, fontSize = 9.sp, lineHeight = 11.sp, softWrap = true)
+                        if (pinned.isNotEmpty()) {
+                            Text("┈".repeat(40), color = Palette.faint, fontFamily = Palette.mono, fontSize = 9.sp, maxLines = 1)
+                            for (l in pinned) Text(styled(l, Palette.dim), fontFamily = Palette.mono, fontSize = 9.sp, lineHeight = 11.sp, softWrap = true)
+                        }
+                    }
+                }
+                val note = flash ?: problem?.takeIf { lines.isNotEmpty() }
+                Text(if (note == null) "└" else "└ $note", color = if (flash != null) Palette.attention else Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(horizontal = side(noteIn, 14f)))
+                if (keyRows == 1) {
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = side(keysIn, 24f)),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) { for (k in presses) Key(k.label, k.colour, k.press) }
                 } else {
-                    for (l in body) Text(styled(l, ink), fontFamily = Palette.mono, fontSize = 9.sp, lineHeight = 11.sp, softWrap = true)
-                    if (pinned.isNotEmpty()) {
-                        Text("┈".repeat(40), color = Palette.faint, fontFamily = Palette.mono, fontSize = 9.sp, maxLines = 1)
-                        for (l in pinned) Text(styled(l, Palette.dim), fontFamily = Palette.mono, fontSize = 9.sp, lineHeight = 11.sp, softWrap = true)
-                    }
-                }
-            }
-            val note = flash ?: problem?.takeIf { lines.isNotEmpty() }
-            Text(if (note == null) "└" else "└ $note", color = if (flash != null) Palette.attention else Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(horizontal = 14.dp))
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (writable) {
-                    Key("Enter", Palette.ink) { key("Enter") }
-                    Key("Esc", Palette.ink) { key("Escape") }
-                    Key("y", Palette.ink) { text("y", true) }
-                    Key("n", Palette.ink) { text("n", true) }
-                    Key("^C", Palette.alert) { key("C-c") }
-                }
-                Key("phone", Palette.dim) {
-                    startActivity(Intent(this@PaneActivity, OpenPaneActivity::class.java).putExtra(OpenPaneActivity.ADDRESS, address))
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = side(keysIn, 24f)),
+                        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                    ) { for (k in presses.take(KEYS_ACROSS)) Key(k.label, k.colour, k.press) }
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = side(keysIn2, 24f)),
+                        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                    ) { for (k in presses.drop(KEYS_ACROSS)) Key(k.label, k.colour, k.press) }
                 }
             }
         }
@@ -393,23 +454,40 @@ class PaneActivity : ComponentActivity() {
     private fun Menu() {
         BackHandler { menu = false }
         val answers = remember(lines, command) { answers() }
-        ScalingLazyColumn(Modifier.fillMaxSize().background(Palette.bg)) {
-            item { Text("┌─ reply ─┐", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp) }
-            for (a in answers) {
-                item {
-                    Text(
-                        a.label, color = if (a.label.contains('·')) Palette.attention else Palette.ink, fontFamily = Palette.mono, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth().clickable { answer(a) }.padding(horizontal = 16.dp, vertical = 7.dp),
-                    )
-                }
+        val config = LocalConfiguration.current
+        val round = config.isScreenRound
+        // Every answer must be reachable: the list centres the row it is on, so the first and the
+        // last come to the middle of the glass, and the bezel turns it as well as the finger.
+        val list = rememberScalingLazyListState(initialCenterItemIndex = 1)
+        val crown = remember { FocusRequester() }
+        LaunchedEffect(Unit) { runCatching { crown.requestFocus() } }
+        val edge = (if (round) config.screenWidthDp * 0.08f else 8f).dp
+        Scaffold(positionIndicator = { PositionIndicator(scalingLazyListState = list) }) {
+            ScalingLazyColumn(
+                Modifier.fillMaxSize().background(Palette.bg)
+                    .rotaryScrollable(RotaryScrollableDefaults.behavior(list), crown),
+                state = list,
+                autoCentering = AutoCenteringParams(itemIndex = 1),
+                contentPadding = PaddingValues(horizontal = edge, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                item { Text("┌─ reply ─┐", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp) }
+                for (a in answers) item { MenuRow(a.label, if (a.label.contains('·')) Palette.attention else Palette.ink) { answer(a) } }
+                item { MenuRow("type…", Palette.ink) { typeOnTheWatch() } }
+                item { Text("└ back", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp, modifier = Modifier.clickable { menu = false }.padding(8.dp)) }
             }
-            item {
-                Text(
-                    "type…", color = Palette.ink, fontFamily = Palette.mono, fontSize = 14.sp,
-                    modifier = Modifier.fillMaxWidth().clickable { typeOnTheWatch() }.padding(horizontal = 16.dp, vertical = 7.dp),
-                )
-            }
-            item { Text("└ back", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp, modifier = Modifier.clickable { menu = false }.padding(8.dp)) }
+        }
+    }
+
+    /** One row of the menu: a box wide enough and tall enough to be hit on a watch. */
+    @Composable
+    private fun MenuRow(label: String, colour: Color, onClick: () -> Unit) {
+        Box(
+            Modifier.fillMaxWidth().heightIn(min = 44.dp).border(1.dp, Palette.faint)
+                .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(label, color = colour, fontFamily = Palette.mono, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 
@@ -428,5 +506,12 @@ class PaneActivity : ComponentActivity() {
         const val TYPED = "text"
         const val READ_EVERY_MS = 2_000L
         const val HEARD_TIMEOUT_MS = 100_000L
+
+        /** The heights the screen's bands are laid out with, in dp, and the keys one row holds. */
+        const val TOP = 34f
+        const val TITLE = 16f
+        const val NOTE = 16f
+        const val KEYS = 34f
+        const val KEYS_ACROSS = 4
     }
 }

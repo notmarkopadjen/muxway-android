@@ -33,7 +33,7 @@ class FaceTest {
         val b = board(row(1, Board.WAITING, "done"))
         assertEquals("no phone", Face.problem(b, now, false))
         assertEquals(0, Face.row(b, 0, 4, now, false).value)
-        assertEquals(Cell("no phone", "1 panes", 0), Face.summary(b, now, false))
+        assertEquals(Cell("no phone", "1 pane", 0), Face.summary(b, now, false))
         assertEquals("--", Face.short(b, now, false))
         assertEquals("paused", Face.problem(b.copy(live = false), now, true))
         assertEquals("stale", Face.problem(b, now + 3600, true))
@@ -44,12 +44,23 @@ class FaceTest {
     }
 
     @Test
-    fun theSummaryCountsWaitingPanes() {
+    fun theSummarySaysWhatThePanesAreDoing() {
         assertEquals(Cell("2 waiting", "3 panes", 2), Face.summary(board(row(1, Board.WAITING, "done"), row(2, Board.WAITING, "idle"), row(3, Board.QUIET)), now, true))
-        assertEquals(Cell("all quiet", "1 panes", 1), Face.summary(board(row(1, Board.QUIET)), now, true))
+        assertEquals(Cell("all quiet", "1 pane", 1), Face.summary(board(row(1, Board.QUIET)), now, true))
         assertEquals(Cell("no panes", "", 0), Face.summary(Board(emptyList(), now, true), now, true))
         assertEquals("✓2", Face.short(board(row(1, Board.WAITING, "done"), row(2, Board.WAITING, "idle")), now, true))
-        assertEquals("·", Face.short(board(row(1, Board.WORKING)), now, true))
+    }
+
+    @Test
+    fun panesThatWorkAreNotQuiet() {
+        val both = board(row(1, Board.WORKING), row(2, Board.WORKING))
+        assertEquals(Cell("2 working", "2 panes", 0), Face.summary(both, now, true))
+        assertEquals("⟳2", Face.short(both, now, true))
+        // One of each: the waiting pane leads, the working one is named beside the count.
+        val mixed = board(row(1, Board.WAITING, "question"), row(2, Board.WORKING), row(3, Board.QUIET))
+        assertEquals(Cell("1 waiting", "1 working · 3 panes", 2), Face.summary(mixed, now, true))
+        assertEquals("?1", Face.short(mixed, now, true))
+        assertEquals("·", Face.short(board(row(1, Board.QUIET)), now, true))
     }
 
     @Test

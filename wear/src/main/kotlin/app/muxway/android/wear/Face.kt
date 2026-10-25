@@ -1,6 +1,7 @@
 package app.muxway.android.wear
 
 import app.muxway.android.protocol.Board
+import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Row
 
 /**
@@ -53,20 +54,26 @@ object Face {
         }
     }
 
-    /** The bottom line: how many wait, or what is wrong. */
+    /** The bottom line: what the panes are doing, strongest state first, or what is wrong. */
     fun summary(board: Board, now: Long, phone: Boolean): Cell {
-        problem(board, now, phone)?.let { return Cell(it, "${board.rows.size} panes", 0) }
+        val panes = panes(board.rows.size)
+        problem(board, now, phone)?.let { return Cell(it, panes, 0) }
+        val working = "${board.working} working"
         return when {
             board.rows.isEmpty() -> Cell("no panes", "", 0)
-            board.waiting == 0 -> Cell("all quiet", "${board.rows.size} panes", 1)
-            else -> Cell("${board.waiting} waiting", "${board.rows.size} panes", 2)
+            board.waiting > 0 -> Cell("${board.waiting} waiting", if (board.working > 0) "$working · $panes" else panes, 2)
+            board.working > 0 -> Cell(working, panes, 0)
+            else -> Cell("all quiet", panes, 1)
         }
     }
 
-    /** Seven characters at most, for a small slot: the top glyph and the count that wait. */
+    /** Seven characters at most, for a small slot: what waits, else what works, else nothing to say. */
     fun short(board: Board, now: Long, phone: Boolean): String {
         if (problem(board, now, phone) != null) return "--"
-        val top = board.rows.firstOrNull()?.takeIf { it.state == Board.WAITING } ?: return "·"
-        return "${top.glyph}${board.waiting}"
+        board.rows.firstOrNull { it.state == Board.WAITING }?.let { return "${it.glyph}${board.waiting}" }
+        if (board.working > 0) return "${Lens.glyph(Lens.Status.WORKING, null)}${board.working}"
+        return "·"
     }
+
+    private fun panes(n: Int) = if (n == 1) "1 pane" else "$n panes"
 }

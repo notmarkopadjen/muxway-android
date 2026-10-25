@@ -95,7 +95,8 @@ sequenceDiagram
   rows, `waiting` is the summary. Each supports `RANGED_VALUE` (the value
   is how to colour the line: 0 dim, 1 ink, 2 attention; the text is
   `? question`, the title the pane's name), `SHORT_TEXT` (`?2` for the
-  summary: the top glyph and how many wait) and `LONG_TEXT`. They update
+  summary: the top glyph and how many wait, `⟳2` when none waits and two
+  work, `·` when nothing is doing anything) and `LONG_TEXT`. They update
   when the board arrives, never on a timer. A row without a pane shows
   `·`; the last row shows `+N` when there are more panes than rows.
 - **The tile** lists six rows and the summary; each row is a tap.
@@ -107,6 +108,11 @@ sequenceDiagram
   `muxway_phone` the phone app announces, asks the Wear OS companion to
   start `muxway://open?pane=<address>` on it, says `opened on the phone`
   or `no phone`, and closes.
+
+**The summary** names the strongest state the panes are in, so it never
+says less than is true: `2 waiting` (with `1 working · 5 panes` beside
+it when some also work), else `2 working`, else `all quiet`, else `no
+panes`. The phone's ongoing notification says the same in its own words.
 
 When no phone is reachable, when the phone's service stopped (`live` is
 false) or when the board is older than ten minutes, every line turns dim
@@ -128,15 +134,25 @@ stateDiagram-v2
 ### The pane screen
 
 ```
-[◉] [reply]                the microphone and the reply menu, at the top
-┌ ? deploy                 so a round screen shows them without a scroll
+   [◉] [reply]             the microphone and the reply menu, at the top
+┌ ? deploy                 the pane's name, painted with its state
   ● I will run make test   the tail: the last 40 lines, in colour,
   Do you want to proceed?  wrapped to the screen, newest at the bottom,
-  ❯ 1. Yes                 a drag scrolls up; Claude Code's rules, box
-    2. No                  and footer are hidden by the lens
+  ❯ 1. Yes                 a drag or the bezel scrolls up; Claude Code's
+    2. No                  rules, box and footer are hidden by the lens
 └ sent                     the last answer's result, or what is wrong
-[Enter] [Esc] [y] [n] [^C] [phone]
+ [Enter] [Esc] [y] [n]     the keys, in two rows on a round watch
+      [^C] [phone]         so each one is on the glass
 ```
+
+**The shape of the glass.** A round watch is a circle, and a band across
+it is only as wide as the chord at whichever of its edges lies farther
+from the middle. `Round.inset` says how far each band must come in
+(`r − √(r² − d²)`); the screen asks it for every band it draws — the top
+row, the title, the tail, the note and the keys — so nothing is cut by
+the edge. The keys take two centred rows there, four and two, because the
+bottom of a circle has room for about three; a square watch keeps its one
+scrolling row and its corners.
 
 The watch still holds no token and opens no connection. The screen asks
 the phone for the tail every two seconds while it shows, and the phone's
@@ -157,7 +173,13 @@ with their colours: the phone's sixteen-colour table, xterm's cube and
 greys, true colour, bold, italic, underline, inverse and dim. Any other
 program is drawn whole.
 
-**Reply.** *reply* opens a list. First what Claude offers on the screen:
+**Reply.** *reply* opens a list, centred on the row it is on, so the
+first and the last answer can be brought to the middle of the glass,
+where they are whole and can be tapped; the bezel and the crown turn it
+as well as the finger, and an indicator at the right edge says how much
+more there is. Each row is a box at least 44 dp tall. The same list and
+the same scrolling serve the pane list the watch app opens with. First
+what Claude offers on the screen:
 its numbered choices (`❯ 1. Yes` … `3. No`, read from the last rows of
 the tail, the one marked `❯` first), each sent as its digit alone, which
 is how Claude Code takes it. Then the common answers, the same as on the

@@ -24,6 +24,7 @@ data class Row(val address: String, val name: String, val state: Int, val kind: 
  */
 data class Board(val rows: List<Row>, val at: Long, val live: Boolean) {
     val waiting: Int get() = rows.count { it.state == WAITING }
+    val working: Int get() = rows.count { it.state == WORKING }
 
     /** Rows for a display with [n] lines: all of them, or [n]-1 and room for the overflow count. */
     fun shown(n: Int): List<Row> = if (rows.size <= n) rows else rows.take(n - 1)
