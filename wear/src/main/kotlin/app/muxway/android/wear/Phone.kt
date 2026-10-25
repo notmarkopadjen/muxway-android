@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.wear.remote.interactions.RemoteActivityHelper
+import app.muxway.android.protocol.Wire
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.tasks.await
@@ -23,6 +24,31 @@ object Phone {
     }
 
     suspend fun reachable(context: Context): Boolean = nodeId(context) != null
+
+    /** One message to the phone; false when there is no phone or it did not take it. */
+    suspend fun send(context: Context, node: String, path: String, bytes: ByteArray): Boolean = try {
+        Wearable.getMessageClient(context).sendMessage(node, path, bytes).await()
+        true
+    } catch (e: Exception) {
+        false
+    }
+
+    /** A clip to the phone on its own channel; the text heard comes back as a message. */
+    suspend fun sendClip(context: Context, node: String, id: String, wav: ByteArray): Boolean {
+        val client = Wearable.getChannelClient(context)
+        return try {
+            val channel = client.openChannel(node, "${Wire.CLIP}/$id").await()
+            try {
+                client.getOutputStream(channel).await().use { it.write(wav) }
+                true
+            } catch (e: Exception) {
+                client.close(channel).await()
+                false
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
 
     /** Asks the phone to open the pane: the companion starts the app's browsable link. */
     suspend fun open(context: Context, address: String): String {

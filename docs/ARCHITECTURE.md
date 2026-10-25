@@ -120,6 +120,9 @@ sequenceDiagram
         S->>S: Board.rank, notifications
         S->>W: Data Layer /board
     end
+    W->>S: /pane/read, /pane/key, /pane/text, a clip (WatchRequests → WatchGate)
+    S->>H: GET the pane, POST input, POST transcribe
+    S-->>W: /pane/tail, /pane/done, /clip/heard
     W->>A: muxway://open?pane=<address> (through the Wear companion)
     A->>A: openLink: grammar, listed? then View
 ```

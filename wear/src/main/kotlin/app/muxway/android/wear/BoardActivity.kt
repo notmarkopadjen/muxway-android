@@ -29,11 +29,11 @@ import androidx.wear.compose.material.Text
 import app.muxway.android.protocol.Board
 import kotlinx.coroutines.delay
 
-/** Every pane, ranked as on the face, with the summary; a tap opens the pane on the phone. */
+/** Every pane, ranked as on the face, with the summary; a tap opens the pane on the watch. */
 class BoardActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { BoardScreen { address -> startActivity(Intent(this, OpenPaneActivity::class.java).putExtra(OpenPaneActivity.ADDRESS, address)) } }
+        setContent { BoardScreen { address -> startActivity(Intent(this, PaneActivity::class.java).putExtra(PaneActivity.ADDRESS, address)) } }
     }
 }
 

@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-feature android:name="android.hardware.type.watch" />
+    <!-- Only while a clip is recorded for the hub's transcriber; asked for at the first tap on the microphone key. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
         android:allowBackup="false"
@@ -23,7 +26,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <!-- Started by complications, the tile and the watch face with the pane's address. -->
+        <!-- One pane: started by complications, the tile, the face and the list with the pane's address. -->
+        <activity
+            android:name=".PaneActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity="" />
+        <!-- The way to the phone, from the pane screen. -->
         <activity
             android:name=".OpenPaneActivity"
             android:excludeFromRecents="true"

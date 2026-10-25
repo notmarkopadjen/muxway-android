@@ -4,7 +4,7 @@
 
 Android client for [muxway](https://github.com/notmarkopadjen/muxway): your tmux panes on a phone, one per screen or side by side.
 
-> Early development. The basics work: connect with a token, list panes, open one or several, switch with tabs, set up by scanning a code, size the host pane to the phone (fit) or read it at its own width with pinch zoom, type, send keys, scroll by swipe, see which pane calls for attention, be told when one does, and see it on a Wear OS watch: a face, complications, a tile.
+> Early development. The basics work: connect with a token, list panes, open one or several, switch with tabs, set up by scanning a code, size the host pane to the phone (fit) or read it at its own width with pinch zoom, type, send keys, scroll by swipe, see which pane calls for attention, be told when one does, and see it on a Wear OS watch: a face, complications, a tile, and a pane's tail with a few answers on the wrist.
 
 ## Install
 
@@ -27,8 +27,9 @@ adb -s <watch> install wear/build/outputs/apk/debug/wear-debug.apk
 adb -s <watch> install watchface/build/outputs/apk/debug/watchface-debug.apk
 ```
 
-Then switch on **watch and notifications** in the phone app's settings.
-See [docs/features/watch.md](docs/features/watch.md).
+Then switch on **watch and notifications** in the phone app's settings,
+and **watch may answer** if the watch is to send keys and spoken lines to a
+pane. See [docs/features/watch.md](docs/features/watch.md).
 
 ## Connect
 

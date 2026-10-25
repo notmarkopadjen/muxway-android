@@ -2,8 +2,10 @@
 
 A Galaxy Watch, or any Wear OS watch, shows which panes wait for their
 owner: on the muxway watch face, in a complication on any other face, in
-a tile and in a small list. A tap on a pane makes the phone app open that
-pane, behind the lock screen, so unlocking the phone lands on it.
+a tile and in a small list. A tap on a pane opens it on the watch: the
+tail of its screen, a row of answers (`Enter`, `Esc`, `y`, `n`, `^C`, a
+spoken line) and *phone*, which makes the phone app open that pane behind
+the lock screen, so unlocking the phone lands on it.
 
 ```
           ┌───────────────┐
@@ -34,19 +36,23 @@ flowchart LR
     subgraph phone[Phone app]
         S[AttentionService] --> B[WatchBridge: DataClient /board]
         S --> N[notifications]
+        S --> G[WatchGate]
+        Q[WatchRequests: messages, clip channel] --> G
         D[muxway://open?pane=…] --> V[View]
     end
     subgraph watch[Wear OS app]
         L[BoardListenerService] --> C[complications: rows 1–4, summary]
         L --> T[tile]
         L --> A[list]
-        C & T & A -- tap --> R[OpenPaneActivity]
+        C & T & A -- tap --> P[PaneActivity: tail, answers]
+        P -- phone --> R[OpenPaneActivity]
     end
     subgraph face[Watch face]
         F[slots bound to the complications]
     end
     B -- Data Layer --> L
     C --> F
+    P -- MessageClient, ChannelClient --> Q
     R -- RemoteActivityHelper --> D
 ```
 
@@ -95,10 +101,11 @@ sequenceDiagram
 - **The app** lists every pane with glyph, name, kind and, when sent, the
   text; the summary is its last line. It opens from the launcher or from
   the summary complication.
-- **A tap** on a row starts `OpenPaneActivity`, which finds the phone by
-  the capability `muxway_phone` the phone app announces, asks the Wear OS
-  companion to start `muxway://open?pane=<address>` on it, says `opened on
-  the phone` or `no phone`, and closes.
+- **A tap** on a row, anywhere, opens the pane screen below. Its *phone*
+  key starts `OpenPaneActivity`, which finds the phone by the capability
+  `muxway_phone` the phone app announces, asks the Wear OS companion to
+  start `muxway://open?pane=<address>` on it, says `opened on the phone`
+  or `no phone`, and closes.
 
 When no phone is reachable, when the phone's service stopped (`live` is
 false) or when the board is older than ten minutes, every line turns dim
@@ -116,6 +123,96 @@ stateDiagram-v2
     Paused --> Live: board with live true
     Stale --> Live: board arrives
 ```
+
+### The pane screen
+
+```
+┌ ? deploy
+  $ make deploy            the tail: the last 40 lines, plain text,
+  Deploy to prod? (y/N) _  wrapped to the screen, newest at the bottom,
+                           a drag scrolls up
+└ sent                     the last answer's result, or what is wrong
+[Enter] [Esc] [y] [n] [^C] [◉] [phone]
+```
+
+The watch still holds no token and opens no connection. The screen asks
+the phone for the tail every two seconds while it shows, and the phone's
+service, which holds the hub's `Api`, reads `GET /v1/panes/{address}`
+(40 lines, colour stripped) and answers only when the hub's ETag changed.
+The header is the pane's lens state from the board the watch already has.
+
+The answers are what a wrist can give. `Enter` takes the default or says
+yes to Claude Code, `Esc` refuses or cancels, `y` and `n` answer a shell's
+prompts, `^C` stops a command. Each is one message to the phone; the
+phone checks it and sends it to the hub; the result flashes under the
+tail (`sent`, or `refused`, `read-only`, `no connection`, `paused`). A
+read-only pane shows the tail, `read-only` and *phone* alone.
+
+`◉` is there when the hub has a transcriber and the pane is writable. The
+first press asks for the microphone. The watch records 16 kHz mono, shows
+the meter and the seconds as the phone does, and stops at `■`, at *drop*
+or at thirty seconds. The clip streams to the phone on a channel; the
+phone posts it to `POST /v1/transcribe` and sends back the text it heard,
+which the screen shows with *send* (the text, then Enter), *type* (the
+text alone) and *drop*. Nothing reaches the pane until *send* or *type*,
+and even then the watch does not send the text: it names the clip, and
+the phone types what it heard under that name. Refusals flash: `too
+short`, `one clip every five seconds`, `transcriber unavailable`, `no
+microphone`, `microphone refused`.
+
+```mermaid
+sequenceDiagram
+    participant W as Watch: PaneActivity
+    participant P as Phone: WatchRequests
+    participant G as Phone: WatchGate
+    participant H as Hub
+    W->>P: /pane/read {id, address, etag}
+    P->>G: read
+    G->>H: GET /v1/panes/alice-laptop/work/0.1?lines=40&ansi=1
+    H-->>G: 200, ETag
+    G-->>P: lines, writable, transcriber
+    P-->>W: /pane/tail {id, etag, lines, writable, transcriber}
+    W->>P: /pane/key {id, address, key Enter}
+    P->>G: key
+    G->>G: allowed? listed? writable? whitelisted? under the limit? not seen before?
+    G->>H: POST /v1/panes/…/input {"key":"Enter"}
+    H-->>G: 204
+    P-->>W: /pane/done {id, ok}
+```
+
+```mermaid
+sequenceDiagram
+    participant W as Watch
+    participant P as Phone
+    participant H as Hub
+    W->>W: ◉ records, up to 30 s
+    W->>P: ChannelClient /clip/<id>: WAV, then close
+    P->>H: POST /v1/transcribe (audio/wav)
+    H-->>P: {"text": "yes deploy it"}
+    P->>P: keep the text under <id>
+    P-->>W: /clip/heard {id, text}
+    W->>W: send · type · drop
+    W->>P: /pane/text {id, address, heard <id>, enter true}
+    P->>H: POST input {"text": "yes deploy it"}; POST input {"key": "Enter"}
+    P-->>W: /pane/done
+```
+
+The messages are JSON documents on the Data Layer `MessageClient`, one
+path each (`/pane/read`, `/pane/key`, `/pane/text` to the phone;
+`/pane/tail`, `/pane/done`, `/clip/heard` back), capped at 64 KiB and read
+defensively on both ends: a broken document is ignored, strings are
+cleaned of control characters and capped, an address must fit the
+protocol's grammar, lines are capped at 60 of 400 characters. Each
+request carries an id its answer repeats; an answer to a request the
+screen no longer waits for is dropped. The clip goes on a `ChannelClient`
+channel named `/clip/<id>`, capped at 1 MiB on the phone.
+
+`WatchGate`, in the protocol module and tested on the JVM, is the phone's
+side: it holds the rate limit (one write a second, ten a minute), the
+ids already answered (a repeat answers the same without writing again)
+and the texts heard. `WatchRequests` is the Wear OS listener service that
+hands messages to the gate while `AttentionService` runs; with the
+service stopped every answer is `paused`.
 
 ### The watch face
 
@@ -146,8 +243,10 @@ adb -s <watch> install watchface/build/outputs/apk/debug/watchface-debug.apk
 ```
 
 On the phone, in settings, switch on **watch and notifications** and allow
-notifications. On the watch, pick the muxway face, or add a muxway
-complication to yours, or add the tile.
+notifications; switch on **watch may answer** too if the watch is to send
+keys and spoken lines. On the watch, pick the muxway face, or add a muxway
+complication to yours, or add the tile. The first `◉` asks for the
+watch's microphone.
 
 ## Settings
 
@@ -155,6 +254,7 @@ complication to yours, or add the tile.
 |---|---|---|
 | watch and notifications | off | the background service: notifications on the phone, the board to the watch |
 | notification text | off | the notification's text travels to the shade and the watch; kind and pane name always do |
+| watch may answer | off | the watch may send `Enter`, `Esc`, `y`, `n`, `^C` and a spoken line to a writable pane through the phone, phone locked or not; off, the pane screen shows the tail and *phone* only |
 
 ## Security considerations
 
@@ -162,8 +262,35 @@ complication to yours, or add the tile.
   and, when the owner allows it, the notification text. A lost watch gives
   an attacker what a glance at its face gives. The board is app-private on
   both ends; the Data Layer binds same-signature apps only.
-- Nothing on the watch can type. The only action is to start the phone
-  app's link, which navigates to a pane the phone already lists.
+- **The watch can type, within limits, and only when allowed.** This was
+  decided by the owner for the pane screen: an unlocked watch (on the
+  wrist, or with its PIN) can send five keys and the text the hub's
+  transcriber heard into a writable pane while the phone stays locked in
+  a pocket, as the phone's principal, audit-logged on the host as the
+  phone's writes. What a lost, unlocked watch does not give: the token,
+  the hub's address, any key outside the whitelist, any text of its own,
+  any pane the phone does not list, and nothing at all while **watch may
+  answer** is off, which it is by default. The phone checks every request
+  (address against the grammar and the current listing, key against the
+  whitelist, `writable` on the pane, the rate limit, a repeated id), and
+  the text it types comes only from a transcript it made itself; the
+  watch names the clip, never the words. A hub field naming the device
+  behind a write would let the audit tell the watch from the phone; that
+  would be a core change and is not part of this.
+- The tail is plain text from a pane the token may read, held in the
+  pane screen's memory only, never in preferences, a complication or the
+  tile, gone when the screen closes. Wear OS has no screenshot block;
+  the phone's **block screenshots** setting does not reach the watch.
+- The clip is kept in memory for the request on both ends and dropped;
+  the phone logs nothing about it; the hub's audit line records bytes and
+  seconds, never the text. `RECORD_AUDIO` is asked at the first `◉`, and
+  the microphone closes the moment the clip stops.
+- The messages between watch and phone are read defensively on both ends
+  (a broken document is ignored, strings cleaned and capped, lines capped,
+  the clip capped at 1 MiB before the hub sees it). The Data Layer
+  connects apps of one package name and one signing key: no other app on
+  the watch reaches `WatchRequests`, no other app on the phone can answer
+  the watch.
 - `muxway://open?pane=<address>` can be fired by anything on the phone. The
   address must match the protocol's grammar (`host/session/window.pane` or
   `host/@alias`, with the protocol's character sets and lengths) and name a

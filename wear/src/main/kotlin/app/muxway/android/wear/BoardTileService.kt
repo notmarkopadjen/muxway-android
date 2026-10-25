@@ -49,8 +49,8 @@ class BoardTileService : TileService() {
                 .setFontStyle(FontStyle.Builder().setSize(sp(15f)).setColor(argb(Palette.argbForValue(cell.value))).build())
             if (cell.address.isNotEmpty()) {
                 val open = ActionBuilders.LaunchAction.Builder().setAndroidActivity(
-                    ActionBuilders.AndroidActivity.Builder().setPackageName(packageName).setClassName(OpenPaneActivity::class.java.name)
-                        .addKeyToExtraMapping(OpenPaneActivity.ADDRESS, ActionBuilders.stringExtra(cell.address)).build(),
+                    ActionBuilders.AndroidActivity.Builder().setPackageName(packageName).setClassName(PaneActivity::class.java.name)
+                        .addKeyToExtraMapping(PaneActivity.ADDRESS, ActionBuilders.stringExtra(cell.address)).build(),
                 ).build()
                 t.setModifiers(ModifiersBuilders.Modifiers.Builder().setClickable(ModifiersBuilders.Clickable.Builder().setId("row$i").setOnClick(open).build()).build())
             }

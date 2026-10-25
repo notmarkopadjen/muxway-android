@@ -24,7 +24,8 @@ report them.
   behind the lock screen, so unlocking lands on it.
 - One ongoing notification, **following panes**, carries the service:
   how many wait, how many panes, or that there is no connection. Its
-  action **stop following** switches the setting off.
+  action **stop following** switches the setting off, and so the watch
+  shows `paused` until it is switched on again.
 - Wear OS bridges these to a watch without the muxway watch app; with it,
   the [watch](watch.md) shows the board instead.
 

@@ -190,6 +190,9 @@ After anything is sent the pane is read again at once. A read-only pane
 shows `read-only` instead of the bar, and no gesture or hardware key sends
 anything to it.
 
+A Wear OS watch shows a pane's tail with a few of these answers, through
+the phone; see [watch.md](watch.md), *The pane screen*.
+
 ## Security considerations
 
 - Text loses control characters before it leaves, the newline excepted:

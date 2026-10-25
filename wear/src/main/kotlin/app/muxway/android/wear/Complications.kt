@@ -42,7 +42,7 @@ abstract class RowComplication(private val index: Int) : SuspendingComplicationD
     }
 
     private fun openPane(address: String): PendingIntent = PendingIntent.getActivity(
-        this, index, Intent(this, OpenPaneActivity::class.java).putExtra(OpenPaneActivity.ADDRESS, address),
+        this, index, Intent(this, PaneActivity::class.java).putExtra(PaneActivity.ADDRESS, address),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 }
