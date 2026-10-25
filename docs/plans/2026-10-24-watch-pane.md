@@ -367,4 +367,7 @@ First run `test-runs/20261025-000250-2a66a36`, recorded as
 **passed**, 128 tests, 0 failed, 0 skipped; UI suite skipped on purpose
 (no device). Final run `test-runs/20261025-000509-8e1ad1f`, recorded as
 [issue #23](https://github.com/notmarkopadjen/muxway-android/issues/23):
+**passed**, 128 tests, 0 failed, 0 skipped. After the first try on the
+watch, `test-runs/20261025-001814-c4f0d6d`, recorded as
+[issue #24](https://github.com/notmarkopadjen/muxway-android/issues/24):
 **passed**, 128 tests, 0 failed, 0 skipped.
