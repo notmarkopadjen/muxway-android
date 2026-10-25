@@ -288,7 +288,38 @@ Deviations, all of them additions the plan did not foresee:
    colour by a value and cannot invert; a working row is dim and a quiet
    one ink, so three states stay apart. Worth a decision by the owner.
 
+## A second pass on the watch, asked for after the first build
+
+The owner tried 0.9.2 on the watch and asked for three things, done in
+7ac38a5 as 0.9.3 (27):
+
+1. **The ring lied.** The summary complication's ranged value was the
+   colour hint, 0 to 2, so a face that draws a gauge drew nonsense: one
+   working pane of two read as empty, and the owner's face showed it
+   full. It is a proportion now — the panes that wait or work, out of all
+   of them — so one working of two is half a ring, and a quiet day is an
+   empty one. This face's summary line is drawn the one way, since a ring
+   cannot say which state it is showing and the four rows above it do.
+2. **The keys under the tail are gone.** They took two bands of a round
+   screen, where the circle is narrowest, and said nothing the reply menu
+   does not. The menu gains *phone*, the one thing only they had; a
+   read-only pane, which has no menu, offers *phone* in the top band.
+3. **The two buttons are in the middle**, *reply* first and the
+   microphone second, both a size a thumb can find.
+
+Found on the way: `scripts/validate-face.sh` had never validated
+anything. The format version it parsed from the manifest came out empty
+(`grep -o '[0-9]*$'` on a line ending in a quote matches nothing), the
+validator answered usage instead of checking, and it exits 0 whatever it
+thinks — so every run since the face was added recorded a face check that
+did not run. It parses the version properly now and treats anything but
+`PASSED` as a failure. The face passes for real against format version 1.
+
 ## Test run
+
+[Run 20261025-103630-7ac38a5](https://github.com/notmarkopadjen/muxway-android/issues/28):
+**passed**, 153 tests, 0 failed, at `7ac38a5`, the watch's second pass
+and the face check that now runs.
 
 [Run 20261025-100907-05d3779](https://github.com/notmarkopadjen/muxway-android/issues/27):
 **passed**, 152 tests, 0 failed, at `05d3779`, against a hub built from
