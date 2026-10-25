@@ -75,5 +75,15 @@ object Face {
         return "·"
     }
 
+    /**
+     * The summary as a gauge, for faces that draw one: the panes that wait or work, out of all
+     * of them, so one working pane of two is half a ring and a quiet day is an empty one. The
+     * colour hint in [Cell.value] is for the rows; a ring cannot say which state it is showing.
+     */
+    fun gauge(board: Board, now: Long, phone: Boolean): Pair<Float, Float> {
+        if (problem(board, now, phone) != null || board.rows.isEmpty()) return 0f to 1f
+        return (board.waiting + board.working).toFloat() to board.rows.size.toFloat()
+    }
+
     private fun panes(n: Int) = if (n == 1) "1 pane" else "$n panes"
 }

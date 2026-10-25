@@ -409,40 +409,16 @@
             <Variant mode="AMBIENT" target="alpha" value="110"/>
             <DefaultProviderPolicy primaryProvider="app.muxway.android/app.muxway.android.wear.SummaryComplication" primaryProviderType="RANGED_VALUE" defaultSystemProvider="WATCH_BATTERY" defaultSystemProviderType="SHORT_TEXT"/>
             <BoundingBox x="0" y="0" width="300" height="36"/>
+            <!-- The summary's value is a proportion now, not a colour: the rows above carry the
+                 states, so the line below them is drawn the one way. -->
             <Complication type="RANGED_VALUE">
-                <Condition>
-                    <Expressions>
-                        <Expression name="waiting"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 2]]></Expression>
-                        <Expression name="quiet"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 1]]></Expression>
-                    </Expressions>
-                    <Compare expression="waiting">
-                        <PartText x="0" y="4" width="300" height="28">
-                            <Text align="CENTER" ellipsis="TRUE" maxLines="1">
-                                <Font family="dejavu_sans_mono" size="19" color="[CONFIGURATION.theme.2]">
-                                    <Template>%s · %s<Parameter expression="[COMPLICATION.TEXT]"/><Parameter expression="[COMPLICATION.TITLE]"/></Template>
-                                </Font>
-                            </Text>
-                        </PartText>
-                    </Compare>
-                    <Compare expression="quiet">
-                        <PartText x="0" y="4" width="300" height="28">
-                            <Text align="CENTER" ellipsis="TRUE" maxLines="1">
-                                <Font family="dejavu_sans_mono" size="19" color="[CONFIGURATION.theme.1]">
-                                    <Template>%s · %s<Parameter expression="[COMPLICATION.TEXT]"/><Parameter expression="[COMPLICATION.TITLE]"/></Template>
-                                </Font>
-                            </Text>
-                        </PartText>
-                    </Compare>
-                    <Default>
-                        <PartText x="0" y="4" width="300" height="28">
-                            <Text align="CENTER" ellipsis="TRUE" maxLines="1">
-                                <Font family="dejavu_sans_mono" size="19" color="[CONFIGURATION.theme.1]">
-                                    <Template>%s · %s<Parameter expression="[COMPLICATION.TEXT]"/><Parameter expression="[COMPLICATION.TITLE]"/></Template>
-                                </Font>
-                            </Text>
-                        </PartText>
-                    </Default>
-                </Condition>
+                <PartText x="0" y="4" width="300" height="28">
+                    <Text align="CENTER" ellipsis="TRUE" maxLines="1">
+                        <Font family="dejavu_sans_mono" size="19" color="[CONFIGURATION.theme.1]">
+                            <Template>%s · %s<Parameter expression="[COMPLICATION.TEXT]"/><Parameter expression="[COMPLICATION.TITLE]"/></Template>
+                        </Font>
+                    </Text>
+                </PartText>
             </Complication>
             <Complication type="SHORT_TEXT">
                 <PartText x="0" y="4" width="300" height="28">

@@ -12,7 +12,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -71,16 +70,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * One pane on the watch: its tail in colour (Claude Code's chrome hidden by the lens), the
- * microphone and *reply* at the top, a row of keys at the bottom, the way to the phone.
- * Everything is asked of the phone; the tail is kept here in memory and nowhere else.
+ * One pane on the watch: its tail in colour (Claude Code's chrome hidden by the lens), with
+ * *reply* and the microphone above it and nothing below, so the tail has the screen. Every
+ * answer, and the way to the phone, is in the reply menu. Everything is asked of the phone; the
+ * tail is kept here in memory and nowhere else.
  */
 class PaneActivity : ComponentActivity() {
     /** One row of the reply menu. */
     private class Answer(val label: String, val text: String = "", val key: String = "", val enter: Boolean = false)
-
-    /** One key of the row under the tail. */
-    private class Press(val label: String, val colour: Color, val press: () -> Unit)
 
     private var address = ""
     private var lines by mutableStateOf<List<String>>(emptyList())
@@ -223,6 +220,12 @@ class PaneActivity : ComponentActivity() {
         else text(d, enter)
     }
 
+    /** The phone opens this pane behind its lock screen, so unlocking lands on it. */
+    private fun openOnThePhone() {
+        menu = false
+        startActivity(Intent(this, OpenPaneActivity::class.java).putExtra(OpenPaneActivity.ADDRESS, address))
+    }
+
     private fun typeOnTheWatch() {
         menu = false
         val intent = RemoteInputIntentHelper.createActionRemoteInputIntent()
@@ -318,22 +321,6 @@ class PaneActivity : ComponentActivity() {
         return s.body.map { lines[it] } to s.pinned.map { lines[it] }
     }
 
-    /** The keys under the tail, in the order they are drawn; a round watch wraps them. */
-    private fun presses(): List<Press> {
-        val out = ArrayList<Press>()
-        if (writable) {
-            out.add(Press("Enter", Palette.ink) { key("Enter") })
-            out.add(Press("Esc", Palette.ink) { key("Escape") })
-            out.add(Press("y", Palette.ink) { text("y", true) })
-            out.add(Press("n", Palette.ink) { text("n", true) })
-            out.add(Press("^C", Palette.alert) { key("C-c") })
-        }
-        out.add(Press("phone", Palette.dim) {
-            startActivity(Intent(this, OpenPaneActivity::class.java).putExtra(OpenPaneActivity.ADDRESS, address))
-        })
-        return out
-    }
-
     /** The reply menu: Claude's choices first, then the common answers; the keyboard is the last row. */
     private fun answers(): List<Answer> {
         val out = ArrayList<Answer>()
@@ -373,27 +360,25 @@ class PaneActivity : ComponentActivity() {
         val config = LocalConfiguration.current
         val round = config.isScreenRound
         Box(Modifier.fillMaxSize().background(Palette.bg)) {
-            // The glass decides how wide each band of the screen may be. The keys take two rows on
-            // a round watch, where the bottom of the circle has room for about three.
+            // The glass decides how wide each band of the screen may be. Nothing sits under the
+            // tail but the note: every answer is in the reply menu, so the tail has the room.
             val tall = config.screenHeightDp.toFloat()
-            val presses = presses()
-            val keyRows = if (round && presses.size > KEYS_ACROSS) 2 else 1
-            val head = if (round) tall * 0.10f else 22f
-            val foot = if (round) tall * 0.04f else 6f
-            val keysTall = KEYS * keyRows
-            val tailTall = (tall - head - TOP - TITLE - NOTE - keysTall - foot).coerceAtLeast(40f)
+            val head = if (round) tall * 0.085f else 22f
+            val foot = if (round) tall * 0.11f else 6f
+            val tailTall = (tall - head - TOP - TITLE - NOTE - foot).coerceAtLeast(40f)
             val bands = Bands(tall, round)
             bands.skip(head)
             val topIn = bands.next(TOP)
             val titleIn = bands.next(TITLE)
             val tailIn = bands.next(tailTall)
             val noteIn = bands.next(NOTE)
-            val keysIn = bands.next(KEYS)
-            val keysIn2 = bands.next(KEYS)
             fun side(inset: Float, flat: Float): Dp = (if (round) inset + 3f else flat).dp
             Column(Modifier.fillMaxSize().padding(top = head.dp, bottom = foot.dp)) {
                 // The top: the microphone and reply, or what one of them is doing.
-                Row(Modifier.fillMaxWidth().padding(horizontal = side(topIn, 26f)), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = side(topIn, 20f)),
+                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                ) {
                     when {
                         recording -> {
                             Key("■", Palette.attention) { stopRecording() }
@@ -407,10 +392,13 @@ class PaneActivity : ComponentActivity() {
                             Key("drop", Palette.dim) { draft = null; draftHeard = "" }
                         }
                         writable -> {
-                            if (transcriber) Key("◉", Palette.attention) { speak() }
-                            Key("reply", Palette.ink) { menu = true }
+                            Key("reply", Palette.ink, big = true) { menu = true }
+                            if (transcriber) Key("◉", Palette.attention, big = true) { speak() }
                         }
-                        problem == null -> Text("read-only", color = Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp))
+                        problem == null -> {
+                            Text("read-only ", color = Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp)
+                            Key("phone", Palette.dim) { openOnThePhone() }
+                        }
                     }
                 }
                 if (draft != null) Text(draft!!, color = Palette.ink, fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = side(topIn, 26f)))
@@ -431,21 +419,6 @@ class PaneActivity : ComponentActivity() {
                 }
                 val note = flash ?: problem?.takeIf { lines.isNotEmpty() }
                 Text(if (note == null) "└" else "└ $note", color = if (flash != null) Palette.attention else Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(horizontal = side(noteIn, 14f)))
-                if (keyRows == 1) {
-                    Row(
-                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = side(keysIn, 24f)),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) { for (k in presses) Key(k.label, k.colour, k.press) }
-                } else {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = side(keysIn, 24f)),
-                        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
-                    ) { for (k in presses.take(KEYS_ACROSS)) Key(k.label, k.colour, k.press) }
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = side(keysIn2, 24f)),
-                        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
-                    ) { for (k in presses.drop(KEYS_ACROSS)) Key(k.label, k.colour, k.press) }
-                }
             }
         }
     }
@@ -474,6 +447,7 @@ class PaneActivity : ComponentActivity() {
                 item { Text("┌─ reply ─┐", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp) }
                 for (a in answers) item { MenuRow(a.label, if (a.label.contains('·')) Palette.attention else Palette.ink) { answer(a) } }
                 item { MenuRow("type…", Palette.ink) { typeOnTheWatch() } }
+                item { MenuRow("phone", Palette.dim) { openOnThePhone() } }
                 item { Text("└ back", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp, modifier = Modifier.clickable { menu = false }.padding(8.dp)) }
             }
         }
@@ -492,12 +466,13 @@ class PaneActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun Key(label: String, colour: Color, onClick: () -> Unit) {
+    private fun Key(label: String, colour: Color, big: Boolean = false, onClick: () -> Unit) {
         Box(
-            Modifier.padding(end = 4.dp, top = 3.dp).border(1.dp, Palette.faint).clickable(onClick = onClick).padding(horizontal = 7.dp, vertical = 6.dp),
+            Modifier.padding(horizontal = if (big) 5.dp else 2.dp, vertical = 3.dp).border(1.dp, Palette.faint)
+                .clickable(onClick = onClick).padding(horizontal = if (big) 14.dp else 7.dp, vertical = if (big) 9.dp else 6.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text(label, color = colour, fontFamily = Palette.mono, fontSize = 12.sp, maxLines = 1)
+            Text(label, color = colour, fontFamily = Palette.mono, fontSize = if (big) 15.sp else 12.sp, maxLines = 1)
         }
     }
 
@@ -507,11 +482,9 @@ class PaneActivity : ComponentActivity() {
         const val READ_EVERY_MS = 2_000L
         const val HEARD_TIMEOUT_MS = 100_000L
 
-        /** The heights the screen's bands are laid out with, in dp, and the keys one row holds. */
-        const val TOP = 34f
+        /** The heights the screen's bands are laid out with, in dp. */
+        const val TOP = 44f
         const val TITLE = 16f
         const val NOTE = 16f
-        const val KEYS = 34f
-        const val KEYS_ACROSS = 4
     }
 }

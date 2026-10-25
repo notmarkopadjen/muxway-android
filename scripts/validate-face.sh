@@ -7,7 +7,8 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 run=${1:-}
 face=watchface/src/main/res/raw/watchface.xml
-version=$(grep -o 'format.version" android:value="[0-9]*"' watchface/src/main/AndroidManifest.xml | grep -o '[0-9]*$')
+version=$(grep -o 'format\.version" android:value="[0-9]\+"' watchface/src/main/AndroidManifest.xml | grep -o '[0-9]\+' | head -1)
+[ -n "$version" ] || { echo "no watch face format version in the manifest" >&2; exit 1; }
 jar=tmp/wff-validator.jar
 if [ ! -f "$jar" ]; then
     mkdir -p tmp
@@ -15,6 +16,8 @@ if [ ! -f "$jar" ]; then
 fi
 start=$(date +%s)
 out=$(java -jar "$jar" "$version" "$face" 2>&1) && status=0 || status=$?
+# The validator answers usage, and exits 0, when it does not like its arguments.
+case "$out" in *PASSED*) ;; *) status=1 ;; esac
 echo "$out" | tail -3
 if [ -n "$run" ]; then
     took=$(( $(date +%s) - start ))

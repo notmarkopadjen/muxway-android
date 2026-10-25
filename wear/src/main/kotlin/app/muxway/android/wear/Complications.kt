@@ -58,17 +58,20 @@ class SummaryComplication : SuspendingComplicationDataSourceService() {
         val board = BoardStore.load(this)
         val now = now()
         val phone = phoneReachable()
-        return build(request.complicationType, Face.summary(board, now, phone), Face.short(board, now, phone))
+        return build(request.complicationType, Face.summary(board, now, phone), Face.short(board, now, phone), Face.gauge(board, now, phone))
     }
 
-    override fun getPreviewData(type: ComplicationType): ComplicationData? =
-        build(type, Face.summary(Face.preview, Face.preview.at, true), Face.short(Face.preview, Face.preview.at, true))
+    override fun getPreviewData(type: ComplicationType): ComplicationData? = build(
+        type, Face.summary(Face.preview, Face.preview.at, true), Face.short(Face.preview, Face.preview.at, true),
+        Face.gauge(Face.preview, Face.preview.at, true),
+    )
 
-    private fun build(type: ComplicationType, cell: Cell, short: String): ComplicationData? {
+    private fun build(type: ComplicationType, cell: Cell, short: String, gauge: Pair<Float, Float>): ComplicationData? {
         val tap = PendingIntent.getActivity(this, 9, Intent(this, BoardActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val description = PlainComplicationText.Builder("${cell.text} ${cell.title}".trim()).build()
         return when (type) {
-            ComplicationType.RANGED_VALUE -> RangedValueComplicationData.Builder(cell.value.toFloat(), 0f, 2f, description)
+            // A ring is a proportion, not a state: how many panes wait or work, of all of them.
+            ComplicationType.RANGED_VALUE -> RangedValueComplicationData.Builder(gauge.first, 0f, gauge.second, description)
                 .setText(PlainComplicationText.Builder(cell.text).build())
                 .setTitle(PlainComplicationText.Builder(cell.title).build())
                 .setTapAction(tap).build()

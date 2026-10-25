@@ -64,6 +64,17 @@ class FaceTest {
     }
 
     @Test
+    fun theGaugeIsAProportionOfThePanesNotAState() {
+        // One working pane of two is half a ring, whatever colour the face draws it in.
+        assertEquals(1f to 2f, Face.gauge(board(row(1, Board.WORKING), row(2, Board.QUIET)), now, true))
+        assertEquals(3f to 5f, Face.gauge(board(row(1, Board.WAITING, "done"), row(2, Board.WAITING, "idle"), row(3, Board.WORKING), row(4, Board.QUIET), row(5, Board.QUIET)), now, true))
+        // A quiet day is an empty ring, and so is one the watch cannot trust or has no panes for.
+        assertEquals(0f to 2f, Face.gauge(board(row(1, Board.QUIET), row(2, Board.QUIET)), now, true))
+        assertEquals(0f to 1f, Face.gauge(board(row(1, Board.WORKING)), now, false))
+        assertEquals(0f to 1f, Face.gauge(Board(emptyList(), now, true), now, true))
+    }
+
+    @Test
     fun thePreviewIsSyntheticAndFillsFourRows() {
         for (i in 0 until 4) assertEquals(true, Face.row(Face.preview, i, 4, Face.preview.at, true).text.isNotEmpty())
         assertEquals("+2", Face.row(Face.preview, 3, 4, Face.preview.at, true).text)

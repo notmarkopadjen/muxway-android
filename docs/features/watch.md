@@ -96,7 +96,11 @@ sequenceDiagram
   is how to colour the line: 0 dim, 1 ink, 2 attention; the text is
   `? question`, the title the pane's name), `SHORT_TEXT` (`?2` for the
   summary: the top glyph and how many wait, `⟳2` when none waits and two
-  work, `·` when nothing is doing anything) and `LONG_TEXT`. They update
+  work, `·` when nothing is doing anything) and `LONG_TEXT`. The
+  **summary's** ranged value is not a colour but a proportion: the panes
+  that wait or work, out of all of them, so one working pane of two fills
+  half a ring and a quiet day leaves it empty. A ring cannot say which
+  state it is showing, and the rows above it already do. They update
   when the board arrives, never on a timer. A row without a pane shows
   `·`; the last row shows `+N` when there are more panes than rows.
 - **The tile** lists six rows and the summary; each row is a tap.
@@ -134,25 +138,29 @@ stateDiagram-v2
 ### The pane screen
 
 ```
-   [◉] [reply]             the microphone and the reply menu, at the top
+    [reply]  [◉]           the reply menu and the microphone, in the middle
 ┌ ? deploy                 the pane's name, painted with its state
   ● I will run make test   the tail: the last 40 lines, in colour,
   Do you want to proceed?  wrapped to the screen, newest at the bottom,
   ❯ 1. Yes                 a drag or the bezel scrolls up; Claude Code's
     2. No                  rules, box and footer are hidden by the lens
-└ sent                     the last answer's result, or what is wrong
- [Enter] [Esc] [y] [n]     the keys, in two rows on a round watch
-      [^C] [phone]         so each one is on the glass
+  ❯ 3. No, and tell me     nothing sits under the tail but the note, so
+└ sent                     the screen is the pane's
 ```
 
 **The shape of the glass.** A round watch is a circle, and a band across
 it is only as wide as the chord at whichever of its edges lies farther
 from the middle. `Round.inset` says how far each band must come in
 (`r − √(r² − d²)`); the screen asks it for every band it draws — the top
-row, the title, the tail, the note and the keys — so nothing is cut by
-the edge. The keys take two centred rows there, four and two, because the
-bottom of a circle has room for about three; a square watch keeps its one
-scrolling row and its corners.
+row, the title, the tail and the note — so nothing is cut by the edge. A
+square watch keeps its corners and the same four bands.
+
+**Two buttons, and the tail.** *reply* and `◉` sit side by side in the
+middle of the top band, large enough for a thumb. Nothing sits under the
+tail but the note line: a row of keys there cost two bands of a round
+screen and said nothing the reply menu does not, so the tail has the rest
+of the glass. On a read-only pane the top band says `read-only` and
+offers *phone* alone.
 
 The watch still holds no token and opens no connection. The screen asks
 the phone for the tail every two seconds while it shows, and the phone's
@@ -188,17 +196,15 @@ were read, `Esc`, `Ctrl-C`, `Tab`, `Shift-Tab`, `Up`, `Down`. Last,
 *type…* opens the watch's own input method through Wear OS remote input
 (the keyboard, handwriting or voice as the watch offers); the line comes
 back as a draft under the top row with *send* (the line, then Enter),
-*type* (the line alone) and *drop*.
+*type* (the line alone) and *drop*. Last of all, *phone* leaves the watch
+and opens the pane on the phone.
 
-The row of keys at the bottom is what a wrist gives in one tap. `Enter`
-takes the default or says yes to Claude Code, `Esc` refuses or cancels,
-`y` and `n` answer a shell's prompts, `^C` stops a command. Each is one
-message to the phone; the
-phone checks it and sends it to the hub; the result flashes under the
-tail: `sent`, or `not allowed: phone setting` (**watch may answer** is
-off), `refused` (not a key or pane the watch may name), `read-only`, `no
-connection`, `paused`. A read-only pane shows the tail, `read-only` and
-*phone* alone.
+`Enter` takes the default or says yes to Claude Code, `Esc` refuses or
+cancels, `y` and `n` answer a shell's prompts, `Ctrl-C` stops a command.
+Each is one message to the phone; the phone checks it and sends it to the
+hub; the result flashes under the tail: `sent`, or `not allowed: phone
+setting` (**watch may answer** is off), `refused` (not a key or pane the
+watch may name), `read-only`, `no connection`, `paused`.
 
 `◉` is there when the hub has a transcriber and the pane is writable. The
 first press asks for the microphone. The watch records 16 kHz mono, shows
