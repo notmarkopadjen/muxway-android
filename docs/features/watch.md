@@ -127,12 +127,12 @@ stateDiagram-v2
 ### The pane screen
 
 ```
-┌ ? deploy
+[◉] [Enter] [Esc] [y] [n] [^C] [phone]   the answers, at the top so a round
+┌ ? deploy                               screen shows them without a scroll
   $ make deploy            the tail: the last 40 lines, plain text,
   Deploy to prod? (y/N) _  wrapped to the screen, newest at the bottom,
                            a drag scrolls up
 └ sent                     the last answer's result, or what is wrong
-[Enter] [Esc] [y] [n] [^C] [◉] [phone]
 ```
 
 The watch still holds no token and opens no connection. The screen asks
@@ -145,8 +145,10 @@ The answers are what a wrist can give. `Enter` takes the default or says
 yes to Claude Code, `Esc` refuses or cancels, `y` and `n` answer a shell's
 prompts, `^C` stops a command. Each is one message to the phone; the
 phone checks it and sends it to the hub; the result flashes under the
-tail (`sent`, or `refused`, `read-only`, `no connection`, `paused`). A
-read-only pane shows the tail, `read-only` and *phone* alone.
+tail: `sent`, or `not allowed: phone setting` (**watch may answer** is
+off), `refused` (not a key or pane the watch may name), `read-only`, `no
+connection`, `paused`. A read-only pane shows the tail, `read-only` and
+*phone* alone.
 
 `◉` is there when the hub has a transcriber and the pane is writable. The
 first press asks for the microphone. The watch records 16 kHz mono, shows
@@ -158,7 +160,9 @@ text alone) and *drop*. Nothing reaches the pane until *send* or *type*,
 and even then the watch does not send the text: it names the clip, and
 the phone types what it heard under that name. Refusals flash: `too
 short`, `one clip every five seconds`, `transcriber unavailable`, `no
-microphone`, `microphone refused`.
+microphone`, `microphone refused`, `clip lost on the way` (the phone did
+not get the whole WAV: it reads as many bytes as the RIFF header
+declares, so a channel whose end never comes cannot hang it).
 
 ```mermaid
 sequenceDiagram

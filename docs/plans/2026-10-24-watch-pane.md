@@ -328,6 +328,12 @@ pre-push check runs before every push.
   - The watch app is not minified in debug and the recorder is a copy of
     the phone's (the `app` module cannot be a dependency of `wear`),
     with a thirty-second cap in place of sixty.
+  - After the first try on a Galaxy Watch (0.8.0): the answers moved to
+    the top of the screen, the microphone first, because the bottom row
+    needed a scroll on a round screen; `not allowed` and `clip lost` got
+    words of their own, since both had said `refused`; the phone reads a
+    clip by the length in its RIFF header rather than to end-of-stream.
+    0.8.1 (23).
   - The UI test (13) is not written: no watch emulator on this bench, and
     an untested UI test is worse than none. First thing to add when one
     is attached.

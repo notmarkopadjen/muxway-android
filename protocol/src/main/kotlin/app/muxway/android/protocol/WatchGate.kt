@@ -46,7 +46,7 @@ class WatchGate(
 
     /** A clip to the hub's transcriber; the text is kept under [id] for one [Wire.Text] that names it. */
     fun transcribe(id: String, wav: ByteArray): Wire.Heard {
-        if (!allowed()) return Wire.Heard(id, "", REFUSED)
+        if (!allowed()) return Wire.Heard(id, "", NOT_ALLOWED)
         if (wav.size > Wire.MAX_CLIP_BYTES) return Wire.Heard(id, "", REFUSED)
         if (wav.size < 44 + Clip.SAMPLE_RATE) return Wire.Heard(id, "", TOO_SHORT)
         return try {
@@ -65,7 +65,8 @@ class WatchGate(
         done[r.id]?.let { return it }
         val pane = panes().firstOrNull { it.address == r.address }
         val answer = when {
-            what == null || pane == null || !allowed() -> Wire.Done(r.id, false, REFUSED)
+            what == null || pane == null -> Wire.Done(r.id, false, REFUSED)
+            !allowed() -> Wire.Done(r.id, false, NOT_ALLOWED)
             !pane.writable -> Wire.Done(r.id, false, READ_ONLY)
             !underLimit() -> Wire.Done(r.id, false, REFUSED)
             else -> try {
@@ -117,6 +118,10 @@ class WatchGate(
     companion object {
         const val PER_MINUTE = 10
         const val REFUSED = "refused"
+        /** The owner has not switched *watch may answer* on. */
+        const val NOT_ALLOWED = "not_allowed"
+        /** The clip did not arrive whole. */
+        const val NO_CLIP = "no_clip"
         const val READ_ONLY = "read_only"
         const val TOO_SHORT = "too_short"
         const val RATE_LIMITED = "rate_limited"

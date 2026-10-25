@@ -73,9 +73,9 @@ class WatchGateTest {
     fun writesAreRefusedWhileTheOwnerHasNotAllowedThem() {
         allowed = false
         val g = gate()
-        assertEquals(WatchGate.REFUSED, g.key(Wire.Key("k1", address, "Enter")).error)
-        assertEquals(WatchGate.REFUSED, g.text(Wire.Text("t1", address, "y", "", false)).error)
-        assertEquals(WatchGate.REFUSED, g.transcribe("c1", Clip.wav(ByteArray(Clip.SAMPLE_RATE * 2))).error)
+        assertEquals(WatchGate.NOT_ALLOWED, g.key(Wire.Key("k1", address, "Enter")).error)
+        assertEquals(WatchGate.NOT_ALLOWED, g.text(Wire.Text("t1", address, "y", "", false)).error)
+        assertEquals(WatchGate.NOT_ALLOWED, g.transcribe("c1", Clip.wav(ByteArray(Clip.SAMPLE_RATE * 2))).error)
         assertTrue(seen.none { it.method == "POST" })
         // The tail still comes: the screen shows, it cannot answer.
         val t = g.read(Wire.Read("r1", address, ""))

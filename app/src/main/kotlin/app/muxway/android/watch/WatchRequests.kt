@@ -48,21 +48,34 @@ class WatchRequests : WearableListenerService() {
             val gate = AttentionService.gate
             val heard = when {
                 gate == null -> Wire.Heard(id, "", WatchGate.PAUSED)
-                wav == null -> Wire.Heard(id, "", WatchGate.REFUSED)
+                wav == null -> Wire.Heard(id, "", WatchGate.NO_CLIP)
                 else -> gate.transcribe(id, wav)
             }
             Wearable.getMessageClient(this).sendMessage(channel.nodeId, Wire.HEARD, Wire.heard(heard))
         }
     }
 
-    /** The whole stream, or null when it runs past the clip cap. */
+    /**
+     * The WAV, as long as its RIFF header says, so the read does not hang on a channel whose
+     * end never comes; null when it is cut short, not a WAV, or past the clip cap.
+     */
     private fun readCapped(s: InputStream): ByteArray? {
-        val out = ByteArrayOutputStream()
+        val head = ByteArray(8)
+        var got = 0
+        while (got < head.size) {
+            val n = s.read(head, got, head.size - got)
+            if (n < 0) return null
+            got += n
+        }
+        if (String(head, 0, 4, Charsets.US_ASCII) != "RIFF") return null
+        val total = 8L + ((head[4].toLong() and 0xff) or ((head[5].toLong() and 0xff) shl 8) or ((head[6].toLong() and 0xff) shl 16) or ((head[7].toLong() and 0xff) shl 24))
+        if (total > Wire.MAX_CLIP_BYTES || total < 44) return null
+        val out = ByteArrayOutputStream(total.toInt())
+        out.write(head, 0, head.size)
         val buf = ByteArray(8192)
-        while (true) {
-            val n = s.read(buf)
-            if (n < 0) break
-            if (out.size() + n > Wire.MAX_CLIP_BYTES) return null
+        while (out.size() < total) {
+            val n = s.read(buf, 0, minOf(buf.size.toLong(), total - out.size()).toInt())
+            if (n < 0) return null
             out.write(buf, 0, n)
         }
         return out.toByteArray()

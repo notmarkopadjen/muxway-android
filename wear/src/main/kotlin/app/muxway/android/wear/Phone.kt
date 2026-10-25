@@ -39,7 +39,7 @@ object Phone {
         return try {
             val channel = client.openChannel(node, "${Wire.CLIP}/$id").await()
             try {
-                client.getOutputStream(channel).await().use { it.write(wav) }
+                client.getOutputStream(channel).await().use { it.write(wav); it.flush() }
                 true
             } catch (e: Exception) {
                 client.close(channel).await()

@@ -14,10 +14,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -236,6 +234,8 @@ class PaneActivity : ComponentActivity() {
 
     private fun say(error: String): String = when (error) {
         WatchGate.REFUSED -> "refused"
+        WatchGate.NOT_ALLOWED -> "not allowed: phone setting"
+        WatchGate.NO_CLIP -> "clip lost on the way"
         WatchGate.READ_ONLY -> "read-only"
         WatchGate.TOO_SHORT -> "too short"
         WatchGate.RATE_LIMITED -> "one clip every five seconds"
@@ -251,46 +251,40 @@ class PaneActivity : ComponentActivity() {
         flashJob = lifecycleScope.launch { delay(2_000); flash = null }
     }
 
+    /**
+     * The answers sit at the top, the microphone first, so nothing needs a scroll on a round
+     * screen; the tail takes the rest; the last result is the bottom line.
+     */
     @Composable
     private fun Screen(row: app.muxway.android.protocol.Row?) {
         val scroll = rememberScrollState()
         LaunchedEffect(lines) { scroll.scrollTo(scroll.maxValue) }
         val value = when (row?.state) { Board.WAITING -> 2; Board.QUIET -> 1; else -> 0 }
         val name = row?.let { r -> r.glyph?.let { "$it ${r.name}" } ?: r.name } ?: address.substringAfter('/')
-        Column(Modifier.fillMaxSize().background(Palette.bg).padding(horizontal = 14.dp, vertical = 8.dp)) {
-            Text("┌ $name", color = Palette.forValue(value), fontFamily = Palette.mono, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp))
-            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll)) {
-                if (lines.isEmpty()) {
-                    Text(problem ?: "empty", color = Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp, modifier = Modifier.padding(4.dp))
-                } else {
-                    Text(lines.joinToString("\n"), color = if (problem == null) Palette.ink else Palette.dim, fontFamily = Palette.mono, fontSize = 9.sp, lineHeight = 11.sp, softWrap = true)
-                }
-            }
-            val note = flash ?: problem?.takeIf { lines.isNotEmpty() }
-            Text(if (note == null) "└" else "└ $note", color = if (flash != null) Palette.attention else Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 1)
+        Column(Modifier.fillMaxSize().background(Palette.bg).padding(top = 22.dp, bottom = 6.dp)) {
             when {
-                recording -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("$meter ${seconds}s", color = Palette.attention, fontFamily = Palette.mono, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                recording -> Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                     Key("■", Palette.attention) { stopRecording() }
+                    Text("$meter ${seconds}s", color = Palette.attention, fontFamily = Palette.mono, fontSize = 12.sp, maxLines = 1, modifier = Modifier.weight(1f))
                     Key("drop", Palette.dim) { dropRecording() }
                 }
-                sending -> Text("  listening…", color = Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp)
-                heard != null -> Column {
-                    Text(heard!!, color = Palette.ink, fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                sending -> Text("◉ listening…", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 28.dp, vertical = 6.dp))
+                heard != null -> Column(Modifier.padding(horizontal = 24.dp)) {
                     Row {
                         Key("send", Palette.attention) { typeHeard(true) }
                         Key("type", Palette.ink) { typeHeard(false) }
                         Key("drop", Palette.dim) { heard = null }
                     }
+                    Text(heard!!, color = Palette.ink, fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
-                else -> Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+                else -> Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (writable) {
+                        if (transcriber) Key("◉", Palette.attention) { speak() }
                         Key("Enter", Palette.ink) { key("Enter") }
                         Key("Esc", Palette.ink) { key("Escape") }
                         Key("y", Palette.ink) { letter("y") }
                         Key("n", Palette.ink) { letter("n") }
                         Key("^C", Palette.alert) { key("C-c") }
-                        if (transcriber) Key("◉", Palette.attention) { speak() }
                     } else if (problem == null) {
                         Text("read-only ", color = Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp)
                     }
@@ -299,7 +293,16 @@ class PaneActivity : ComponentActivity() {
                     }
                 }
             }
-            Spacer(Modifier.height(10.dp))
+            Text("┌ $name", color = Palette.forValue(value), fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 4.dp))
+            Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp).verticalScroll(scroll)) {
+                if (lines.isEmpty()) {
+                    Text(problem ?: "empty", color = Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp, modifier = Modifier.padding(4.dp))
+                } else {
+                    Text(lines.joinToString("\n"), color = if (problem == null) Palette.ink else Palette.dim, fontFamily = Palette.mono, fontSize = 9.sp, lineHeight = 11.sp, softWrap = true)
+                }
+            }
+            val note = flash ?: problem?.takeIf { lines.isNotEmpty() }
+            Text(if (note == null) "└" else "└ $note", color = if (flash != null) Palette.attention else Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 1, modifier = Modifier.padding(horizontal = 28.dp))
         }
     }
 

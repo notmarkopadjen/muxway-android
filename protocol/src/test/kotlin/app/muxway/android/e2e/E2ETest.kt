@@ -448,8 +448,8 @@ class E2ETest {
         assertFalse(tail.transcriber)
         assertNull(gate.read(Wire.Read("r2", address, tail.etag)).lines)
         // Not allowed yet: nothing reaches the pane.
-        assertEquals(WatchGate.REFUSED, gate.text(Wire.Text("t0", address, "y", "", true)).error)
-        assertEquals(WatchGate.REFUSED, gate.key(Wire.Key("k0", address, "Enter")).error)
+        assertEquals(WatchGate.NOT_ALLOWED, gate.text(Wire.Text("t0", address, "y", "", true)).error)
+        assertEquals(WatchGate.NOT_ALLOWED, gate.key(Wire.Key("k0", address, "Enter")).error)
         assertFalse(core.pane().contains("answer=y"))
         allowed = true
         assertEquals(WatchGate.REFUSED, gate.key(Wire.Key("k1", address, "Up")).error)
