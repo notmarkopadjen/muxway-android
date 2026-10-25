@@ -429,3 +429,7 @@ First run `test-runs/20261025-000250-2a66a36`, recorded as
 watch, `test-runs/20261025-001814-c4f0d6d`, recorded as
 [issue #24](https://github.com/notmarkopadjen/muxway-android/issues/24):
 **passed**, 128 tests, 0 failed, 0 skipped.
+Revision 2 (the Claude lens, the reply menu, typing on the watch),
+`test-runs/20261025-003745-4715f4f`, recorded as
+[issue #25](https://github.com/notmarkopadjen/muxway-android/issues/25):
+**passed**, 134 tests, 0 failed, 0 skipped.
