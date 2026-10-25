@@ -256,9 +256,46 @@ Each step builds and passes the JVM suites on its own.
 
 ## Review (after implementation)
 
-- [ ] Diff matches the plan, deviations explained here
-- [ ] Security rules (AGENTS.md section 2) hold
-- [ ] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
-- [ ] Docs and diagrams updated
+- [x] Diff matches the plan, deviations explained here
+- [x] Security rules (AGENTS.md section 2) hold
+- [x] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
+- [x] Docs and diagrams updated
+
+Deviations, all of them additions the plan did not foresee:
+
+1. **The watch's own pane list** got the same treatment as the reply
+   menu (centred rows, the bezel, an indicator, the arc's inset). It has
+   the same ailment and the owner taps panes there to open them.
+2. **The summary said "all quiet" while panes worked.** The owner
+   reported it mid-implementation: every summary counted only the panes
+   that wait, so two working Claude panes read as quiet. `Board.working`
+   now exists, and the watch's summary, its small slot and the phone's
+   ongoing notification name the strongest state: *N waiting* (with the
+   working count beside it), else *N working*, else *all quiet*. Panes
+   are counted in the singular too.
+3. **Three end-to-end tests** cover what c79898e brought in untested
+   (closing a pane, with and without the agent's flag, and for a
+   read-only token) and the new window fit against a real hub.
+4. **Issue #26** was opened for the one difference the compare in §2.1
+   missed: tiles that are every pane of one window fit the window *as
+   one, laid out as the tiles*. This client has the other half of that
+   rule (one fit per window, the rest *held*) but does not send a tmux
+   layout string, which wants a layout builder and a checksum. The
+   guideline's §1.4 now names #26 instead of #19 there.
+5. The plan said the attention colour needed nothing here, which held:
+   c79898e had already brought the phone's palettes in line. The watch
+   app keeps amber for a waiting row, because its face and complications
+   colour by a value and cannot invert; a working row is dim and a quiet
+   one ink, so three states stay apart. Worth a decision by the owner.
 
 ## Test run
+
+[Run 20261025-100907-05d3779](https://github.com/notmarkopadjen/muxway-android/issues/27):
+**passed**, 152 tests, 0 failed, at `05d3779`, against a hub built from
+the core's `origin/main` (715d737). No secret in any of the 85 logs.
+
+The UI suite (`FlowTest`) compiled but did not run: this machine has no
+KVM, so `adb devices` lists none. The watch's round layout, the reply
+menu, the microphone held, the completion row and the `×` that closes a
+pane are to be tried on the owner's phone and watch; 0.9.2 (26) went to
+them for that.
