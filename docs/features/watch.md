@@ -277,8 +277,10 @@ date under it; four row slots and a summary slot are complication slots
 that default to the muxway complications. The face colours each row by
 the complication's value with a `Condition`, so it needs no code and any
 other complication put in a slot still renders. Three colour options,
-green, amber and paper, match the phone app. In ambient mode everything
-dims to about a third. Tapping a row is the complication's tap action; the
+green, amber and paper, match the phone app, except that a waiting row is
+painted in the attention hue rather than inverted as the phone draws it:
+the face is always on and a complication is drawn by whatever face holds
+it (see `look.md`). In ambient mode everything dims to about a third. Tapping a row is the complication's tap action; the
 time has none.
 
 Any other face shows the same information through its own slots: pick a

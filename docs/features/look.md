@@ -12,6 +12,15 @@ client's pixel font; everything else in DejaVu Sans Mono.
 | ink | `#39ff14` | `#ffb000` | `#1f2a1f` |
 | dim · faint | `#1f8f14` · `#0f4a0c` | `#a06c00` · `#4a3200` | `#5a6a5a` · `#b9b39f` |
 | attention · alert | the ink, inverted · `#ff3b3b` | the ink, inverted · `#ff3b3b` | the ink, inverted · `#a3161b` |
+| attention, on the watch only | `#ffb000` | `#ffd36b` | `#9a5b00` |
+
+The watch is the one exception to the inverted attention, decided by the
+owner on 2026-10-25: a face is always on, where a filled ink bar is
+burn-in and battery, and a complication is drawn by whatever face it sits
+in, which honours no inversion of ours. Its face, its complications and
+its app paint a waiting pane in the hue above; working stays dim and
+quiet plain, so the three states stay apart (`wear/Palette.kt`, the face's
+`theme` colour options, and `ui-guideline.md` §1.5).
 
 Effects, on by default and off with the **effects** setting:
 
