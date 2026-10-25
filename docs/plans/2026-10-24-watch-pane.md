@@ -359,4 +359,6 @@ comes back; that `phone` still lands the phone on the pane.
 First run `test-runs/20261025-000250-2a66a36`, recorded as
 [issue #22](https://github.com/notmarkopadjen/muxway-android/issues/22):
 **passed**, 128 tests, 0 failed, 0 skipped; UI suite skipped on purpose
-(no device). The final run after the review's fixes is recorded below.
+(no device). Final run `test-runs/20261025-000509-8e1ad1f`, recorded as
+[issue #23](https://github.com/notmarkopadjen/muxway-android/issues/23):
+**passed**, 128 tests, 0 failed, 0 skipped.
