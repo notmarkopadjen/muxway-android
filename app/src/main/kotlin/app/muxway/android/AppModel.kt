@@ -139,7 +139,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     private fun api(): Api {
         api?.let { return it }
-        val token = vault.token(settings.current) ?: throw ApiException(401, "unauthorized")
+        val token = vault.token(settings.current)
+            ?: throw if (vault.hasToken(settings.current)) ApiException(0, "keystore") else ApiException(401, "unauthorized")
         return Api(settings.hubUrl, token, userAgent).also { api = it }
     }
 

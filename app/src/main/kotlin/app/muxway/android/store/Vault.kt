@@ -4,7 +4,11 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import java.io.IOException
+import java.security.GeneralSecurityException
 import java.security.KeyStore
+import java.security.ProviderException
+import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -22,19 +26,32 @@ class Vault(context: Context) {
         return prefs.contains(key(id))
     }
 
+    /** The token, or null: forgotten once nothing can open it, kept when the keystore just failed this time. */
     fun token(id: String): String? {
         adopt(id)
         val raw = prefs.getString(key(id), null) ?: return null
-        return try {
-            val blob = Base64.decode(raw, Base64.NO_WRAP)
-            val cipher = Cipher.getInstance(TRANSFORM)
-            cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, blob, 0, IV_LEN))
-            String(cipher.doFinal(blob, IV_LEN, blob.size - IV_LEN), Charsets.UTF_8)
-        } catch (e: Exception) {
-            // A reset keystore leaves ciphertext nothing can open; start over.
-            clear(id)
-            null
+        try {
+            val key = storedKey()
+            if (key != null) {
+                val blob = Base64.decode(raw, Base64.NO_WRAP)
+                val cipher = Cipher.getInstance(TRANSFORM)
+                cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, blob, 0, IV_LEN))
+                return String(cipher.doFinal(blob, IV_LEN, blob.size - IV_LEN), Charsets.UTF_8)
+            }
+        } catch (e: AEADBadTagException) {
+            // The key changed under the ciphertext: handled below.
+        } catch (e: IllegalArgumentException) {
+            // A blob that is not ours: the same.
+        } catch (e: GeneralSecurityException) {
+            return null
+        } catch (e: ProviderException) {
+            return null
+        } catch (e: IOException) {
+            return null
         }
+        // A reset keystore leaves ciphertext nothing can open; start over.
+        clear(id)
+        return null
     }
 
     fun store(id: String, token: String) {
@@ -57,9 +74,13 @@ class Vault(context: Context) {
         prefs.edit().putString(key(id), prefs.getString(TOKEN, null)).remove(TOKEN).apply()
     }
 
-    private fun key(): SecretKey {
+    private fun storedKey(): SecretKey? {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        (ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
+        return (ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.secretKey
+    }
+
+    private fun key(): SecretKey {
+        storedKey()?.let { return it }
         val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
         gen.init(
             KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)

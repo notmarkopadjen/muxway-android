@@ -80,6 +80,7 @@ class ApiException(val status: Int, val code: String) : Exception(messageFor(sta
             "no_mouse_hub" -> "This hub has no mouse support yet"
             "no_mouse_pane" -> "No mouse in this pane"
             "offline" -> "No connection"
+            "keystore" -> "The keystore did not open the token, try again"
             "bad_answer" -> "The hub's answer made no sense"
             else -> if (status > 0) "Unexpected answer $status" else "No connection"
         }
