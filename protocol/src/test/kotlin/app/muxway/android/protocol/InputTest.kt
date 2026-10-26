@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.json.JSONObject
 
 class InputTest {
     @Test
@@ -47,5 +48,17 @@ class InputTest {
     fun jsonBodiesEscapeWhatTheUserTyped() {
         assertEquals("{\"text\":\"say \\\"hi\\\" \\\\ done\"}", Json.text("say \"hi\" \\ done"))
         assertEquals("{\"key\":\"C-c\"}", Json.key("C-c"))
+    }
+
+    @Test
+    fun aWheelCountGoesInTheBodyOnlyAboveOne() {
+        val counted = JSONObject(Json.mouse("wheeldown", 5, 3, 10)).getJSONObject("mouse")
+        assertEquals(listOf("wheeldown", 5, 3, 10), listOf(counted.getString("button"), counted.getInt("x"), counted.getInt("y"), counted.getInt("count")))
+        assertFalse(JSONObject(Json.mouse("wheelup", 5, 3, 1)).getJSONObject("mouse").has("count"))
+        assertFalse(JSONObject(Json.mouse("left", 5, 3)).getJSONObject("mouse").has("count"))
+        assertTrue(Input.isMouse("wheelup", 1, 1, 50))
+        assertTrue(Input.isMouse("left", 1, 1, 1))
+        for ((button, count) in listOf("wheelup" to 0, "wheeldown" to 51, "left" to 2, "right" to 2, "laser" to 1))
+            assertFalse("$button $count", Input.isMouse(button, 1, 1, count))
     }
 }

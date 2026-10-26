@@ -46,10 +46,13 @@ class Api(private val baseUrl: String, private val token: String, private val us
         post("panes/${encode(address)}/input", Json.key(name))
     }
 
-    /** A mouse button at a cell (1-based) of the pane; a hub without mouse input answers bad_json. */
-    fun mouse(address: String, button: String, x: Int, y: Int) {
-        require(button in Input.BUTTONS && x in 1..500 && y in 1..300) { "mouse" }
-        post("panes/${encode(address)}/input", Json.mouse(button, x, y))
+    /**
+     * A mouse button at a cell (1-based) of the pane, the wheel turned [count] notches; a hub
+     * without mouse input answers bad_json, one from before the count bad_input to a count.
+     */
+    fun mouse(address: String, button: String, x: Int, y: Int, count: Int = 1) {
+        require(Input.isMouse(button, x, y, count)) { "mouse" }
+        post("panes/${encode(address)}/input", Json.mouse(button, x, y, count))
     }
 
     /**

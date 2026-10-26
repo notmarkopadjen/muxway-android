@@ -70,8 +70,10 @@ object Json {
 
     fun key(name: String): String = JSONObject().put("key", name).toString()
 
-    fun mouse(button: String, x: Int, y: Int): String =
-        JSONObject().put("mouse", JSONObject().put("button", button).put("x", x).put("y", y)).toString()
+    /** The count only above one, so a single notch is the body an older hub knows. */
+    fun mouse(button: String, x: Int, y: Int, count: Int = 1): String =
+        JSONObject().put("mouse", JSONObject().put("button", button).put("x", x).put("y", y)
+            .apply { if (count > 1) put("count", count) }).toString()
 
     /** A resize: the pane alone, or its whole window, with the pane zoomed over its siblings. */
     fun size(cols: Int, rows: Int, window: Boolean = false, zoom: Boolean = false): String =

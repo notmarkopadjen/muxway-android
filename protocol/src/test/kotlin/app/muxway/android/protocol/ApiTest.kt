@@ -97,6 +97,12 @@ class ApiTest {
         assertThrows(IllegalArgumentException::class.java) { api().mouse("h/w/0.0", "laser", 1, 1) }
         assertThrows(IllegalArgumentException::class.java) { api().mouse("h/w/0.0", "left", 0, 1) }
         assertThrows(IllegalArgumentException::class.java) { api().mouse("h/w/0.0", "left", 1, 301) }
+        assertThrows(IllegalArgumentException::class.java) { api().mouse("h/w/0.0", "left", 1, 1, 2) }
+        assertThrows(IllegalArgumentException::class.java) { api().mouse("h/w/0.0", "wheelup", 1, 1, 0) }
+        assertThrows(IllegalArgumentException::class.java) { api().mouse("h/w/0.0", "wheelup", 1, 1, 51) }
+        assertEquals(1, seen.size)
+        api().mouse("h/w/0.0", "wheelup", 2, 2, 50)
+        assertEquals(50, org.json.JSONObject(String(seen[1].body)).getJSONObject("mouse").getInt("count"))
     }
 
     @Test

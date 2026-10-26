@@ -12,8 +12,14 @@ object Input {
         "PageUp" to "PgUp", "PageDown" to "PgDn", "Home" to "Home", "End" to "End",
     )
 
-    /** Mouse buttons the protocol names. */
+    /** Mouse buttons the protocol names; the wheel ones take a count. */
     val BUTTONS = setOf("left", "middle", "right", "wheelup", "wheeldown")
+    val WHEEL = setOf("wheelup", "wheeldown")
+    const val MAX_WHEEL = 50
+
+    /** A button at a cell with a notch count the hub takes: the count above one with the wheel only. */
+    fun isMouse(button: String, x: Int, y: Int, count: Int): Boolean =
+        button in BUTTONS && x in 1..500 && y in 1..300 && count in 1..MAX_WHEEL && (count == 1 || button in WHEEL)
 
     private val NAMED = setOf(
         "Enter", "Tab", "BTab", "BSpace", "Escape", "Space", "Up", "Down", "Left", "Right",
