@@ -76,6 +76,8 @@ class ApiException(val status: Int, val code: String) : Exception(messageFor(sta
             "exists" -> "That name is taken"
             "too_many" -> "Too many already: 8 panes a window, 32 sessions"
             "provider_unavailable" -> "Transcriber unavailable"
+            "unsupported" -> "Not a type the host takes"
+            "inbox_full" -> "The host's inbox is full"
             "bad_json", "bad_input", "bad_parameter" -> "The hub refused the request"
             "no_mouse_hub" -> "This hub has no mouse support yet"
             "no_mouse_pane" -> "No mouse in this pane"

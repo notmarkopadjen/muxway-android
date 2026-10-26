@@ -50,6 +50,13 @@ object Json {
         }
     }
 
+    /** Where a file went: the path, cleaned as everything shown is, and the bytes the hub took. */
+    fun sent(body: String): Sent = parse(body) { o ->
+        val path = Input.printable(o.getString("path"))
+        if (path.isEmpty() || path.length > 1024) throw JSONException("path")
+        Sent(path, o.optLong("bytes"))
+    }
+
     /** The transcriber's text, cleaned as typed text is. */
     fun transcript(body: String): String = parse(body) { o -> Input.typed(o.optString("text")) }
 

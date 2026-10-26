@@ -196,6 +196,55 @@ class ApiTest {
     }
 
     @Test
+    fun aFileGoesAsOneMultipartPartAndThePathComesBackClean() {
+        answer = { json(201, """{"path":"/home/alice/.config/muxway/agent/inbox/20261025-102235-56fwge.png\u0007\u001b[31m","bytes":10}""") }
+        val data = "\u0089PNG\r\n".toByteArray(Charsets.ISO_8859_1) + ByteArray(5)
+        val sent = api().sendFile("alice-laptop/work/0.0", data, "image/png")
+        assertEquals("/home/alice/.config/muxway/agent/inbox/20261025-102235-56fwge.png", sent.path)
+        assertEquals(10L, sent.bytes)
+        val r = seen.single()
+        assertEquals("POST", r.method)
+        assertEquals("/v1/panes/alice-laptop/work/0.0/files", r.path)
+        assertEquals("Bearer $token", r.header("Authorization"))
+        val boundary = r.header("Content-Type")!!.substringAfter("multipart/form-data; boundary=")
+        val head = "--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"file\"\r\nContent-Type: image/png\r\n\r\n".toByteArray()
+        val tail = "\r\n--$boundary--\r\n".toByteArray()
+        assertEquals(head.size + data.size + tail.size, r.body.size)
+        assertTrue(head.contentEquals(r.body.copyOfRange(0, head.size)))
+        assertTrue(data.contentEquals(r.body.copyOfRange(head.size, head.size + data.size)))
+        assertTrue(tail.contentEquals(r.body.copyOfRange(head.size + data.size, r.body.size)))
+        // Refused here, before any request: a type off the list, a file over the cap.
+        assertThrows(IllegalArgumentException::class.java) { api().sendFile("h/w/0.0", data, "image/svg+xml") }
+        assertThrows(IllegalArgumentException::class.java) { api().sendFile("h/w/0.0", ByteArray(Files.MAX_BYTES + 1), "text/plain") }
+        assertEquals(1, seen.size)
+        // An answer without a usable path is a bad answer, not a line to type.
+        answer = { json(201, """{"bytes":10}""") }
+        assertEquals("bad_answer", assertThrows(ApiException::class.java) { api().sendFile("h/w/0.0", data, "image/png") }.code)
+        answer = { json(201, """{"path":"\u0000\u0001"}""") }
+        assertEquals("bad_answer", assertThrows(ApiException::class.java) { api().sendFile("h/w/0.0", data, "image/png") }.code)
+        answer = { json(415, """{"error":"unsupported"}""") }
+        val e = assertThrows(ApiException::class.java) { api().sendFile("h/w/0.0", data, "image/png") }
+        assertEquals("unsupported", e.code)
+        assertEquals("Not a type the host takes", e.message)
+    }
+
+    @Test
+    fun theFilesProbeIsTrueOnlyOn204() {
+        answer = { Response(204) }
+        assertTrue(api().takesFiles("alice-laptop/work/0.0"))
+        assertEquals("/v1/panes/alice-laptop/work/0.0/files", seen.single().path)
+        assertEquals("GET", seen.single().method)
+        answer = { json(404, """{"error":"not_found"}""") }
+        assertFalse(api().takesFiles("h/w/0.0"))
+        answer = { json(403, """{"error":"read_only"}""") }
+        assertFalse(api().takesFiles("h/w/0.0"))
+        answer = { json(200, """{}""") }
+        assertFalse(api().takesFiles("h/w/0.0"))
+        server.close()
+        assertEquals("offline", assertThrows(ApiException::class.java) { api().takesFiles("h/w/0.0") }.code)
+    }
+
+    @Test
     fun transcriberProbeReadsTheStatus() {
         answer = { Response(204, ByteArray(0), emptyMap()) }
         assertTrue(api().hasTranscriber())

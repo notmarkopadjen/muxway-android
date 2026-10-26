@@ -17,6 +17,8 @@ class Api(private val baseUrl: String, private val token: String, private val us
         private const val READ_TIMEOUT = 40_000
         /** The hub gives the transcriber ninety seconds. */
         private const val TRANSCRIBE_TIMEOUT = 95_000
+        /** The hub holds an upload while the agent writes the file. */
+        private const val FILE_TIMEOUT = 60_000
         /** What a client may name a session it starts. */
         val SESSION_NAME = Regex("^[a-z0-9_-]{1,32}$")
         private val SESSION_ID = Regex("^[A-Za-z0-9_-]{1,16}$")
@@ -93,6 +95,19 @@ class Api(private val baseUrl: String, private val token: String, private val us
     fun transcribe(wav: ByteArray): String {
         require(wav.size in 45..(4 shl 20)) { "clip size" }
         return Json.transcript(call("POST", "transcribe", wav, "audio/wav", null, TRANSCRIBE_TIMEOUT).body)
+    }
+
+    /** Whether the pane takes files: 204 says yes; a refusal (no inbox, read only, no such pane) no. */
+    fun takesFiles(address: String): Boolean = try {
+        get("panes/${encode(address)}/files").status == 204
+    } catch (e: ApiException) {
+        if (e.status > 0) false else throw e
+    }
+
+    /** A file for the pane's program, into its host's inbox; where it went. The phone's name for it is not sent. */
+    fun sendFile(address: String, data: ByteArray, type: String): Sent {
+        val part = Files.multipart(data, type)
+        return Json.sent(call("POST", "panes/${encode(address)}/files", part.body, part.contentType, null, FILE_TIMEOUT).body)
     }
 
     /** Whether this token carries the admin grant. */
