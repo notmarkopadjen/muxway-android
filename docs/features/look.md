@@ -1,18 +1,18 @@
 # Look and motion
 
 The app shares the web client's design tokens, so the two look like one
-product: phosphor green on near-black by default, amber, and paper for
+product: phosphor amber on near-black by default, green, and paper for
 daylight. The brand and panel titles are set in Press Start 2P, the web
 client's pixel font; everything else in DejaVu Sans Mono.
 
-| Token | Green | Amber | Paper |
+| Token | Amber | Green | Paper |
 |---|---|---|---|
-| background | `#050806` | `#0a0603` | `#f1ead8` |
-| panel | `#0a120c` | `#140b05` | `#e8dfc8` |
-| ink | `#39ff14` | `#ffb000` | `#1f2a1f` |
-| dim · faint | `#1f8f14` · `#0f4a0c` | `#a06c00` · `#4a3200` | `#5a6a5a` · `#b9b39f` |
+| background | `#0a0603` | `#050806` | `#f1ead8` |
+| panel | `#140b05` | `#0a120c` | `#e8dfc8` |
+| ink | `#ffb000` | `#39ff14` | `#1f2a1f` |
+| dim · faint | `#a06c00` · `#4a3200` | `#1f8f14` · `#0f4a0c` | `#5a6a5a` · `#b9b39f` |
 | attention · alert | the ink, inverted · `#ff3b3b` | the ink, inverted · `#ff3b3b` | the ink, inverted · `#a3161b` |
-| attention, on the watch only | `#ffb000` | `#ffd36b` | `#9a5b00` |
+| attention, on the watch only | `#ffd36b` | `#ffb000` | `#9a5b00` |
 
 The watch is the one exception to the inverted attention, decided by the
 owner on 2026-10-25: a face is always on, where a filled ink bar is

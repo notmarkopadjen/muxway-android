@@ -11,9 +11,9 @@
 
     <!-- ink, dim, attention, faint, background -->
     <UserConfigurations>
-        <ColorConfiguration id="theme" displayName="theme_label" defaultValue="0">
-            <ColorOption id="0" displayName="theme_green" colors="#39FF14 #1F8F14 #FFB000 #0F4A0C #050806"/>
+        <ColorConfiguration id="theme" displayName="theme_label" defaultValue="1">
             <ColorOption id="1" displayName="theme_amber" colors="#FFB000 #A06C00 #FFD36B #4A3200 #0A0603"/>
+            <ColorOption id="0" displayName="theme_green" colors="#39FF14 #1F8F14 #FFB000 #0F4A0C #050806"/>
             <ColorOption id="2" displayName="theme_paper" colors="#1F2A1F #5A6A5A #9A5B00 #B9B39F #F1EAD8"/>
         </ColorConfiguration>
     </UserConfigurations>

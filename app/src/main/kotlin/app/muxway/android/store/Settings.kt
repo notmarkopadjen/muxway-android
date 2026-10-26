@@ -2,7 +2,7 @@ package app.muxway.android.store
 
 import android.content.Context
 
-enum class Theme { GREEN, AMBER, PAPER }
+enum class Theme { AMBER, GREEN, PAPER }
 
 data class Settings(
     val hubs: List<Hub> = emptyList(),
@@ -10,7 +10,7 @@ data class Settings(
     val refreshSeconds: Int = 2,
     val lines: Int = 200,
     val textSp: Int = 12,
-    val theme: Theme = Theme.GREEN,
+    val theme: Theme = Theme.AMBER,
     val blockScreenshots: Boolean = false,
     val hardwareKeyboard: Boolean = false,
     val effects: Boolean = true,

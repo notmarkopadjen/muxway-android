@@ -70,7 +70,7 @@ for.
 | every | Seconds between reads of an open pane, 1 to 60. |
 | lines | Lines fetched per read, 10 to 2000. |
 | text | Text size in sp, 6 to 24. |
-| theme | `green` (phosphor on black), `amber`, `paper` (dark on light). |
+| theme | `amber` (phosphor on black, the default), `green`, `paper` (dark on light). |
 | block screenshots | Sets `FLAG_SECURE` on the pane screen: no screenshots, no thumbnail in recents. Off by default. |
 | assume a hardware keyboard | The input field takes focus without raising the on-screen keyboard; `abc` in the pane view's top row brings it up. The input connection stays, so dictation keyboards keep working. Off by default. |
 | effects | Glow, scanlines, vignette, power-on and pulses (see [look](look.md)). On by default. |

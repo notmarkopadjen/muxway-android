@@ -83,7 +83,7 @@ sequenceDiagram
     S->>W: /board (urgent)
     W->>W: store, request complication and tile updates
     W->>F: row 2: value 2, "✓ done", "build"
-    F->>F: amber row
+    F->>F: attention row
     F->>W: tap row 2
     W->>P: start muxway://open?pane=alice-laptop/work/0.0
     P->>P: open the View on that pane, behind the keyguard
@@ -288,7 +288,7 @@ date under it; four row slots and a summary slot are complication slots
 that default to the muxway complications. The face colours each row by
 the complication's value with a `Condition`, so it needs no code and any
 other complication put in a slot still renders. Three colour options,
-green, amber and paper, match the phone app, except that a waiting row is
+amber (the default), green and paper, match the phone app, except that a waiting row is
 painted in the attention hue rather than inverted as the phone draws it:
 the face is always on and a complication is drawn by whatever face holds
 it (see `look.md`). In ambient mode everything dims to about a third. Tapping a row is the complication's tap action; the

@@ -56,14 +56,14 @@ private val paperAnsi = colours(
     0x666666, 0xCD3131, 0x1A8A1A, 0xB5BA00, 0x0451A5, 0xBC05BC, 0x0598BC, 0xA5A5A5,
 )
 
-val Green = Palette(
-    bg = Color(0xFF050806), panel = Color(0xFF0A120C), ink = Color(0xFF39FF14), dim = Color(0xFF1F8F14), faint = Color(0xFF0F4A0C),
-    accent = Color(0xFFB6FF9E), attention = Color(0xFF39FF14), alert = Color(0xFFFF3B3B), claude = Color(0xFFD97757), glow = Color(0xFF39FF14),
-    scan = Color(0f, 0f, 0f, 0.22f), vignette = Color(0f, 0f, 0f, 0.55f), light = false, ansi = darkAnsi,
-)
 val Amber = Palette(
     bg = Color(0xFF0A0603), panel = Color(0xFF140B05), ink = Color(0xFFFFB000), dim = Color(0xFFA06C00), faint = Color(0xFF4A3200),
     accent = Color(0xFFFFD36B), attention = Color(0xFFFFB000), alert = Color(0xFFFF3B3B), claude = Color(0xFFD97757), glow = Color(0xFFFFB000),
+    scan = Color(0f, 0f, 0f, 0.22f), vignette = Color(0f, 0f, 0f, 0.55f), light = false, ansi = darkAnsi,
+)
+val Green = Palette(
+    bg = Color(0xFF050806), panel = Color(0xFF0A120C), ink = Color(0xFF39FF14), dim = Color(0xFF1F8F14), faint = Color(0xFF0F4A0C),
+    accent = Color(0xFFB6FF9E), attention = Color(0xFF39FF14), alert = Color(0xFFFF3B3B), claude = Color(0xFFD97757), glow = Color(0xFF39FF14),
     scan = Color(0f, 0f, 0f, 0.22f), vignette = Color(0f, 0f, 0f, 0.55f), light = false, ansi = darkAnsi,
 )
 val Paper = Palette(
@@ -72,14 +72,14 @@ val Paper = Palette(
     scan = Color(0f, 0f, 0f, 0.04f), vignette = Color(0f, 0f, 0f, 0.08f), light = true, ansi = paperAnsi,
 )
 
-val LocalPalette = staticCompositionLocalOf { Green }
+val LocalPalette = staticCompositionLocalOf { Amber }
 
 /** Whether glow, scanlines and motion are drawn. */
 val LocalEffects = staticCompositionLocalOf { true }
 
 fun Theme.palette() = when (this) {
-    Theme.GREEN -> Green
     Theme.AMBER -> Amber
+    Theme.GREEN -> Green
     Theme.PAPER -> Paper
 }
 
