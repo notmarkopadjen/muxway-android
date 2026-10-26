@@ -32,11 +32,11 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity="" />
-        <!-- The way to the phone, from the pane screen. -->
+        <!-- The way to the phone, from the pane screen; nothing outside the app starts it. -->
         <activity
             android:name=".OpenPaneActivity"
             android:excludeFromRecents="true"
-            android:exported="true"
+            android:exported="false"
             android:noHistory="true"
             android:taskAffinity="" />
 
