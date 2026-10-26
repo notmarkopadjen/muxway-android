@@ -15,6 +15,7 @@ flowchart LR
     end
     subgraph app[app: the phone]
         UI[ui: Connect, Scan, Panes, View] --> M[AppModel]
+        M --> F[files: Attachments]
         M --> S[store: SettingsStore, Vault]
         S --> KS[(Android Keystore)]
         W[watch: AttentionService, Notifier, WatchBridge]
@@ -46,6 +47,9 @@ flowchart LR
 - **AppModel** is the one view model: which screen is open, the pane list,
   one `PaneState` per open pane, and the calls into `Api` on the IO
   dispatcher.
+- **files** reads a content URI the keyboard, the picker or a share
+  handed over into memory, under the inbox's cap, with the type checked
+  against its list; see [features/attachments.md](features/attachments.md).
 - **ui** is three Compose screens and a handful of widgets drawn as a
   terminal: monospace, box-drawing frames, square corners.
 
@@ -146,10 +150,11 @@ client's side of it.
 | split, new session, close | `POST /v1/windows/{host}/{session}/{window}/panes`, `POST /v1/hosts/{host}/sessions`, `POST /v1/panes/{address}/close`, where the host allows them | pane view, pane list |
 | events | `GET /v1/events?after=cursor&wait=30&limit=50`, a long poll | pane list, watch service, the lens |
 | transcription | `GET /v1/transcribe` (`204` or `404`) to know there is one, `POST /v1/transcribe` with `audio/wav` | microphone button, the watch's clip |
+| files | `GET /v1/panes/{address}/files` (`204` or a refusal) to know the pane takes them, `POST` the same as `multipart/form-data` with one part `file` of a listed type, 8 MiB at most; the path answered lands on the input line | `⇪`, a paste into the line |
 | admin | `GET /v1/me` for the grant, `GET /v1/admin/log?limit=200`, `GET /v1/admin/overview`, `DELETE /v1/admin/sessions/{id}` | the admin section of Settings |
 
 Not used: `/v1/auth/*` (the token is pasted or scanned, never exchanged
-for a cookie), `/v1/panes/{address}/files`, `/v1/hosts/{host}/tree`,
+for a cookie), `/v1/hosts/{host}/tree`,
 `GET /v1/windows/...`, and the admin calls that mint or revoke tokens and
 users.
 

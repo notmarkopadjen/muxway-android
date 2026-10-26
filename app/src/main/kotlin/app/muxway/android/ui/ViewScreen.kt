@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.LocalOverscrollConfiguration
 import android.Manifest
 import android.content.ClipData
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
@@ -46,8 +47,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,6 +58,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -116,6 +120,7 @@ import app.muxway.android.protocol.Ansi
 import app.muxway.android.protocol.Clip
 import app.muxway.android.protocol.Commands
 import app.muxway.android.protocol.Complete
+import app.muxway.android.protocol.Files
 import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Links
@@ -394,19 +399,41 @@ private class FieldFocus {
 
 /**
  * Esc pinned left, Enter pinned right, the other keys scrolling between; under them the command
- * row for the program in the pane, when it has one; then the text line, with the microphone
- * button when the hub has a transcriber.
+ * row for the program in the pane, when it has one; then the text line, with the file button
+ * where the host has an inbox and the microphone button when the hub has a transcriber.
  */
 @Composable
 private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, onFieldFocus: (Boolean) -> Unit) {
     val p = LocalPalette.current
-    var text by rememberSaveable(state.address) { mutableStateOf("") }
+    val line = key(state.address) { rememberTextFieldState() }
+    val text = line.text.toString()
     fun send(enter: Boolean) {
         if (text.isEmpty() && !enter) return
         model.type(state.address, text, enter)
-        text = ""
+        line.clearText()
     }
     val busy = state.busy
+
+    // Files for the pane's program: from the keyboard or a pasted clip through the line, from
+    // the picker through ⇪, from a share through the chooser. Each path lands on the line with
+    // a space after it, focused; nothing is sent. A host without an inbox is told about.
+    LaunchedEffect(state.address) { model.probeInbox(state.address) }
+    val takes = model.takesFiles(state.address)
+    val sending = state.sending
+    fun files(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        if (takes == false) model.sendError = "No inbox on ${state.pane?.host ?: state.address.substringBefore('/')}: its agent needs --inbox"
+        else model.sendFiles(state.address, uris)
+    }
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { files(it) }
+    LaunchedEffect(state.landed) {
+        if (state.landed.isEmpty()) return@LaunchedEffect
+        var t = line.text.toString()
+        for (path in state.landed) t = Files.onLine(t, path)
+        state.landed = emptyList()
+        line.setTextAndPlaceCursorAtEnd(t)
+        fieldFocus.request()
+    }
 
     // The microphone: a clip for the hub's transcriber, its words onto the line to be read
     // before send. The recorder reports from its own thread; the main one draws.
@@ -426,7 +453,8 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
             return
         }
         hearing = model.transcribe(state.address, clip.wav()) { heard ->
-            text = if (text.isEmpty()) heard else "$text $heard"
+            val t = line.text.toString()
+            line.setTextAndPlaceCursorAtEnd(if (t.isEmpty()) heard else "$t $heard")
             fieldFocus.request()
         }
     }
@@ -478,7 +506,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
                         if (i == fixed) Text(" │ ", color = p.faint, maxLines = 1)
                         Btn(c.label, {
                             if (c.send) model.type(state.address, c.text, enter = true)
-                            else { text = c.text; fieldFocus.request() }
+                            else { line.setTextAndPlaceCursorAtEnd(c.text); fieldFocus.request() }
                         }, enabled = !busy)
                     }
                 }
@@ -487,13 +515,13 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
     }
     // While the first word is being typed, what the program takes is offered above the line; a
     // tap takes one. Only constants and this client's own sent lines are ever offered.
-    val picks = if (recorder != null || hearing) emptyList() else state.pane?.let { Complete.forPane(it, text, text.length, model.recent) }.orEmpty()
+    val picks = if (recorder != null || hearing || sending != null) emptyList() else state.pane?.let { Complete.forPane(it, text, text.length, model.recent) }.orEmpty()
     if (picks.isNotEmpty()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(" ⇥ ", color = p.faint, maxLines = 1)
             LazyRow(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 items(picks, key = { it }) { c ->
-                    Btn(c, { text = Complete.take(text, text.length, c).first; fieldFocus.request() }, enabled = !busy)
+                    Btn(c, { line.setTextAndPlaceCursorAtEnd(Complete.take(text, text.length, c).first); fieldFocus.request() }, enabled = !busy)
                 }
             }
         }
@@ -514,22 +542,27 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
                 Text("> ", color = p.dim, maxLines = 1)
                 Text("⟳ hearing…", color = p.dim, maxLines = 1, modifier = Modifier.weight(1f).padding(vertical = 4.dp).border(1.dp, p.dim).padding(horizontal = 6.dp, vertical = 6.dp))
             }
+            sending != null -> {
+                Text("> ", color = p.dim, maxLines = 1)
+                Text(sending, color = p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(vertical = 4.dp).border(1.dp, p.dim).padding(horizontal = 6.dp, vertical = 6.dp))
+            }
             else -> {
                 LaunchedEffect(fieldFocus.wanted) { if (fieldFocus.wanted) fieldFocus.give() }
-                Field(
-                    ">", text, { text = Input.typed(it) },
+                Line(
+                    ">", line,
                     Modifier.weight(1f),
                     hint = state.pane?.label ?: "",
                     keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Send),
-                    actions = KeyboardActions(onSend = { send(true) }),
                     focusRequester = fieldFocus.requester,
                     onFocus = onFieldFocus,
                     maxLines = 6,
-                    onEnter = { send(true) },
+                    onSend = { send(true) },
+                    onContent = ::files,
                 )
             }
         }
         Btn("⌨\uFE0E", { board = !board }, selected = board, enabled = writable, modifier = Modifier.testTag("keyboard-open"))
+        if (takes == true) Btn("⇪", { pick.launch(Files.MIMES.toTypedArray()) }, enabled = !busy && sending == null, modifier = Modifier.testTag("files"))
         // Held, it records until the finger lifts; tapped, it records and the next tap stops.
         if (model.transcriber) {
             Btn(
@@ -540,7 +573,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
         }
         when {
             recorder != null -> Btn("cancel", { dropClip() })
-            hearing -> Btn("⏎", {}, enabled = false)
+            hearing || sending != null -> Btn("⏎", {}, enabled = false)
             else -> {
                 Btn("type", { send(false) }, enabled = !busy && text.isNotEmpty())
                 Btn("⏎", { send(true) }, enabled = !busy, modifier = Modifier.testTag("send"))

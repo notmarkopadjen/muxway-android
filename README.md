@@ -55,11 +55,15 @@ Wear OS watch.
 - **Several hubs**, each with its own token in the Android Keystore.
 - **Voice**: hold the microphone, speak, and the words the hub's
   transcriber heard land on the input line to read and send.
+- **Attachments**: paste a screenshot into the line, or pick files with
+  `⇪`, where the host's agent has an inbox; each goes to the host and
+  its path lands on the line for you to finish the sentence and send.
 
 Screens: [connect](docs/features/connect.md),
 [panes](docs/features/panes.md), [pane view](docs/features/pane-view.md),
 [lenses](docs/features/lenses.md),
 [notifications](docs/features/notifications.md),
+[attachments](docs/features/attachments.md),
 [watch](docs/features/watch.md), [admin](docs/features/admin.md),
 [look](docs/features/look.md). How it is built:
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

@@ -12,7 +12,7 @@ focused pane.
 │ $ █                                               │
 └──────────────────────────────────────────────────┘
 [Esc] [Tab][S-Tab][^C][↑][↓][←][→][BS] …   [Enter]
-> ______________________________ [⌨] [◉] [type] [⏎]
+> ______________________________ [⌨] [⇪] [◉] [type] [⏎]
  12:00:01
 ```
 
@@ -170,8 +170,9 @@ it is writable:
   Claude Code takes it as one message and bash as one block it shows
   before `Enter` runs it. Completion of the first word is on the web
   client for now (#12).
-- right of the line, in this order: `⌨` the keyboard, `◉` the
-  microphone (where the hub has a transcriber), **type**, and `⏎`;
+- right of the line, in this order: `⌨` the keyboard, `⇪` files
+  (where the host has an inbox), `◉` the microphone (where the hub has
+  a transcriber), **type**, and `⏎`;
 - **type** sends the text as typed, without `Enter`;
 - **`⏎`** (send), the keyboard's send action, or a hardware `Enter` sends the
   text and then `Enter`;
@@ -202,6 +203,16 @@ it is writable:
   A hub without a transcriber shows no button. Refusals show in the
   status line like a refused send: `Microphone refused`, `No microphone`,
   `Too short`, `One clip every five seconds`, `Transcriber unavailable`;
+- **files**: where the host's agent has an inbox (`GET
+  /v1/panes/{address}/files` is `204`, asked when the pane opens and
+  kept for a minute) a `⇪` button sits right of `⌨`: it opens the
+  system picker, and a file goes to the host's inbox and its path lands
+  on the line with a space after it, focused, unsent. An image the
+  keyboard inserts or a clip with a file pasted into the line goes the
+  same way. While a file goes the line reads `⇪ shot.png · 2.1 KiB…`.
+  Refusals land in the status line, one per file, with the file's name:
+  `not a type the host takes`, `too large, 8 MiB at most`, the hub's
+  code in words. See [attachments.md](attachments.md);
 - **completion**: while the first word on the line is being typed, and
   nothing follows it, a row above the line offers what the program takes
   — Claude Code's slash commands, or a shell's starters and the lines
@@ -261,6 +272,12 @@ the last); `n` keeps it. Elsewhere there is no `×`. See the core's
   nothing else. The transcript is cleaned as typed text is and shown on
   the line before anything is sent, so a hostile transcriber gets words
   on a line you read, nothing more.
+- A file goes to the hub only, with the bearer token, and the hub's
+  checks stand in front of the host's inbox: the write grant and mark,
+  the type sniffed, 8 MiB, one per two seconds. This client sends only
+  a type on the list and a file under the cap, never the file's own
+  name, and types nothing: the path lands on the line for you to send.
+  See [attachments.md](attachments.md).
 - The command row sends what you could type: a fixed string from the
   app's own list, or a line you sent before, and `Enter`. Nothing from
   a pane, a title or the hub reaches the list; a pane dressed as Claude

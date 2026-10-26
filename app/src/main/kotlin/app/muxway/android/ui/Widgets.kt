@@ -22,9 +22,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.content.ReceiveContentListener
+import androidx.compose.foundation.content.TransferableContent
+import androidx.compose.foundation.content.consume
+import androidx.compose.foundation.content.contentReceiver
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.KeyboardActionHandler
+import androidx.compose.foundation.text.input.TextFieldBuffer
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,6 +62,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.ContentResolver
+import android.net.Uri
+import app.muxway.android.protocol.Input
 
 /** `┌─ muxway ─┐ crumb ──── actions`: the header, brand in the pixel font. */
 @Composable
@@ -205,6 +217,82 @@ fun Field(
                     },
             )
         }
+    }
+}
+
+/**
+ * The pane's input line: [Field]'s look on the text field that takes content, so an image the
+ * keyboard inserts, or a file in a pasted clip, reaches [onContent] while text pastes as text.
+ * Enter and the keyboard's action call [onSend]; Shift+Enter starts a new line at the caret.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun Line(
+    label: String,
+    state: TextFieldState,
+    modifier: Modifier = Modifier,
+    hint: String = "",
+    keyboard: KeyboardOptions = KeyboardOptions.Default,
+    focusRequester: FocusRequester,
+    onFocus: (Boolean) -> Unit,
+    maxLines: Int = 6,
+    onSend: () -> Unit,
+    onContent: (List<Uri>) -> Unit,
+) {
+    val p = LocalPalette.current
+    val send by rememberUpdatedState(onSend)
+    val content by rememberUpdatedState(onContent)
+    // Items that are files go to the caller; whatever is left, text, is pasted.
+    val receiver = remember {
+        object : ReceiveContentListener {
+            override fun onReceive(transferableContent: TransferableContent): TransferableContent? {
+                val uris = ArrayList<Uri>()
+                val rest = transferableContent.consume { item ->
+                    val u = item.uri
+                    if (u != null && u.scheme == ContentResolver.SCHEME_CONTENT) { uris.add(u); true } else false
+                }
+                if (uris.isNotEmpty()) content(uris)
+                return rest
+            }
+        }
+    }
+    val action = remember { object : KeyboardActionHandler { override fun onKeyboardAction(performDefaultAction: () -> Unit) { send() } } }
+    Row(modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
+        Text("$label ", color = p.dim, maxLines = 1)
+        Box(Modifier.weight(1f).border(1.dp, p.dim).padding(horizontal = 6.dp, vertical = 6.dp)) {
+            if (state.text.isEmpty()) Text(hint, color = p.faint, maxLines = 1)
+            BasicTextField(
+                state = state,
+                modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).onFocusChanged { onFocus(it.isFocused) }
+                    .contentReceiver(receiver)
+                    .onPreviewKeyEvent { e ->
+                        val enter = e.type == KeyEventType.KeyDown && (e.key == Key.Enter || e.key == Key.NumPadEnter)
+                        when {
+                            !enter -> false
+                            e.isShiftPressed -> {
+                                state.edit { val at = selection.min; replace(selection.min, selection.max, "\n"); placeCursorAfterCharAt(at) }
+                                true
+                            }
+                            else -> { send(); true }
+                        }
+                    },
+                inputTransformation = Typed,
+                textStyle = LocalTextStyle.current.copy(color = p.ink),
+                keyboardOptions = keyboard,
+                onKeyboardAction = action,
+                lineLimits = TextFieldLineLimits.MultiLine(1, maxLines),
+                cursorBrush = SolidColor(p.ink),
+            )
+        }
+    }
+}
+
+/** Control characters never reach the line, whichever way they come in. */
+private object Typed : InputTransformation {
+    override fun TextFieldBuffer.transformInput() {
+        val s = asCharSequence().toString()
+        val clean = Input.typed(s)
+        if (clean != s) replace(0, length, clean)
     }
 }
 

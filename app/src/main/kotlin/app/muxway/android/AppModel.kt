@@ -14,7 +14,10 @@ import app.muxway.android.protocol.Address
 import app.muxway.android.protocol.AdminClient
 import app.muxway.android.protocol.Api
 import app.muxway.android.protocol.ApiException
+import app.muxway.android.files.Attachment
+import app.muxway.android.files.Attachments
 import app.muxway.android.protocol.Commands
+import app.muxway.android.protocol.Files
 import app.muxway.android.protocol.Host
 import app.muxway.android.protocol.HubUrl
 import app.muxway.android.protocol.Input
@@ -65,6 +68,12 @@ class PaneState(val address: String) {
     var fitRetried = false
     var fitted = false
     var fitJob: Job? = null
+
+    /** Files on their way to the host's inbox: the one going, the ones waiting, the paths that landed. */
+    var sending by mutableStateOf<String?>(null)
+    val queued = ArrayDeque<Uri>()
+    var fileJob: Job? = null
+    var landed by mutableStateOf(listOf<String>())
 }
 
 class AppModel(app: Application) : AndroidViewModel(app) {
@@ -124,6 +133,10 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     /** A pane a link asked for, opened once the listing confirms it exists. */
     private var pendingOpen: String? = null
+
+    /** Whether a pane takes files, asked once per pane and kept for a minute, as the browser does. */
+    private val inbox = mutableStateMapOf<String, Boolean>()
+    private val inboxAt = HashMap<String, Long>()
 
     /** The host a new session is being named for, while its dialog shows. */
     var naming by mutableStateOf<String?>(null)
@@ -223,6 +236,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     private fun reset() {
         api = null
         probed = false
+        inbox.clear()
+        inboxAt.clear()
         transcriber = false
         admin = false
         adminLog = emptyList()
@@ -565,7 +580,70 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    /** Swaps two open panes' places. */
+    /** Whether the pane takes files: true after a 204, false after a refusal, null while unasked. */
+    fun takesFiles(address: String): Boolean? = inbox[address]
+
+    /** Asks the hub whether the pane takes files, unless it answered within the minute. */
+    fun probeInbox(address: String) {
+        val now = System.currentTimeMillis()
+        if (now - (inboxAt[address] ?: 0L) < 60_000) return
+        inboxAt[address] = now
+        viewModelScope.launch {
+            try {
+                inbox[address] = withContext(Dispatchers.IO) { api().takesFiles(address) }
+            } catch (e: ApiException) {
+                // No connection: ask again next time.
+                inboxAt.remove(address)
+            }
+        }
+    }
+
+    /**
+     * Files for the pane's program, one after another: read into memory, checked, sent to the
+     * host's inbox, and each path lands in [PaneState.landed] for the line to take. A refusal
+     * goes to [sendError] with the file's name. Nothing is typed into the pane.
+     */
+    fun sendFiles(address: String, uris: List<Uri>) {
+        val v = view(address)
+        v.queued.addAll(uris)
+        if (v.fileJob?.isActive == true) return
+        v.fileJob = viewModelScope.launch {
+            val resolver = getApplication<Application>().contentResolver
+            while (true) {
+                val uri = v.queued.removeFirstOrNull() ?: break
+                val f = withContext(Dispatchers.IO) { Attachments.read(resolver, uri) }
+                if (f !is Attachment.Ready) {
+                    sendError = "${f.name}: ${(f as Attachment.Refused).why}"
+                    continue
+                }
+                v.sending = Files.progress(f.name, f.bytes.size.toLong())
+                sendError = null
+                var tries = 0
+                while (true) {
+                    try {
+                        val sent = withContext(Dispatchers.IO) { api().sendFile(address, f.bytes, f.type) }
+                        v.landed = v.landed + sent.path
+                        break
+                    } catch (e: ApiException) {
+                        // One file every two seconds per principal: the next of a batch waits its turn.
+                        if (e.code == "rate_limited" && tries++ < 3) { delay(2_100); continue }
+                        sendError = "${f.name}: ${fileRefusal(e)}"
+                        if (e.code == "unauthorized") tokenRefused()
+                        break
+                    }
+                }
+                v.sending = null
+            }
+        }
+    }
+
+    private fun fileRefusal(e: ApiException): String = when (e.code) {
+        "too_large" -> "too large, 8 MiB at most"
+        "not_found" -> "no inbox on this host"
+        "rate_limited" -> "one file every two seconds"
+        else -> e.message?.replaceFirstChar { it.lowercase() } ?: e.code
+    }
+
     /** Whether the pane's host lets clients close panes; the pane must be writable as well. */
     fun hostCloses(address: String): Boolean = hosts.any { it.name == address.substringBefore('/') && it.close }
 
