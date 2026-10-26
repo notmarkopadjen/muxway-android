@@ -19,7 +19,8 @@ Every pane the token may read, from `GET /v1/panes`, grouped by host.
 - A pane with a pending notification shows `! <kind>` in the attention
   colour: `question`, `permission`, `idle` or `done`, see the core's
   [notifications](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/notifications.md).
-  A Claude Code pane that is busy shows `⟳ working` (see [lenses](lenses.md)).
+  A pane with a lens, Claude Code's for now, shows `⟳ working` while it
+  is busy (see [lenses](lenses.md)).
 - Hosts from `GET /v1/hosts` that are online with nothing exposed, and
   hosts that are offline, are listed after the panes.
 - **tap** opens one pane. **hold** selects a pane; with a selection, taps

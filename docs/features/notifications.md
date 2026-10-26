@@ -2,8 +2,10 @@
 
 With the **watch and notifications** setting on, the app follows the panes
 while it is closed and tells you when one waits: a question, a permission,
-idle or done, as the core's [notifications](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/notifications.md)
-report them.
+idle or done. The AI coding agent in the pane (Claude Code is the one
+tested) tells the hub through its hooks, as the core's
+[notifications](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/notifications.md)
+describe; the app only shows what the hub reports.
 
 ```
 ┌─ muxway ────────────────────────────┐

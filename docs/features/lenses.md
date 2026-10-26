@@ -1,9 +1,11 @@
 # Lenses
 
-A lens knows one program and tells the rest of the app what its pane is up
-to. The first, and so far only, lens is for Claude Code. It is one object in
-the protocol package, pure Kotlin, unit-tested; nothing else in the app
-knows what it looks for.
+A lens knows one program, an AI coding agent that runs in tmux, and tells
+the rest of the app what its pane is up to. The first, and so far only,
+lens is for Claude Code, the one agent tested; another agent needs a lens
+for its screen and its own hooks on the host calling `muxway notify`. A
+lens is one object in the protocol package, pure Kotlin, unit-tested;
+nothing else in the app knows what it looks for.
 
 ## The Claude Code lens
 
@@ -26,8 +28,8 @@ a pane that was already working says so before the next event arrives.
 The glyph sits before the pane's name in the tab strip, in the pane's
 header with the word (`! permission`, `⟳ working`), and in the pane list.
 The name is the title without the mark, so a tab reads `⟳ build server`
-rather than `✳ build server`. Panes that are not Claude's show
-notifications the same way and never show "working".
+rather than `✳ build server`. Panes without a lens show notifications
+the same way and never show "working".
 
 Tabs and headers are painted with the state: the theme's ink, inverted, while
 the pane waits for you, dim while it works, plain when quiet. Selection

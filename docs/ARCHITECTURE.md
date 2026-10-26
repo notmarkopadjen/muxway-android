@@ -37,9 +37,9 @@ flowchart LR
   defensively; `Input` filters what is typed; `Ansi` keeps colour and
   attribute sequences out of pane content and drops every other escape,
   then turns the text into styled rows; `HubUrl` decides which URLs are
-  acceptable; `Lens` and `Board` say what a pane is up to and rank the
-  panes for a glance. The end-to-end suite runs this layer on the JVM
-  against a real hub.
+  acceptable; `Lens` (one per AI coding agent, Claude Code's so far) and
+  `Board` say what a pane is up to and rank the panes for a glance. The
+  end-to-end suite runs this layer on the JVM against a real hub.
 - **wear** and **watchface** are described in [features/watch.md](features/watch.md).
 - **store** keeps settings in app-private preferences and the token in
   `Vault`: AES-256-GCM with a key generated inside the Keystore.

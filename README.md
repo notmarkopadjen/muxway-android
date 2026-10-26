@@ -41,9 +41,13 @@ Wear OS watch.
   shell's recent lines in a command row. **Fit** sizes the pane on the
   host to the phone; off, pinch to zoom the host's own width.
 - **Notifications** when a pane waits: a question, a permission, idle,
-  done; a tap lands on the pane.
-- **The Claude Code lens** knows Claude's screen: a pane's state, its
-  question, and what to hide on a small display.
+  done, as the AI coding agent in the pane reports them to the hub
+  through its hooks; a tap lands on the pane.
+- **Lenses**: a lens knows one agent's screen. **The Claude Code lens**
+  knows Claude's: a pane's state, its question, and what to hide on a
+  small display. Only Claude Code has been tested so far; another agent
+  needs its own hooks calling `muxway notify` on the host, and a lens for
+  its screen.
 - **The watch**: a watch face and complications that count the waiting
   panes, a tile, and a pane on the wrist with a reply menu, a row of keys
   and the microphone; *phone* opens the same pane on the phone behind the
