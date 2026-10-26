@@ -53,10 +53,10 @@ flowchart TD
     T -- yes --> V[Vault.store id: AES-GCM, Keystore key]
     T -- no, one stored for the hub --> W
     T -- no, none --> E2[Paste a token]
-    V --> W[use: current = id; client, list and watch rebuilt]
+    V --> W["use: current = id; client, list and watch rebuilt"]
     W --> P[Panes]
     L[use on another row] --> W
-    R[× on a row] --> D[Vault.clear id; next hub takes over]
+    R[× on a row] --> D["Vault.clear id; next hub takes over"]
 ```
 
 An install from before the list keeps its one hub under a fixed id, and

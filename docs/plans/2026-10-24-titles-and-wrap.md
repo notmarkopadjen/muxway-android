@@ -1,5 +1,7 @@
 # Feature: pane titles, a wrap toggle and the Claude lens
 
+> Status: approved 2026-10-23, implemented the same day.
+
 > Polish after the second hands-on test.
 
 ## 1. Goal
@@ -35,8 +37,8 @@ one. That is by design; wrap mode is the way out for text that may reflow.
 ```mermaid
 flowchart LR
     C[content] --> W{wrap?}
-    W -- off --> F[cols = pane width; size = min(text, fit) × zoom; pan]
-    W -- on --> R[size = text × zoom; cols = tile / glyph; reflow]
+    W -- off --> F["cols = pane width; size = min(text, fit) × zoom; pan"]
+    W -- on --> R["size = text × zoom; cols = tile / glyph; reflow"]
 ```
 
 - `Lens` (protocol package, pure Kotlin): `isClaude` from command or

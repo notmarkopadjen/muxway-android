@@ -1,5 +1,7 @@
 # Feature: a pane on the watch
 
+> Status: approved 2026-10-24, implemented 2026-10-25, revision 2 the same day.
+
 > The watch shows which panes wait. The owner wants the next step on the
 > wrist: see what the pane says, answer the simple way (a key, a spoken
 > line) and, when that is not enough, continue on the phone. This is the
@@ -158,7 +160,8 @@ sequenceDiagram
     P-->>W: /clip/heard {id, text "yes deploy it"}
     W->>W: show the text: send · type · drop
     W->>P: /pane/text {id, address, text, enter true}
-    P->>H: POST input {"text"}; POST input {"key":"Enter"}
+    P->>H: POST input {"text"}
+    P->>H: POST input {"key":"Enter"}
     P-->>W: /pane/done
 ```
 

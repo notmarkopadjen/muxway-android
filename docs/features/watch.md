@@ -251,14 +251,15 @@ sequenceDiagram
     participant P as Phone
     participant H as Hub
     W->>W: ◉ records, up to 30 s
-    W->>P: ChannelClient /clip/<id>: WAV, then close
+    W->>P: ChannelClient /clip/{id}: WAV, then close
     P->>H: POST /v1/transcribe (audio/wav)
     H-->>P: {"text": "yes deploy it"}
-    P->>P: keep the text under <id>
+    P->>P: keep the text under {id}
     P-->>W: /clip/heard {id, text}
     W->>W: send · type · drop
-    W->>P: /pane/text {id, address, heard <id>, enter true}
-    P->>H: POST input {"text": "yes deploy it"}; POST input {"key": "Enter"}
+    W->>P: /pane/text {id, address, heard {id}, enter true}
+    P->>H: POST input {"text": "yes deploy it"}
+    P->>H: POST input {"key": "Enter"}
     P-->>W: /pane/done
 ```
 

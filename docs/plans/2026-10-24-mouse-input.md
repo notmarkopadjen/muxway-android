@@ -1,5 +1,7 @@
 # Feature: touch is a click (mouse input)
 
+> Status: approved 2026-10-24, implemented the same day; the hub's side landed in the core afterwards.
+
 > The owner wants to tap an option Claude Code shows and have it chosen.
 > Claude Code has mouse reporting on; the protocol has no mouse input.
 > This plan specifies the addition for the core and implements the
@@ -50,8 +52,8 @@ sequenceDiagram
     P->>H: POST .../input {"mouse": {"button": "left", "x": 39, "y": 9}}
     H->>H: write grant? mark? button known? cell within width×height?
     H->>A: input mouse left 39 9
-    A->>A: #{mouse_any_flag} on? else bad_input
-    A->>T: send-keys -l ESC[<0;39;9M ESC[<0;39;9m
+    A->>A: mouse_any_flag on? else bad_input
+    A->>T: send-keys -l: the SGR press and release for cell 39, 9
     A-->>H: ok
     H-->>P: 204
 ```
