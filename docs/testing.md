@@ -79,8 +79,8 @@ default `../muxway`) and runs four suites:
 
 | Suite | Where | What |
 |---|---|---|
-| unit | JVM | `protocol`: `Input`, `HubUrl`, `Json`, `Lens`, `Board` (ranking, hostile JSON), `Api` against a server that misbehaves; `wear`: `Face` (rows, overflow, stale) |
-| end-to-end | JVM | `E2ETest`: the protocol layer against a real hub, agent and tmux, through a recording relay; security tests first, a log search for secrets last |
+| unit | JVM | `protocol`: `Input`, `HubUrl`, `Json`, `Lens`, `Board` (ranking, hostile JSON), `Files` (the inbox's types, cap, multipart body, the path on the line), `Api` against a server that misbehaves; `wear`: `Face` (rows, overflow, stale) |
+| end-to-end | JVM | `E2ETest`: the protocol layer against a real hub, agent and tmux (with `--inbox default` for the file tests), through a recording relay; security tests first, a log search for secrets last |
 | check | JVM | `scripts/validate-face.sh`: the watch face against the Watch Face Format schema with Google's validator (fetched once into `tmp/`) |
 | UI | device | `FlowTest`: connect, list, open, type, back, settings, a screenshot per step |
 

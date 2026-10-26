@@ -5,6 +5,7 @@ import app.muxway.android.protocol.Api
 import app.muxway.android.protocol.ApiException
 import app.muxway.android.protocol.Board
 import app.muxway.android.protocol.Clip
+import app.muxway.android.protocol.Files
 import app.muxway.android.protocol.Keyboard
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.WatchGate
@@ -48,9 +49,9 @@ class E2ETest {
         cleanups.reversed().forEach { runCatching(it) }
     }
 
-    private fun setup(expose: String? = "--write", write: String? = "$HOST/*", revoke: Boolean = false, allowSessions: Boolean = false, sttUrl: String? = null, allowClose: Boolean = false): Pair<Api, String> {
+    private fun setup(expose: String? = "--write", write: String? = "$HOST/*", revoke: Boolean = false, allowSessions: Boolean = false, sttUrl: String? = null, allowClose: Boolean = false, inbox: Boolean = false): Pair<Api, String> {
         val logs = Env.logs(name.methodName)
-        core = Core(logs).start(expose, allowSessions, sttUrl, allowClose)
+        core = Core(logs).start(expose, allowSessions, sttUrl, allowClose, inbox)
         cleanups.add(core::close)
         val tok = core.token(write = write)
         if (revoke) core.revokeAll()
@@ -60,6 +61,14 @@ class E2ETest {
     }
 
     private fun waitPane(contains: String) = waitFor("pane shows $contains") { core.pane().contains(contains) }
+
+    /** A 2×2 PNG, made for the test. */
+    private val png = ("89504e470d0a1a0a0000000d49484452000000020000000208060000007" +
+        "2b60d24000000164944415478" + "9c63f8cfc0f09f81e13f03c37f06001af605fd958bd81d0000000049454e44ae426082").hexBytes()
+
+    private fun String.hexBytes(): ByteArray = ByteArray(length / 2) { substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+
+    private fun inboxFiles(): List<File> = core.inbox.listFiles()?.toList().orEmpty()
 
     /** Null when this hub has mouse input, else the reason to skip: an older hub answers bad_json. */
     private fun mouseUnsupported(api: Api, address: String): Boolean = try {
@@ -526,6 +535,88 @@ class E2ETest {
         api.closePane(made.address)
         waitFor("the pane is gone from the host") { core.tmux("list-panes", "-t", "work", "-F", "#{pane_id}").lines().size == 1 }
         waitFor("and from the listing") { api.panes().size == 1 }
+    }
+
+    @Test
+    fun s14_filesNeedAnInboxAWriteGrantAndAWritablePane() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        // No --inbox: the probe says no, a file is not found, and no inbox directory appears.
+        assertFalse(api.takesFiles(address))
+        val none = assertThrows(ApiException::class.java) { api.sendFile(address, png, "image/png") }
+        assertEquals(404, none.status)
+        assertEquals("not_found", none.code)
+        assertFalse("an inbox without --inbox", core.inbox.exists())
+        core.stop("agent")
+        core.startAgent(inbox = true)
+        assertTrue(api.takesFiles(address))
+        // A read-only token sees no button and is refused.
+        val reader = Api(relay.url, core.token(write = null), "muxway-android-e2e")
+        assertFalse(reader.takesFiles(address))
+        val ro = assertThrows(ApiException::class.java) { reader.sendFile(address, png, "image/png") }
+        assertEquals(403, ro.status)
+        assertEquals("read_only", ro.code)
+        // A pane marked read only is refused even with a write grant.
+        core.tmux("split-window", "-t", "work:0", "-v")
+        core.cli("expose", "--tmux-name", core.tmux, "-t", "work:0.1")
+        waitFor("two panes listed") { api.panes().size == 2 }
+        assertFalse(api.takesFiles("$HOST/work/0.1"))
+        assertEquals("read_only", assertThrows(ApiException::class.java) { api.sendFile("$HOST/work/0.1", png, "image/png") }.code)
+        assertEquals("not_found", assertThrows(ApiException::class.java) { api.sendFile("$HOST/work/7.0", png, "image/png") }.code)
+        assertEquals(0, inboxFiles().size)
+        // The token never travels in the body or the URL of an upload.
+        val up = relay.seen.filter { it.method == "POST" && it.path.endsWith("/files") }
+        assertTrue(up.isNotEmpty())
+        for (r in up) assertTrue(r.headers["content-type"]!!.startsWith("multipart/form-data; boundary="))
+    }
+
+    @Test
+    fun s14b_aFileMustBeWhatItsTypeSaysAndOneGoesEveryTwoSeconds() {
+        val (api, _) = setup(inbox = true)
+        val address = "$HOST/work/0.0"
+        val lie = assertThrows(ApiException::class.java) { api.sendFile(address, "\u007fELF not a picture".toByteArray(), "image/png") }
+        assertEquals(415, lie.status)
+        assertEquals("unsupported", lie.code)
+        assertEquals("Not a type the host takes", lie.message)
+        val control = assertThrows(ApiException::class.java) { api.sendFile(address, "red \u001b[31m text".toByteArray(), "text/plain") }
+        assertEquals("unsupported", control.code)
+        assertEquals(0, inboxFiles().size)
+        // The hub takes one file every two seconds per token; a refused one costs no slot.
+        api.sendFile(address, "one\n".toByteArray(), "text/plain")
+        val fast = assertThrows(ApiException::class.java) { api.sendFile(address, "two\n".toByteArray(), "text/plain") }
+        assertEquals(429, fast.status)
+        assertEquals("rate_limited", fast.code)
+        Thread.sleep(2_100)
+        api.sendFile(address, "three\n".toByteArray(), "text/plain")
+        assertEquals(2, inboxFiles().size)
+        // Over the cap, the client refuses before any request.
+        val before = relay.seen.size
+        assertThrows(IllegalArgumentException::class.java) { api.sendFile(address, ByteArray(Files.MAX_BYTES + 1), "text/plain") }
+        assertThrows(IllegalArgumentException::class.java) { api.sendFile(address, png, "image/svg+xml") }
+        assertEquals(before, relay.seen.size)
+    }
+
+    @Test
+    fun f24_aPngLandsInTheInboxAndItsPathComesBackForTheLine() {
+        val (api, _) = setup(inbox = true)
+        val address = "$HOST/work/0.0"
+        assertTrue(api.takesFiles(address))
+        val sent = api.sendFile(address, png, "image/png")
+        assertEquals(png.size.toLong(), sent.bytes)
+        val f = File(sent.path)
+        assertEquals(core.inbox.canonicalPath, f.parentFile!!.canonicalPath)
+        assertTrue(f.name, Regex("^\\d{8}-\\d{6}-[a-z0-9]{6}\\.png$").matches(f.name))
+        assertTrue(png.contentEquals(f.readBytes()))
+        assertEquals("rw-------", java.nio.file.attribute.PosixFilePermissions.toString(java.nio.file.Files.getPosixFilePermissions(f.toPath())))
+        // What the line shows afterwards: the path after what was typed, a space after it.
+        assertEquals("what is wrong in ${sent.path} ", Files.onLine("what is wrong in", sent.path))
+        // Nothing was typed into the pane.
+        Thread.sleep(300)
+        assertFalse(core.pane().contains("inbox"))
+        Thread.sleep(2_100)
+        val text = api.sendFile(address, "{\"a\": 1}".toByteArray(), "application/json")
+        assertTrue(text.path.endsWith(".json"))
+        assertEquals(2, inboxFiles().size)
     }
 
     @Test

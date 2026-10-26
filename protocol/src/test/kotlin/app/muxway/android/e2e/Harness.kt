@@ -69,7 +69,7 @@ class Core(private val logs: File) {
         return out.trim()
     }
 
-    fun start(expose: String? = "--write", allowSessions: Boolean = false, sttUrl: String? = null, allowClose: Boolean = false): Core {
+    fun start(expose: String? = "--write", allowSessions: Boolean = false, sttUrl: String? = null, allowClose: Boolean = false, inbox: Boolean = false): Core {
         val shell = "env -i PATH=/usr/bin:/bin TERM=xterm LANG=C.UTF-8 PS1='$ ' bash --norc --noprofile"
         tmux("-f", "/dev/null", "new-session", "-d", "-s", "work", "-n", "shell", "-x", "80", "-y", "24", shell)
         // Panes and sessions made later get the same clean shell.
@@ -81,17 +81,18 @@ class Core(private val logs: File) {
         waitFor("hub") { File(hubDir, "admin.sock").exists() }
         val code = cli("hub", "pair-code", "--dir", hubDir.path, "--host", HOST)
         cli("agent", "pair", "--dir", agentDir.path, code)
-        startAgent(allowSessions, allowClose)
+        startAgent(allowSessions, allowClose, inbox)
         val args = arrayListOf("expose", "--tmux-name", tmux, "-t", "work:0.0")
         if (expose != null) args.add(expose)
         cli(*args.toTypedArray())
         return this
     }
 
-    fun startAgent(allowSessions: Boolean = false, allowClose: Boolean = false) {
+    fun startAgent(allowSessions: Boolean = false, allowClose: Boolean = false, inbox: Boolean = false) {
         val args = arrayListOf("agent", "run", "--dir", agentDir.path, "--tmux-name", tmux)
         if (allowSessions) args.add("--allow-sessions")
         if (allowClose) args.add("--allow-close")
+        if (inbox) { args.add("--inbox"); args.add("default") }
         spawn("agent", *args.toTypedArray())
         waitFor("agent online") { cli("hub", "agents", "--dir", hubDir.path).contains("$HOST\tonline") }
     }
@@ -107,6 +108,9 @@ class Core(private val logs: File) {
             if (line.isNotBlank()) cli("hub", "token", "revoke", "--dir", hubDir.path, line.split(Regex("\\s+"))[0])
         }
     }
+
+    /** Where the agent writes files when it runs with `--inbox default`. */
+    val inbox: File get() = File(agentDir, "inbox")
 
     fun paneId(): String = tmux("display-message", "-p", "-t", "work:0.0", "#{pane_id}")
 
