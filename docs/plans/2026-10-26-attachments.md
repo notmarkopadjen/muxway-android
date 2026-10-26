@@ -215,17 +215,23 @@ cannot stand in for.
 
 ## Review (after implementation)
 
-- [x] Diff matches the plan. Deviations: none.
+- [x] Diff matches the plan. Deviations: a refused token also drops the
+      pane's file queue, so the rest of a batch does not fail one by one;
+      the chooser says `takes no files` rather than `no inbox`, since the
+      probe's refusal covers a missing write grant too. Two assertions of
+      older end-to-end tests (`f08`, `f15`) were brought to the core's
+      JSON read of today, which gives rows as the terminal shows them.
 - [x] Security rules (AGENTS.md section 2) hold: the write grant and the
       mark are the hub's; this client sends nothing to a pane by itself,
       opens `content://` only, caps at 8 MiB before the request, logs
-      nothing, adds no dependency.
+      nothing, adds no dependency and no permission.
 - [x] Privacy check: `scripts/prepush-check.sh` clean, diff read.
 - [x] Docs and diagrams updated.
 
 ## Test run
 
-Recorded with `scripts/record-run.sh` from the run directory of the
-final `MUXWAY_UI=0 MUXWAY_CORE=../muxway scripts/e2e.sh`; the issue is
-linked from the commit that made it. Paste, pick and share on a device
-are not in the run (test 11): no device was at hand.
+[Run 20261026-084134-0f89f00](https://github.com/notmarkopadjen/muxway-android/issues/32):
+passed, 173 tests, 0 failed, at `0f89f00`, `MUXWAY_UI=0` (no device at
+hand), core `901efb7`, secrets searched in every log and none found.
+Paste, pick and share on a phone (test 11) are not in the run and wait
+for a device.
