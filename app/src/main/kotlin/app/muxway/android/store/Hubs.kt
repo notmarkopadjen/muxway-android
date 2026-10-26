@@ -1,5 +1,6 @@
 package app.muxway.android.store
 
+import app.muxway.android.BuildConfig
 import app.muxway.android.protocol.HubUrl
 import org.json.JSONArray
 import org.json.JSONException
@@ -37,7 +38,7 @@ object Hubs {
             val o = arr.optJSONObject(i) ?: continue
             val id = o.optString("id")
             val name = o.optString("name")
-            val url = HubUrl.check(o.optString("url")).first ?: continue
+            val url = HubUrl.check(o.optString("url"), BuildConfig.DEBUG).first ?: continue
             if (!ID.matches(id) || !NAME.matches(name)) continue
             if (out.any { it.id == id || it.url == url }) continue
             if (out.size < MAX) out.add(Hub(id, name, url))

@@ -20,9 +20,18 @@ class HubUrlTest {
     fun plainHttpOnlyToLoopback() {
         assertEquals("http://127.0.0.1:7600", ok("http://127.0.0.1:7600"))
         assertEquals("http://localhost:7600", ok("http://localhost:7600"))
-        assertEquals("http://10.0.2.2:7600", ok("http://10.0.2.2:7600"))
         assertNotNull(bad("http://hub.example.com"))
         assertNotNull(bad("http://192.0.2.10:7600"))
+    }
+
+    @Test
+    fun theEmulatorHostIsPlainHttpOnlyWhenAsked() {
+        assertNotNull(bad("http://10.0.2.2:7600"))
+        val (url, why) = HubUrl.check("http://10.0.2.2:7600", emulator = true)
+        assertNull(why)
+        assertEquals("http://10.0.2.2:7600", url)
+        assertNotNull(HubUrl.check("http://192.0.2.10:7600", emulator = true).second)
+        assertEquals("https://hub.example.com", HubUrl.check("hub.example.com", emulator = true).first)
     }
 
     @Test

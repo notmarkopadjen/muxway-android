@@ -126,10 +126,10 @@ sequenceDiagram
 ## URL rules
 
 - `https` is required.
-- `http` is accepted only for `localhost`, `127.0.0.1`, `::1` and
-  `10.0.2.2` (the emulator's route to its host). A hub without TLS on a
-  development machine is reached with `adb reverse tcp:7600 tcp:7600` and
-  `http://127.0.0.1:7600`.
+- `http` is accepted only for `localhost`, `127.0.0.1` and `::1`. A
+  debug build also takes `10.0.2.2` (the emulator's route to its host);
+  a release build does not. A hub without TLS on a development machine is
+  reached with `adb reverse tcp:7600 tcp:7600` and `http://127.0.0.1:7600`.
 - No user name, query or fragment in the URL.
 
 ## Security considerations

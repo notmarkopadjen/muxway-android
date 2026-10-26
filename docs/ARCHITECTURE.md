@@ -136,8 +136,10 @@ See [features/watch.md](features/watch.md) and [features/notifications.md](featu
 - `Authorization: Bearer` on every request, never a URL parameter. No
   request, token or pane content is logged.
 - HTTPS with the system trust store. The network security configuration
-  allows cleartext only to `localhost`, `127.0.0.1` and `10.0.2.2`, and
-  `HubUrl` refuses anything else before it is saved.
+  allows cleartext only to `localhost` and `127.0.0.1`, and `HubUrl`
+  refuses anything else before it is saved. A debug build alone also
+  admits `10.0.2.2`, the emulator's route to the host it runs on, in both
+  places.
 - Bodies are read up to 2 MiB; JSON that does not fit the protocol is "The
   hub's answer made no sense", not a crash. Control characters and escape
   sequences are removed from everything shown; pane content keeps only

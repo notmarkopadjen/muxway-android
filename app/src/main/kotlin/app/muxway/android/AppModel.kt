@@ -169,7 +169,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
      * stored; a name left empty comes from the host. Returns a message when something is wrong.
      */
     fun saveHub(id: String?, name: String, url: String, newToken: String): String? {
-        val (u, why) = HubUrl.check(url)
+        val (u, why) = HubUrl.check(url, BuildConfig.DEBUG)
         if (u == null) return why
         val others = settings.hubs.filter { it.id != id }
         val n = name.trim().ifEmpty { Hubs.defaultName(u, others) }
@@ -242,7 +242,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
      */
     fun connectWithCode(text: String): String? {
         val code = Setup.parse(text) ?: return "That is not a muxway code"
-        val (u, why) = HubUrl.check(code.hub)
+        val (u, why) = HubUrl.check(code.hub, BuildConfig.DEBUG)
         if (u == null) return why
         val have = settings.hubs.firstOrNull { it.url == u }
         if (have != null && vault.hasToken(have.id)) {

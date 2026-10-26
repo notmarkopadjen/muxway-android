@@ -4,10 +4,12 @@ import java.net.URI
 
 /** The hub's base URL as the user typed it, checked and normalised. */
 object HubUrl {
-    private val loopback = setOf("localhost", "127.0.0.1", "::1", "[::1]", "10.0.2.2")
+    private val loopback = setOf("localhost", "127.0.0.1", "::1", "[::1]")
+    /** The emulator's route to its host; a debug build may reach a test hub there in the clear. */
+    const val EMULATOR_HOST = "10.0.2.2"
 
-    /** Returns the normalised URL or null with a reason. */
-    fun check(raw: String): Pair<String?, String?> {
+    /** Returns the normalised URL or null with a reason. [emulator] admits plain HTTP to [EMULATOR_HOST]. */
+    fun check(raw: String, emulator: Boolean = false): Pair<String?, String?> {
         var s = raw.trim()
         if (s.isEmpty()) return null to "Hub URL is empty"
         if (!s.contains("://")) s = "https://$s"
@@ -21,7 +23,10 @@ object HubUrl {
         if (uri.rawQuery != null || uri.rawFragment != null) return null to "No query in the URL"
         when (uri.scheme?.lowercase()) {
             "https" -> {}
-            "http" -> if (host.lowercase() !in loopback) return null to "Plain HTTP only to localhost"
+            "http" -> {
+                val h = host.lowercase()
+                if (h !in loopback && !(emulator && h == EMULATOR_HOST)) return null to "Plain HTTP only to localhost"
+            }
             else -> return null to "Only https"
         }
         val port = if (uri.port > 0) ":${uri.port}" else ""
