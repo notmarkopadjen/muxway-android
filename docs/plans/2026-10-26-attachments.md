@@ -114,7 +114,7 @@ sequenceDiagram
 stateDiagram-v2
     [*] --> Idle
     Idle --> Reading: a URI queued
-    Reading --> Refused: not content://, type off the list, over 8 MiB, unreadable
+    Reading --> Refused: not a content URI, type off the list, over 8 MiB, unreadable
     Refused --> Idle: status line, next URI
     Reading --> Sending: bytes in memory
     Sending --> Landed: 201 path

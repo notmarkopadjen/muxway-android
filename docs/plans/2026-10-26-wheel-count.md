@@ -81,7 +81,7 @@ sequenceDiagram
     M->>H: POST input {... "wheeldown", "count": 3}
     H-->>M: 400 bad_input
     M->>H: POST input {... "wheeldown"} (no count)
-    H-->>M: 204 — so the hub is old, not the pane; remembered
+    H-->>M: 204 — so the hub is old, not the pane, remembered
     M->>H: POST input {... "wheeldown"} ×2
     H-->>M: 204, 204
 ```
