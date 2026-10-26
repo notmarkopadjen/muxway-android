@@ -640,10 +640,9 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             val resolver = getApplication<Application>().contentResolver
             while (true) {
                 val uri = v.queued.removeFirstOrNull() ?: break
-                val f = withContext(Dispatchers.IO) { Attachments.read(resolver, uri) }
-                if (f !is Attachment.Ready) {
-                    sendError = "${f.name}: ${(f as Attachment.Refused).why}"
-                    continue
+                val f = when (val a = withContext(Dispatchers.IO) { Attachments.read(resolver, uri) }) {
+                    is Attachment.Refused -> { sendError = "${a.name}: ${a.why}"; continue }
+                    is Attachment.Ready -> a
                 }
                 v.sending = Files.progress(f.name, f.bytes.size.toLong())
                 sendError = null
@@ -657,7 +656,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                         // One file every two seconds per principal: the next of a batch waits its turn.
                         if (e.code == "rate_limited" && tries++ < 3) { delay(2_100); continue }
                         sendError = "${f.name}: ${fileRefusal(e)}"
-                        if (e.code == "unauthorized") tokenRefused()
+                        if (e.code == "unauthorized") { v.queued.clear(); tokenRefused() }
                         break
                     }
                 }

@@ -194,8 +194,10 @@ class E2ETest {
     fun f08_readAPaneThenTypeAndSendEnter() {
         val (api, _) = setup()
         val address = "$HOST/work/0.0"
+        waitFor("the prompt") { core.pane().contains("$") }
         val r = api.read(address, 20, null)!!
-        assertTrue(r.content, r.content.contains("$ "))
+        // Rows come as the terminal shows them: the prompt's trailing blank is not among them.
+        assertTrue(r.content, r.content.lines().any { it.trimEnd() == "$" })
         assertTrue(r.etag.startsWith("\""))
         api.type(address, "echo hi there")
         api.key(address, "Enter")
@@ -314,9 +316,11 @@ class E2ETest {
         api.type(address, "echo " + "x".repeat(50))
         api.key(address, "Enter")
         waitPane("xxxxx")
-        // The hub joins wrapped lines, so the listing is what says the pane is 40 wide now.
         assertEquals(40, api.panes().single().width)
-        assertTrue(api.read(address, 20, null)!!.content.contains("x".repeat(50)))
+        // A line the terminal wrapped at 40 columns stays on its rows in JSON.
+        val rows = api.read(address, 20, null)!!.content.lines().map { it.trimEnd() }
+        assertTrue(rows.toString(), rows.contains("x".repeat(40)) && rows.contains("x".repeat(10)))
+        assertFalse(rows.any { it.length > 40 })
         api.release(address)
         waitFor("tmux is back to its own size") { core.width() == before.width }
     }

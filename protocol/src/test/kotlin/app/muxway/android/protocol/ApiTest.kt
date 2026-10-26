@@ -240,8 +240,9 @@ class ApiTest {
         assertFalse(api().takesFiles("h/w/0.0"))
         answer = { json(200, """{}""") }
         assertFalse(api().takesFiles("h/w/0.0"))
-        server.close()
-        assertEquals("offline", assertThrows(ApiException::class.java) { api().takesFiles("h/w/0.0") }.code)
+        // No connection is not a no: the probe is asked again later.
+        val dead = Api("http://127.0.0.1:1", token, "test")
+        assertEquals("offline", assertThrows(ApiException::class.java) { dead.takesFiles("h/w/0.0") }.code)
     }
 
     @Test
