@@ -116,3 +116,5 @@ See [docs/testing.md](docs/testing.md).
 
 Contributors and AI agents: read [AGENTS.md](AGENTS.md) first.
 Security issues: see [SECURITY.md](SECURITY.md).
+
+[Apache License 2.0](LICENSE), like the rest of muxway.
