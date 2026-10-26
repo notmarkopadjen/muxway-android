@@ -123,11 +123,35 @@ sequenceDiagram
     W->>S: /pane/read, /pane/key, /pane/text, a clip (WatchRequests → WatchGate)
     S->>H: GET the pane, POST input, POST transcribe
     S-->>W: /pane/tail, /pane/done, /clip/heard
-    W->>A: muxway://open?pane=<address> (through the Wear companion)
+    W->>A: muxway://open?pane=address (through the Wear companion)
     A->>A: openLink: grammar, listed? then View
 ```
 
 See [features/watch.md](features/watch.md) and [features/notifications.md](features/notifications.md).
+
+## Protocol features used
+
+Everything the app asks of a hub, as `protocol/.../Api.kt` sends it. The
+core's `docs/protocol/v1.md` is the specification; this table is the
+client's side of it.
+
+| Feature | Request | Used by |
+|---|---|---|
+| hosts and panes | `GET /v1/hosts`, `GET /v1/panes`; a host's `sessions`, `close` and `keys` flags decide what the UI offers | pane list, watch service |
+| reading a pane | `GET /v1/panes/{address}?lines=N&ansi=1` with `If-None-Match`; `304` when unchanged; colour kept, every other escape dropped | pane view, the watch's tail |
+| typing | `POST /v1/panes/{address}/input` with `{"text"}` (control characters removed, 4096 bytes at most) | input bar, watch |
+| keys | the same with `{"key"}`; the grammar (`C-`, `M-`, `S-` on any key, chords) where the host says `keys: 2`, the old names elsewhere | key row, keyboard, hardware keyboard, watch |
+| mouse | the same with `{"mouse": {button, x, y}}`, only when the pane reports the mouse on | taps, wheel notches |
+| fit | `POST /v1/panes/{address}/resize` with `{cols, rows}`, `scope: window` and `zoom` for a pane alone, `{"fit": "auto"}` to give it back | tiles |
+| split, new session, close | `POST /v1/windows/{host}/{session}/{window}/panes`, `POST /v1/hosts/{host}/sessions`, `POST /v1/panes/{address}/close`, where the host allows them | pane view, pane list |
+| events | `GET /v1/events?after=cursor&wait=30&limit=50`, a long poll | pane list, watch service, the lens |
+| transcription | `GET /v1/transcribe` (`204` or `404`) to know there is one, `POST /v1/transcribe` with `audio/wav` | microphone button, the watch's clip |
+| admin | `GET /v1/me` for the grant, `GET /v1/admin/log?limit=200`, `GET /v1/admin/overview`, `DELETE /v1/admin/sessions/{id}` | the admin section of Settings |
+
+Not used: `/v1/auth/*` (the token is pasted or scanned, never exchanged
+for a cookie), `/v1/panes/{address}/files`, `/v1/hosts/{host}/tree`,
+`GET /v1/windows/...`, and the admin calls that mint or revoke tokens and
+users.
 
 ## Security
 
