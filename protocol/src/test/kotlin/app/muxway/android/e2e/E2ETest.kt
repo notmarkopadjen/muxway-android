@@ -2,6 +2,8 @@ package app.muxway.android.e2e
 
 import app.muxway.android.protocol.Ansi
 import app.muxway.android.protocol.Api
+import app.muxway.android.protocol.Wheel
+import app.muxway.android.protocol.WheelQueue
 import app.muxway.android.protocol.ApiException
 import app.muxway.android.protocol.Board
 import app.muxway.android.protocol.Clip
@@ -78,6 +80,24 @@ class E2ETest {
         e.code == "bad_json"
     }
 
+    /** A raw input body with the bearer token, as a hostile or odd client would send it; the status. */
+    private fun post(tok: String, address: String, body: String): Int {
+        val c = java.net.URL("${core.url}/v1/panes/$address/input").openConnection() as java.net.HttpURLConnection
+        c.requestMethod = "POST"
+        c.doOutput = true
+        c.setRequestProperty("Authorization", "Bearer $tok")
+        c.setRequestProperty("Content-Type", "application/json")
+        c.outputStream.use { it.write(body.toByteArray()) }
+        return c.responseCode
+    }
+
+    /** Runs `cat -v` with mouse reporting on, so every mouse byte shows as text. */
+    private fun catWithMouse(api: Api, address: String) {
+        api.type(address, "printf '\\033[?1000h\\033[?1006h'; cat -v")
+        api.key(address, "Enter")
+        waitFor("cat running") { core.command() == "cat" }
+    }
+
     // --- security ---
 
     @Test
@@ -144,6 +164,25 @@ class E2ETest {
         assertFalse(core.pane().contains("[<"))
         val ro = Api(relay.url, core.token(write = null), "muxway-android-e2e")
         assertEquals("read_only", assertThrows(ApiException::class.java) { ro.mouse(address, "left", 2, 2) }.code)
+    }
+
+    @Test
+    fun s04d_aWheelCountIsCappedAndGoesWithTheWheelOnly() {
+        val (api, tok) = setup()
+        val address = "$HOST/work/0.0"
+        assumeTrue("hub without mouse input", !mouseUnsupported(api, address))
+        catWithMouse(api, address)
+        assumeTrue("hub without wheel count", post(tok, address, """{"mouse":{"button":"wheeldown","x":1,"y":1,"count":2}}""") == 204)
+        waitPane("^[[<65;1;1M^[[<65;1;1M")
+        assertEquals(400, post(tok, address, """{"mouse":{"button":"left","x":1,"y":1,"count":2}}"""))
+        assertEquals(400, post(tok, address, """{"mouse":{"button":"wheeldown","x":1,"y":1,"count":51}}"""))
+        assertEquals(400, post(tok, address, """{"mouse":{"button":"wheelup","x":1,"y":1,"count":-1}}"""))
+        assertEquals(400, post(tok, address, """{"mouse":{"button":"wheelup","x":1,"y":1,"count":"9"}}"""))
+        assertEquals(2, Regex("\\^\\[\\[<").findAll(core.pane()).count())
+        assertThrows(IllegalArgumentException::class.java) { api.mouse(address, "wheelup", 1, 1, 51) }
+        assertThrows(IllegalArgumentException::class.java) { api.mouse(address, "left", 1, 1, 2) }
+        api.key(address, "C-c")
+        waitFor("shell back") { core.command() == "bash" }
     }
 
     @Test
@@ -330,12 +369,32 @@ class E2ETest {
         val (api, _) = setup()
         val address = "$HOST/work/0.0"
         assumeTrue("hub without mouse input", !mouseUnsupported(api, address))
-        api.type(address, "printf '\\033[?1000h\\033[?1006h'; cat -v")
-        api.key(address, "Enter")
-        waitFor("cat running") { core.command() == "cat" }
+        catWithMouse(api, address)
         api.mouse(address, "left", 5, 3)
         waitPane("^[[<0;5;3M")
         waitPane("^[[<0;5;3m")
+        api.key(address, "C-c")
+        waitFor("shell back") { core.command() == "bash" }
+    }
+
+    @Test
+    fun f16b_aCountedWheelTurnsThatManyNotches() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        assumeTrue("hub without mouse input", !mouseUnsupported(api, address))
+        catWithMouse(api, address)
+        try {
+            api.mouse(address, "wheeldown", 5, 3, 3)
+        } catch (e: ApiException) {
+            assumeTrue("hub without wheel count", e.code != "bad_input")
+            throw e
+        }
+        waitPane("^[[<65;5;3M^[[<65;5;3M^[[<65;5;3M")
+        // The queue's shape, delivered: an older hub is not in the test environment, so the counted path.
+        val q = WheelQueue()
+        q.add(true, 6, 2, 2)
+        assertTrue(Wheel.deliver(api, address, q.next()!!, counted = true))
+        waitPane("^[[<64;6;2M^[[<64;6;2M")
         api.key(address, "C-c")
         waitFor("shell back") { core.command() == "bash" }
     }
