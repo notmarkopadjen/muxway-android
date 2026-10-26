@@ -132,7 +132,15 @@ flowchart LR
   notch per row of movement when the program has the mouse (the hub's
   mouse addition and the listing's `mouse` flag), else a `PageUp` or
   `PageDown` per third of the tile's height; one request at a time.
-  Claude Code scrolls its transcript on both. The list underneath takes no drags then, and never
+  Claude Code scrolls its transcript on both. The notches of a drag go
+  counted (`docs/plans/2026-10-26-wheel-count.md`): the rows since the
+  last request gather behind the one in flight and go as the next
+  request with their `count`, at the cell the finger was last at, 50 a
+  request at most and a few requests pending, the other direction
+  starting a fresh one, so a long drag is a few requests and the
+  program keeps up with the hand. A hub from before the count refuses
+  it once; the notches then go one by one for the rest of the session.
+  The list underneath takes no drags then, and never
   the system's stretch effect, so the drag reaches the pager and a
   sideways swipe reaches the page.
 

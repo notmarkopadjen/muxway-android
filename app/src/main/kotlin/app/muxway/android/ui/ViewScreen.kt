@@ -698,9 +698,9 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
             val body = Modifier.fillMaxHeight().then(if (sideways) Modifier.width(with(density) { (cols * colPx).toDp() } + 4.dp) else Modifier.fillMaxWidth())
             // A full-screen program (alternate screen) leaves nothing to scroll locally, so a
             // vertical drag scrolls it instead: a wheel notch per row when the program has the
-            // mouse, else a third of the tile per PageUp or PageDown. The list then takes no drags
-            // at all, and never its stretch effect, so the gesture reaches us and sideways swipes
-            // reach the page.
+            // mouse, the rows since the last request counted into one, else a third of the tile
+            // per PageUp or PageDown. The list then takes no drags at all, and never its stretch
+            // effect, so the gesture reaches us and sideways swipes reach the page.
             val scrolls = rows.size > visibleRows
             val paging = !scrolls && pane?.writable == true
             val wheel = pane?.mouse == true
@@ -727,20 +727,24 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
                 .pointerInput(address, page, paging, wheel) {
                     if (!paging) return@pointerInput
                     var acc = 0f
-                    var cx = 1
-                    var cy = 1
-                    detectVerticalDragGestures(onDragStart = { at ->
-                        acc = 0f
-                        cx = ((at.x / colPx).toInt() + 1).coerceIn(1, (pane?.width ?: 1).coerceAtLeast(1))
-                        cy = (((at.y - top) / rowPx).toInt() + 1).coerceIn(1, (pane?.height ?: 1).coerceAtLeast(1))
-                    }) { change, dy ->
+                    detectVerticalDragGestures(onDragStart = { acc = 0f }) { change, dy ->
                         change.consume()
-                        acc = (acc + dy).coerceIn(-3 * page, 3 * page)
-                        val up = acc >= page
-                        val down = acc <= -page
-                        if (up || down) {
-                            val sent = if (wheel) model.wheel(address, up, cx, cy) else model.key(address, if (up) "PageUp" else "PageDown")
-                            if (sent) acc += if (up) -page else page
+                        acc += dy
+                        if (wheel) {
+                            // Whole rows go now, at the cell under the finger; the rest waits.
+                            val notches = (acc / page).toInt()
+                            if (notches != 0) {
+                                val at = change.position
+                                val cx = ((at.x / colPx).toInt() + 1).coerceIn(1, (pane?.width ?: 1).coerceAtLeast(1))
+                                val cy = (((at.y - top) / rowPx).toInt() + 1).coerceIn(1, (pane?.height ?: 1).coerceAtLeast(1))
+                                model.wheel(address, notches > 0, cx, cy, abs(notches))
+                                acc -= notches * page
+                            }
+                        } else {
+                            acc = acc.coerceIn(-3 * page, 3 * page)
+                            val up = acc >= page
+                            val down = acc <= -page
+                            if ((up || down) && model.key(address, if (up) "PageUp" else "PageDown")) acc += if (up) -page else page
                         }
                     }
                 }) {

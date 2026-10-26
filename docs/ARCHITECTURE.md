@@ -149,7 +149,7 @@ client's side of it.
 | reading a pane | `GET /v1/panes/{address}?lines=N&ansi=1` with `If-None-Match`; `304` when unchanged; colour kept, every other escape dropped | pane view, the watch's tail |
 | typing | `POST /v1/panes/{address}/input` with `{"text"}` (control characters removed, 4096 bytes at most) | input bar, watch |
 | keys | the same with `{"key"}`; the grammar (`C-`, `M-`, `S-` on any key, chords) where the host says `keys: 2`, the old names elsewhere | key row, keyboard, hardware keyboard, watch |
-| mouse | the same with `{"mouse": {button, x, y}}`, only when the pane reports the mouse on | taps, wheel notches |
+| mouse | the same with `{"mouse": {button, x, y}}`, only when the pane reports the mouse on; `count` (2 to 50, wheel buttons only) turns the wheel that many notches in one request, left out where the hub answered `bad_input` to it | taps, the notches of a drag |
 | fit | `POST /v1/panes/{address}/resize` with `{cols, rows}`, `scope: window` and `zoom` for a pane alone, `{"fit": "auto"}` to give it back | tiles |
 | split, new session, close | `POST /v1/windows/{host}/{session}/{window}/panes`, `POST /v1/hosts/{host}/sessions`, `POST /v1/panes/{address}/close`, where the host allows them | pane view, pane list |
 | events | `GET /v1/events?after=cursor&wait=30&limit=50`, a long poll | pane list, watch service, the lens |

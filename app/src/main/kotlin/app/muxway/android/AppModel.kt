@@ -25,6 +25,8 @@ import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.LogLine
 import app.muxway.android.protocol.Pane
 import app.muxway.android.protocol.Setup
+import app.muxway.android.protocol.Wheel
+import app.muxway.android.protocol.WheelQueue
 import app.muxway.android.store.Hub
 import app.muxway.android.store.Hubs
 import app.muxway.android.store.Settings
@@ -75,6 +77,11 @@ class PaneState(val address: String) {
     val queued = ArrayDeque<Uri>()
     var fileJob: Job? = null
     var landed by mutableStateOf(listOf<String>())
+
+    /** Wheel notches behind the request in flight, the pump draining them, the read it started. */
+    val wheel = WheelQueue()
+    var wheelJob: Job? = null
+    var wheelRead: Job? = null
 }
 
 class AppModel(app: Application) : AndroidViewModel(app) {
@@ -87,6 +94,9 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     var hasToken by mutableStateOf(vault.hasToken(settings.current))
         private set
     private var api: Api? = null
+
+    /** Whether the hub takes a wheel count; a hub from before the field says no once, then it is sent one notch at a time. */
+    private var wheelCounts = true
 
     var screen by mutableStateOf<Screen>(if (ready()) Screen.Panes else Screen.Connect)
         private set
@@ -265,6 +275,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     private fun reset() {
         api = null
         probed = false
+        wheelCounts = true
         inbox.clear()
         inboxAt.clear()
         transcriber = false
@@ -559,22 +570,66 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     /** A tap on the pane: a left click at the cell, when the pane's program has the mouse. */
     fun click(address: String, x: Int, y: Int) = mouse(address, "left", x, y)
 
-    /** One wheel notch at the cell; the smooth way to scroll a program that has the mouse. */
-    fun wheel(address: String, up: Boolean, x: Int, y: Int) = mouse(address, if (up) "wheelup" else "wheeldown", x, y)
+    /**
+     * Wheel notches at the cell, the smooth way to scroll a program that has the mouse. They
+     * queue behind the request in flight and go as one counted request each, so a long drag
+     * is a few requests and the program keeps up with the hand.
+     */
+    fun wheel(address: String, up: Boolean, x: Int, y: Int, count: Int = 1) {
+        val v = view(address)
+        if (v.pane?.mouse == false) {
+            sendError = ApiException.messageFor(400, "no_mouse_pane")
+            return
+        }
+        v.wheel.add(up, x, y, count)
+        if (v.wheelJob?.isActive == true) return
+        v.wheelJob = viewModelScope.launch { pumpWheel(v) }
+    }
+
+    private suspend fun pumpWheel(v: PaneState) {
+        // A key may be on its way; the notches wait for it.
+        while (v.busy) delay(25)
+        v.busy = true
+        v.ownAt = System.currentTimeMillis() / 1000
+        sendError = null
+        try {
+            do {
+                while (true) {
+                    val n = v.wheel.next() ?: break
+                    wheelCounts = withContext(Dispatchers.IO) { Wheel.deliver(api(), v.address, n, wheelCounts) }
+                    v.etag = null
+                    // The screen follows without holding the next request up.
+                    if (v.wheelRead?.isActive != true) v.wheelRead = viewModelScope.launch { pollOnce(v.address) }
+                }
+                v.wheelRead?.join()
+                pollOnce(v.address)
+            } while (v.wheel.size > 0)
+        } catch (e: ApiException) {
+            v.wheel.clear()
+            sendError = mouseError(e)
+            if (e.code == "unauthorized") tokenRefused()
+        } finally {
+            v.busy = false
+        }
+    }
 
     private fun mouse(address: String, button: String, x: Int, y: Int) = send(address) {
         if (view(address).pane?.mouse == false) throw ApiException(400, "no_mouse_pane")
         try {
             it.mouse(address, button, x, y)
         } catch (e: ApiException) {
-            // An older hub refuses the field; a pane without mouse mode refuses the input.
-            throw when (e.code) {
-                "bad_json" -> ApiException(e.status, "no_mouse_hub")
-                "bad_input" -> ApiException(e.status, "no_mouse_pane")
-                else -> e
-            }
+            throw ApiException(e.status, mouseCode(e))
         }
     }
+
+    // An older hub refuses the field; a pane without mouse mode refuses the input.
+    private fun mouseCode(e: ApiException) = when (e.code) {
+        "bad_json" -> "no_mouse_hub"
+        "bad_input" -> "no_mouse_pane"
+        else -> e.code
+    }
+
+    private fun mouseError(e: ApiException) = ApiException.messageFor(e.status, mouseCode(e))
 
     /** False when the pane is still busy with the previous send. */
     fun key(address: String, name: String) = send(address) { it.key(address, name) }
@@ -740,6 +795,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     private fun tokenRefused() {
         api = null
         probed = false
+        wheelCounts = true
         transcriber = false
         admin = false
         adminLog = emptyList()
