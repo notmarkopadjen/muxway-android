@@ -139,6 +139,19 @@ class ApiTest {
     }
 
     @Test
+    fun anEtagTheHubCannotHaveMeantIsDropped() {
+        val pane = """{"pane":{"address":"h/w/0.0","mode":"read"},"content":"x"}"""
+        answer = { Response(200, pane.toByteArray(), mapOf("Content-Type" to "application/json", "ETag" to "\"ok\"")) }
+        assertEquals("\"ok\"", api().read("h/w/0.0", 50, null)!!.etag)
+        answer = { Response(200, pane.toByteArray(), mapOf("Content-Type" to "application/json", "ETag" to "\"caf\u00e9\u007f\"")) }
+        assertEquals("", api().read("h/w/0.0", 50, null)!!.etag)
+        answer = { Response(200, pane.toByteArray(), mapOf("Content-Type" to "application/json", "ETag" to "\"" + "e".repeat(300) + "\"")) }
+        assertEquals("", api().read("h/w/0.0", 50, null)!!.etag)
+        // One that slipped through anyway is a bad answer, not a crash.
+        assertEquals("bad_answer", assertThrows(ApiException::class.java) { api().read("h/w/0.0", 50, "\"a\nb\"") }.code)
+    }
+
+    @Test
     fun inputIsFilteredBeforeItLeaves() {
         answer = { Response(204) }
         api().type("h/w/0.0", "echo\u0000 hi\r\n")

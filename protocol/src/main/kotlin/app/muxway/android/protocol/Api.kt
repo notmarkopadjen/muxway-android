@@ -12,6 +12,7 @@ import java.net.URL
 class Api(private val baseUrl: String, private val token: String, private val userAgent: String) {
     companion object {
         const val MAX_BODY = 2 * 1024 * 1024
+        const val MAX_ETAG = 256
         private const val CONNECT_TIMEOUT = 10_000
         private const val READ_TIMEOUT = 40_000
         /** The hub gives the transcriber ninety seconds. */
@@ -138,7 +139,7 @@ class Api(private val baseUrl: String, private val token: String, private val us
             c.setRequestProperty("Authorization", "Bearer $token")
             c.setRequestProperty("Accept", "application/json")
             c.setRequestProperty("User-Agent", userAgent)
-            if (etag != null) c.setRequestProperty("If-None-Match", etag)
+            if (!etag.isNullOrEmpty()) c.setRequestProperty("If-None-Match", etag)
             if (body != null) {
                 c.doOutput = true
                 c.setRequestProperty("Content-Type", contentType)
@@ -149,14 +150,23 @@ class Api(private val baseUrl: String, private val token: String, private val us
             val stream = if (status >= 400) c.errorStream else c.inputStream
             val body = if (status == 204 || status == 304 || stream == null) "" else readCapped(stream)
             if (status == 200 || status == 201 || status == 204 || status == 304) {
-                return Response(status, body, c.getHeaderField("ETag") ?: "")
+                return Response(status, body, etagOf(c.getHeaderField("ETag")))
             }
             throw ApiException(status, Json.error(body))
         } catch (e: IOException) {
             throw ApiException(0, "offline")
+        } catch (e: IllegalArgumentException) {
+            throw ApiException(0, "bad_answer")
         } finally {
             c.disconnect()
         }
+    }
+
+    /** An ETag goes back to the hub as a header, so only printable ASCII of a sane length is kept. */
+    private fun etagOf(raw: String?): String {
+        val t = raw ?: return ""
+        if (t.length > MAX_ETAG || t.any { it < ' ' || it > '~' }) return ""
+        return t
     }
 
     /** Reads at most MAX_BODY bytes; whatever follows is dropped unread. */
