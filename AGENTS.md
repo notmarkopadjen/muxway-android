@@ -113,11 +113,14 @@ limits; and that no secret appears in any response or log.
 
 - End-to-end tests run the real binaries against a throwaway tmux server and
   a test hub, never against a real machine.
-- Browser and UI tests use Playwright and plain `.html` fixture pages where
-  a page is needed, so a test can be opened and replayed by hand.
-- Every run writes a run directory: a summary, the full log of every
-  component, and for UI tests a screenshot (and a trace) at each step and on
-  failure.
+- UI tests are instrumented tests (`FlowTest`) on an emulator or a phone,
+  run by `scripts/ui-tests.sh` against a throwaway hub reached through
+  `adb reverse`; `scripts/e2e.sh` runs them when `adb` sees a device and
+  skips them with `MUXWAY_UI=0`.
+- Every run writes a run directory: `summary.md`, `results.xml`, the hub,
+  agent and relay log of every end-to-end test, the Gradle and face-check
+  logs, the secret search's result, and a screenshot per step of the UI
+  run. `docs/testing.md` lists the files.
 - Every run is recorded as a test run: a GitHub issue labelled `test-run` (see `docs/testing.md`), with its
   date, commit, environment, result per test, and links to the logs and
   screenshots.
@@ -125,10 +128,22 @@ limits; and that no secret appears in any response or log.
 ## 7. This repository
 
 The Android client for muxway. It speaks only the published muxway protocol
-(see the `muxway` repository's `docs/protocol/`) and pins the protocol
-version it supports.
+(see the `muxway` repository's `docs/protocol/`), version 1: every request
+goes to `/v1/...` and nowhere else (`protocol/.../Api.kt`), and
+`docs/ARCHITECTURE.md` lists which of its features the app uses.
 
 - Panes open one per screen or several side by side, chosen by the user.
 - Credentials live in the Android Keystore, never in preferences or logs.
 - UI tests run on an emulator against the test hub from the core
   repository's test environment.
+
+Building and testing need JDK 17 and an Android SDK with platform 35
+(`sdk.dir` in `local.properties`, or `ANDROID_HOME`):
+
+```sh
+./gradlew :app:assembleDebug                             # the phone app
+./gradlew :wear:assembleDebug :watchface:assembleDebug   # the watch app and face
+./gradlew test                                           # unit tests, every module
+MUXWAY_CORE=../muxway scripts/e2e.sh                     # the full suite against a hub built from the core checkout
+MUXWAY_UI=0 MUXWAY_CORE=../muxway scripts/e2e.sh         # the same, without the UI run
+```

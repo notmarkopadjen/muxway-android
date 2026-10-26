@@ -17,7 +17,7 @@ environment is read.
 flowchart LR
     S[start run] --> E[throwaway tmux, hub, agent]
     E --> T[tests: security first, then features, then UI]
-    T --> D[run directory: summary, logs, screenshots, traces]
+    T --> D[run directory: summary, results.xml, logs, screenshots]
     D --> R[record the run]
 ```
 
@@ -26,15 +26,18 @@ Every run writes `test-runs/<timestamp>-<commit>/` (ignored by git):
 | File | Content |
 |---|---|
 | `summary.md` | date, commit, environment, totals, result per test |
-| `results.xml` | JUnit XML, for tools |
-| `logs/<component>.log` | full log of hub, agent, tmux and test runner |
-| `screens/<test>/<step>.png` | UI tests: a screenshot per step and on failure |
-| `traces/<test>.zip` | UI tests: Playwright trace, opened with `npx playwright show-trace` |
-| `report/index.html` | HTML report of the run |
+| `results.xml` | JUnit XML merged from every suite, for tools |
+| `environment.txt` | the core's commit, tmux, Java and OS versions, the device of a UI run |
+| `logs/<test>/hub.log`, `agent.log`, `relay.log` | one directory per end-to-end test: the hub, the agent and the recording relay |
+| `logs/gradle.log` | the Gradle build and unit-test output |
+| `logs/face-check.log`, `face-check.xml` | the watch face against the Watch Face Format schema |
+| `secrets-check.txt` | the search of every log for the run's tokens and secrets |
+| `logs/FlowTest/`, `screens/FlowTest/<step>.png` | the UI run: hub, agent, Gradle, adb and logcat logs, a screenshot per step |
+| `ui-skipped.txt` | when no device ran the UI suite, and why |
 
-UI tests drive the clients with Playwright. Where a test needs a page of its
-own, it is a plain `.html` file under `tests/e2e/pages/` that can be opened
-and replayed by hand.
+UI tests are instrumented tests (`app/src/androidTest`, `FlowTest`) that
+`scripts/ui-tests.sh` runs on an emulator or a phone; there are no
+browser tests in this repository, the web client's live in the core.
 
 ## Recording runs
 
@@ -63,10 +66,10 @@ sequenceDiagram
     participant E as scripts/e2e.sh
     participant GH as GitHub
     CI->>E: run suite
-    E-->>CI: test-runs/<id>/ (summary, results.xml, logs, screens, traces)
+    E-->>CI: test-runs/id/ (summary, results.xml, logs, screens)
     CI->>GH: upload run directory as artifact
     CI->>GH: check run from results.xml
-    CI->>GH: issue "Run <id>: result @ commit" (closed if passed)
+    CI->>GH: issue "Run id: result @ commit" (closed if passed)
 ```
 
 ## This repository
