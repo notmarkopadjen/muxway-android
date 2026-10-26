@@ -71,6 +71,12 @@ The other clients, and the hub: [muxway](https://github.com/notmarkopadjen/muxwa
 
 ## Install
 
+The latest build is on the repository's
+[Releases page](https://github.com/notmarkopadjen/muxway-android/releases/latest)
+as three APKs: app, wear and watchface. They are signed with a debug key,
+so they install with `adb install` and by side-loading; building them
+yourself is described below.
+
 Build it yourself, Android 8.0 or newer:
 
 ```sh
