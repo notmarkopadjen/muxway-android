@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -56,7 +57,8 @@ fun ConnectScreen(model: AppModel) {
     val hub = saved.hubs.firstOrNull { it.id == editing }
     var name by rememberSaveable(editing) { mutableStateOf(hub?.name ?: "") }
     var url by rememberSaveable(editing) { mutableStateOf(hub?.url ?: "") }
-    var token by rememberSaveable(editing) { mutableStateOf("") }
+    // Not saveable: a half-pasted token must not land in the instance state Bundle.
+    var token by remember(editing) { mutableStateOf("") }
     var problem by rememberSaveable { mutableStateOf<String?>(null) }
     val stored = hub != null && model.hasTokenFor(hub.id)
 
