@@ -116,13 +116,34 @@ flowchart LR
   answers "This hub has no mouse support yet", a pane whose program has
   no mouse mode "No mouse in this pane" (from the listing's `mouse` flag
   when the hub sends one, so nothing is sent at all), and nothing is
-  typed either way.
+  typed either way. The cell is found from the screen as the host
+  describes it: the content's last rows are the screen, less the blank
+  rows at its bottom the hub counts in `trimmed`, so a tap lands on the
+  row it shows whatever the screen holds. A tap on the row the program
+  waits on, the cursor's row from the listing (or the last row shown,
+  when the cursor is on a blank one below), also gives the text line
+  the focus: tapping Claude Code's `❯` box or a shell's prompt means
+  *type here*.
+- **Copy a block.** A long press on a row copies the block it is in,
+  the browser's rule: the rows down one bar (`│`, `┃`, `|`, `>`), a `●`
+  or `❯` row with the rows indented under it, a `⎿` result with its
+  rows; without the bar, the marker and the indent, and the status line
+  says how many rows. Nothing goes to the host.
 - **Links.** A web address in a row, `http` or `https` and nothing else,
   is underlined and opens with a tap through the system's handler, in
   the browser; the punctuation after it stays text, a bracket it opened
   stays in, and an address wrapped onto a second row opens up to the
   row's end. A tap on a link is not a tap on the pane: nothing goes to
-  the host, mouse mode or not.
+  the host, mouse mode or not. A path of the host's inbox
+  (`…/20261025-102235-56fwge.png`) is a link too, in any pane, and on
+  a host whose owner named preview roots (`preview` in the hosts
+  listing) any path with a slash in it or from `~` ending in a type the
+  host shows, in a writable pane: a tap opens the file in a sheet over
+  the pane, an image as itself, a text as it is, anything else as its
+  download only, with the name, the size, `⤓` (saved under Downloads
+  under the file's own name), *open* for the types the phone shows
+  (handed to the system read-only from the app's cache) and `×`. What
+  the host will not serve says `the host does not preview this file`.
 - **Scrolling.** The body is a list of rows, newest at the bottom; a
   one-finger drag or a wheel scrolls back through the `lines` the hub
   sent (the pane's scrollback), and new output keeps the bottom in view
@@ -176,8 +197,9 @@ it is writable:
   inside. A text with several lines reaches the pane as one paste,
   between the bracketed-paste marks when the program asked for them, so
   Claude Code takes it as one message and bash as one block it shows
-  before `Enter` runs it. Completion of the first word is on the web
-  client for now (#12).
+  before `Enter` runs it. The rows the line takes beyond one are not a
+  resize: with fit on, the pane keeps its size while a message is
+  written, and the rows scroll under the line instead.
 - right of the line, in this order: `⌨` the keyboard, `⇪` files
   (where the host has an inbox), `◉` the microphone (where the hub has
   a transcriber), **type**, and `⏎`;
@@ -221,14 +243,16 @@ it is writable:
   Refusals land in the status line, one per file, with the file's name:
   `not a type the host takes`, `too large, 8 MiB at most`, the hub's
   code in words. See [attachments.md](attachments.md);
-- **completion**: while the first word on the line is being typed, and
-  nothing follows it, a row above the line offers what the program takes
-  — Claude Code's slash commands, or a shell's starters and the lines
-  sent to a shell from this phone — eight at most, marked `⇥`. A tap
-  takes one onto the line with a space after it, ready for the rest; the
-  row goes when the word is finished or nothing matches any more.
-  Nothing a pane printed and nothing the hub said is ever offered
-  (`Complete` in the protocol module, the browser's rules);
+- **completion**: while a word is being typed, a row above the line
+  offers, for the first word, what the program takes — Claude Code's
+  slash commands, or a shell's starters and the lines sent to a shell
+  from this phone — and for any word two letters in the words on the
+  pane's screen, newest first, each marked `⇥` after the commands; eight
+  at most. A tap takes one onto the line with a space after it, ready
+  for the rest; the row goes when the word is finished or nothing
+  matches any more. Nothing from another pane and nothing the hub said
+  is ever offered (`Complete` in the protocol module, the browser's
+  rules);
 - the **command row**, between the key row and the text line, is for the
   program in the pane and scrolls sideways. Claude Code's pane (the lens
   decides) gets `/clear`, `/compact`, `/rename`, `/model`, `/resume`,

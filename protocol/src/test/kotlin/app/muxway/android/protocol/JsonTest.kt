@@ -33,6 +33,20 @@ class JsonTest {
     }
 
     @Test
+    fun theCursorTheTrimmedRowsAndThePreviewFlagAreReadWhenGiven() {
+        val p = Json.panes("""{"panes":[{"session":"work","width":80,"height":24,"cursor_x":3,"cursor_y":24}]}""").single()
+        assertEquals(3, p.cursorX)
+        assertEquals(24, p.cursorY)
+        assertEquals(0, Json.panes("""{"panes":[{"session":"work"}]}""").single().cursorY)
+        val r = Json.read("""{"pane":{"session":"work","height":30},"content":"$ ","trimmed":29}""", "")
+        assertEquals(29, r.trimmed)
+        assertEquals(1, r.screenRows)
+        assertEquals(0, Json.read("""{"pane":{"session":"work","height":30},"content":"$ "}""", "").trimmed)
+        assertEquals(true, Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true,"preview":true}]}""").single().preview)
+        assertEquals(false, Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true}]}""").single().preview)
+    }
+
+    @Test
     fun theMouseFlagIsNullUntilTheHubSaysIt() {
         assertNull(Json.panes("""{"panes":[{"session":"work"}]}""").single().mouse)
         assertEquals(true, Json.panes("""{"panes":[{"session":"work","mouse":true}]}""").single().mouse)

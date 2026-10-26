@@ -17,11 +17,13 @@ class FilesTest {
         assertEquals("text/markdown", Files.type(null, "notes.md"))
         assertEquals("application/json", Files.type("", "a.b.json"))
         assertEquals("application/pdf", Files.type("application/pdf", null))
+        assertEquals("application/zip", Files.type(null, "tool.zip"))
+        assertEquals("application/zip", Files.type("application/zip", "x"))
         for (bad in listOf("image/svg+xml" to "a.svg", "text/html" to "a.html", "application/x-sh" to "a.sh", null to "a.exe", null to "noext", null to "dot.")) {
             assertNull("${bad.first} ${bad.second}", Files.type(bad.first, bad.second))
         }
         assertEquals("text/plain", Files.type("text/plain", "notes"))
-        assertEquals(8, Files.MIMES.size)
+        assertEquals(9, Files.MIMES.size)
     }
 
     @Test

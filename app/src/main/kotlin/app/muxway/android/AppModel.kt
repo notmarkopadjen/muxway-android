@@ -1,9 +1,12 @@
 package app.muxway.android
 
 import android.app.Application
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +56,8 @@ sealed class Screen {
 class PaneState(val address: String) {
     var pane by mutableStateOf<Pane?>(null)
     var content by mutableStateOf("")
+    /** Blank rows at the bottom of the screen the host left out of [content]. */
+    var trimmed by mutableIntStateOf(0)
     var etag: String? = null
     var error by mutableStateOf<String?>(null)
     var updated by mutableStateOf("")
@@ -463,6 +468,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 v.pane = r.pane
                 if (r.content != v.content && Lens.changeCounts(!v.read, v.ownAt, at)) v.changedAt = at
                 v.content = r.content
+                v.trimmed = r.trimmed
                 v.etag = r.etag
                 v.read = true
             }
@@ -729,6 +735,34 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     /** Whether the pane's host lets clients close panes; the pane must be writable as well. */
     fun hostCloses(address: String): Boolean = hosts.any { it.name == address.substringBefore('/') && it.close }
+
+    /** Whether the pane's host serves files a pane prints the paths of, to writers. */
+    fun hostPreviews(address: String): Boolean = hosts.any { it.name == address.substringBefore('/') && it.preview }
+
+    /** A word for the person in the pane view that is not an error: what was copied, what was saved. */
+    var told by mutableStateOf<String?>(null)
+
+    /** A file of the host, by inbox name or by a printed path, for the sheet; null when refused. */
+    fun fetchFile(address: String, name: String?, path: String?, done: (Api.Fetched?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val f = withContext(Dispatchers.IO) {
+                    if (name != null) api().readFile(address, name) else api().previewFile(address, path ?: "")
+                }
+                done(f)
+            } catch (e: ApiException) {
+                if (e.code == "unauthorized") tokenRefused()
+                done(null)
+            }
+        }
+    }
+
+    /** The block's text onto the clipboard; the notice says how many rows. */
+    fun copyBlock(text: String, rows: Int) {
+        val clipboard = getApplication<Application>().getSystemService(ClipboardManager::class.java)
+        clipboard?.setPrimaryClip(ClipData.newPlainText("muxway", text))
+        told = "copied, $rows ${if (rows == 1) "row" else "rows"}"
+    }
 
     /** Closes the pane on its host; its tile leaves, and with none left the list shows. */
     fun closePane(addresses: List<String>, address: String) {

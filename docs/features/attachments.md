@@ -19,7 +19,7 @@ Three ways in, each landing on the line of the focused pane:
   holds a file. Text pastes as text, as before.
 - **`⇪`**, right of `⌨`, opens the system picker; several files can be
   picked at once and go one after another.
-- **Share.** muxway is a share target for the eight types: a screenshot
+- **Share.** muxway is a share target for the nine types: a screenshot
   shared from the gallery, a PDF from a browser, up to ten files at
   once. The chooser lists the writable panes by host; those whose host
   takes files carry `⇪` and are tappable, the others say `takes no
@@ -44,8 +44,8 @@ field's place, as it reads `⟳ hearing…` for the microphone. Then the
 path is appended to whatever is on the line, with a space before it when
 needed and one after, the line takes focus, and **nothing is sent**
 until `⏎`. The types the inbox takes: PNG, JPEG, GIF and WebP images,
-PDF, plain text, Markdown and JSON, 8 MiB each. The agent keeps a file
-for a day.
+PDF, plain text, Markdown, JSON and zip archives, 8 MiB each. The agent
+keeps a file for a day, and never unpacks one.
 
 `⇪` shows only when the pane is writable and the hub answered `204` to
 `GET /v1/panes/{address}/files`, asked when the pane opens and kept for
@@ -61,6 +61,15 @@ this host`, `x.png: the host's inbox is full`, `x.png: host offline`.
 The hub takes one file every two seconds per token; a batch waits its
 turn by itself (three tries, 2.1 s apart) before `one file every two
 seconds` is reported.
+
+## Seeing it again
+
+A path of the inbox printed in a pane is a link in the pane view: a tap
+shows the file in a sheet over the pane with its size, `⤓` to save it
+under Downloads and, for an archive or a PDF, *open* for the system;
+see [the pane view](pane-view.md). The host serves a file of its inbox
+by name only, to a reader of the pane
+(`GET /v1/panes/{address}/files/{name}`).
 
 ## How it works
 

@@ -67,4 +67,35 @@ class LinksTest {
         assertEquals("https://example.com/m", Links.at(line, 24)?.href)
         assertNull(Links.at(line, 25))
     }
+
+    @Test
+    fun findsInboxFilesByTheirNameAndPathsOfShownTypes() {
+        val name = "20261025-102235-56fwge.png"
+        assertEquals(listOf(name), Links.findFiles("what is wrong in /home/alice/.config/muxway/agent/inbox/$name ?").map { it.name })
+        assertEquals(listOf(name), Links.findFiles("see /tmp/$name.").map { it.name })
+        assertEquals(listOf("20261025-102235-d4e5f6.zip"), Links.findFiles("/i/20261025-102235-d4e5f6.zip").map { it.name })
+        for (s in listOf(name, "/tmp/$name.exe", "/tmp/${name}x", "/tmp/x$name", "/tmp/20261025-102235-56fwge.PNG", "/tmp/20261025-102235-56fwge.svg")) {
+            assertEquals(s, emptyList<Links.FileLink>(), Links.findFiles(s))
+        }
+        assertEquals(
+            listOf("docs/plans/2026-10-26-fit-keeps-still.md", "~/notes/todo.txt", "/var/log/app.log"),
+            Links.findPaths("1. docs/plans/2026-10-26-fit-keeps-still.md: fit ignores, see ~/notes/todo.txt and /var/log/app.log.").map { it.path },
+        )
+        assertEquals(listOf("./out/report.csv", "../shot.PNG"), Links.findPaths("wrote ./out/report.csv (3 rows) and ../shot.PNG").map { it.path })
+        for (s in listOf("README.md", "notes.txt in the dir", "docs/plans/x.md.bak", "bin/run.sh", "keys/agent.key", "a/b.mdx", "x/y.md-")) {
+            assertEquals(s, emptyList<Links.PathLink>(), Links.findPaths(s))
+        }
+        assertEquals(true, Links.isImage(name))
+        assertEquals(false, Links.isImage("20261025-102235-56fwge.pdf"))
+    }
+
+    @Test
+    fun theColumnTellsAFileAPathAndAnAddressApart() {
+        val line = "see https://example.com/20261025-102235-56fwge.png and /tmp/20261025-102235-56fwge.png and docs/a.md"
+        assertNull(Links.fileAt(line, 30))
+        assertEquals("20261025-102235-56fwge.png", Links.fileAt(line, 60)?.name)
+        assertNull(Links.pathAt(line, 60))
+        assertEquals("docs/a.md", Links.pathAt(line, line.length - 2)?.path)
+        assertNull(Links.pathAt(line, 0))
+    }
 }

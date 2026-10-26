@@ -7,13 +7,13 @@ import org.json.JSONObject
 /** The hub's JSON, read defensively: a missing field is a default, a wrong type is an error. */
 object Json {
     fun hosts(body: String): List<Host> = parse(body) { o ->
-        list(o.optJSONArray("hosts")) { Host(it.optString("name"), it.optBoolean("online"), it.optBoolean("sessions"), it.optBoolean("close"), it.optInt("keys")) }
+        list(o.optJSONArray("hosts")) { Host(it.optString("name"), it.optBoolean("online"), it.optBoolean("sessions"), it.optBoolean("close"), it.optInt("keys"), it.optBoolean("preview")) }
     }
 
     fun panes(body: String): List<Pane> = parse(body) { o -> list(o.optJSONArray("panes")) { pane(it) } }
 
     fun read(body: String, etag: String): PaneRead = parse(body) { o ->
-        PaneRead(pane(o.getJSONObject("pane")), Ansi.keep(o.optString("content")), etag)
+        PaneRead(pane(o.getJSONObject("pane")), Ansi.keep(o.optString("content")), etag, o.optInt("trimmed").coerceAtLeast(0))
     }
 
     fun events(body: String): Events = parse(body) { o ->
@@ -109,6 +109,8 @@ object Json {
             activity = o.optLong("activity"),
             attention = a?.let { Attention(it.optString("kind"), it.optLong("at"), Input.printable(it.optString("text"))) },
             mouse = if (o.has("mouse")) o.optBoolean("mouse") else null,
+            cursorX = o.optInt("cursor_x").coerceAtLeast(0),
+            cursorY = o.optInt("cursor_y").coerceAtLeast(0),
         )
     }
 

@@ -19,6 +19,8 @@ class Api(private val baseUrl: String, private val token: String, private val us
         private const val TRANSCRIBE_TIMEOUT = 95_000
         /** The hub holds an upload while the agent writes the file. */
         private const val FILE_TIMEOUT = 60_000
+        /** The largest file the inbox or a preview root serves. */
+        private const val MAX_FILE = 8 * 1024 * 1024
         /** What a client may name a session it starts. */
         val SESSION_NAME = Regex("^[a-z0-9_-]{1,32}$")
         private val SESSION_ID = Regex("^[A-Za-z0-9_-]{1,16}$")
@@ -113,6 +115,57 @@ class Api(private val baseUrl: String, private val token: String, private val us
         return Json.sent(call("POST", "panes/${encode(address)}/files", part.body, part.contentType, null, FILE_TIMEOUT).body)
     }
 
+    /** One file of the host's inbox back, by the name the agent gave it. */
+    fun readFile(address: String, name: String): Fetched = fetch("panes/${encode(address)}/files/${encode(name)}")
+
+    /** A file a pane printed the path of, from under the host's preview roots; a writer's call. */
+    fun previewFile(address: String, path: String): Fetched = fetch("panes/${encode(address)}/preview?path=${query(path)}")
+
+    private fun fetch(path: String): Fetched {
+        val c = try {
+            URL("$baseUrl/v1/$path").openConnection() as HttpURLConnection
+        } catch (e: Exception) {
+            throw ApiException(0, "offline")
+        }
+        try {
+            c.connectTimeout = CONNECT_TIMEOUT
+            c.readTimeout = FILE_TIMEOUT
+            c.instanceFollowRedirects = false
+            c.setRequestProperty("Authorization", "Bearer $token")
+            c.setRequestProperty("User-Agent", userAgent)
+            val status = c.responseCode
+            if (status != 200) throw ApiException(status, Json.error(c.errorStream?.let { readCapped(it) } ?: ""))
+            val type = (c.contentType ?: "application/octet-stream").substringBefore(';').trim().lowercase()
+            val out = java.io.ByteArrayOutputStream()
+            c.inputStream.use { s ->
+                val buf = ByteArray(64 * 1024)
+                while (out.size() <= MAX_FILE) {
+                    val n = s.read(buf)
+                    if (n < 0) break
+                    out.write(buf, 0, n)
+                }
+            }
+            if (out.size() > MAX_FILE) throw ApiException(0, "bad_answer")
+            return Fetched(type, out.toByteArray())
+        } catch (e: IOException) {
+            throw ApiException(0, "offline")
+        } finally {
+            c.disconnect()
+        }
+    }
+
+    /** A query value, percent-encoded but for the unreserved characters. */
+    private fun query(s: String): String {
+        val out = StringBuilder()
+        for (b in s.toByteArray(Charsets.UTF_8)) {
+            val ch = b.toInt() and 0xff
+            val k = ch.toChar()
+            if (k.isLetterOrDigit() && ch < 0x80 || k in "-._~") out.append(k)
+            else out.append('%').append("0123456789ABCDEF"[ch shr 4]).append("0123456789ABCDEF"[ch and 15])
+        }
+        return out.toString()
+    }
+
     /** Whether this token carries the admin grant. */
     fun isAdmin(): Boolean = Json.admin(get("me").body)
 
@@ -138,6 +191,9 @@ class Api(private val baseUrl: String, private val token: String, private val us
     }
 
     private class Response(val status: Int, val body: String, val etag: String)
+
+    /** A file's bytes as the hub serves them, with the type its name says. */
+    class Fetched(val type: String, val bytes: ByteArray)
 
     private fun get(path: String, etag: String? = null) = call("GET", path, null, null, etag)
 

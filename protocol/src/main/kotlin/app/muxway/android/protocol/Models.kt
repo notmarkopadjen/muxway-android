@@ -1,7 +1,10 @@
 package app.muxway.android.protocol
 
-/** [sessions]: the host's agent lets clients start sessions; [close]: and close writable panes. */
-data class Host(val name: String, val online: Boolean, val sessions: Boolean = false, val close: Boolean = false, val keys: Int = 0)
+/**
+ * [sessions]: the host's agent lets clients start sessions; [close]: and close writable panes;
+ * [preview]: it serves files under roots its owner named, to writers, when a pane prints their paths.
+ */
+data class Host(val name: String, val online: Boolean, val sessions: Boolean = false, val close: Boolean = false, val keys: Int = 0, val preview: Boolean = false)
 
 data class Attention(val kind: String, val at: Long, val text: String)
 
@@ -23,6 +26,9 @@ data class Pane(
     val attention: Attention?,
     /** Whether the program asked its terminal for the mouse; null when the hub does not say. */
     val mouse: Boolean? = null,
+    /** The cursor's cell, 1-based, where the program waits for input; 0 when the hub does not say. */
+    val cursorX: Int = 0,
+    val cursorY: Int = 0,
 ) {
     val writable get() = mode == "write"
 
@@ -33,7 +39,11 @@ data class Pane(
     val name get() = Lens.name(this)
 }
 
-data class PaneRead(val pane: Pane, val content: String, val etag: String)
+/** [trimmed]: blank rows at the bottom of the screen the host left out of [content]. */
+data class PaneRead(val pane: Pane, val content: String, val etag: String, val trimmed: Int = 0) {
+    /** How many of [content]'s last rows are the screen: the pane's rows less the blank ones left out. */
+    val screenRows get() = (pane.height - trimmed).coerceAtLeast(0)
+}
 
 data class Event(
     val seq: Long,

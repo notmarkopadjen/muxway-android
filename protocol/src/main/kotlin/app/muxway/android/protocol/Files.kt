@@ -16,6 +16,7 @@ object Files {
     val TYPES: Map<String, String> = linkedMapOf(
         "png" to "image/png", "jpg" to "image/jpeg", "jpeg" to "image/jpeg", "gif" to "image/gif", "webp" to "image/webp",
         "pdf" to "application/pdf", "txt" to "text/plain", "md" to "text/markdown", "json" to "application/json",
+        "zip" to "application/zip",
     )
 
     /** The types, each once, for the picker. */

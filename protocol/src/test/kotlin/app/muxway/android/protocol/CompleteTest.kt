@@ -59,4 +59,20 @@ class CompleteTest {
         assertEquals("  /compact " to 11, Complete.take("  /comp", 7, "/compact"))
         assertEquals("git status rest" to 11, Complete.take("git rest", 3, "git status"))
     }
+
+    @Test
+    fun anyWordTwoLettersInGetsTheScreensWordsAfterTheCommands() {
+        val words = Complete.screenWords("ls\ndocs/plans/a.md  notes.txt  README\n$ cat docs/plans/a.md\n│ quoted │\nhi there, Marko.")
+        assertEquals(listOf("Marko", "there", "quoted", "docs/plans/a.md"), words.take(4))
+        assertTrue("ls" !in words && "│" !in words)
+        assertEquals(listOf(Complete.Offer("docs/plans/a.md", true)), Complete.offers(shell, "cat do", 6, emptyList(), words))
+        assertTrue(Complete.offers(shell, "d", 1, emptyList(), words).isEmpty())
+        val first = Complete.offers(claude, "/co", 3, emptyList(), listOf("/compact-notes.md"))
+        assertEquals(false, first[0].word)
+        assertTrue(first.any { it.text == "/compact-notes.md" && it.word })
+        assertTrue(Complete.offers(shell, "cat docs/plans/a.md", 19, emptyList(), words).isEmpty())
+        assertEquals(Complete.At("do", 4, false), Complete.wordAt("cat do", 6))
+        assertNull(Complete.wordAt("cat do", 5))
+        assertEquals("cat docs/plans/a.md " to 20, Complete.take("cat do", 6, "docs/plans/a.md"))
+    }
 }

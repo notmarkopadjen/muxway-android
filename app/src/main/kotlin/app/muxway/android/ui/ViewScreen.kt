@@ -71,6 +71,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.DragAndDropTransferData
@@ -124,6 +125,7 @@ import app.muxway.android.protocol.Files
 import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Links
+import app.muxway.android.protocol.Blocks
 import app.muxway.android.protocol.Pane
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -158,6 +160,11 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val now = ticker()
     val order = model.panes.map { it.address }.ifEmpty { addresses }
     DisposableEffect(Unit) { onDispose { model.releaseFits() } }
+    // A file of the host over the pane; the height the text line takes beyond one row, which
+    // the tiles lose and the fit must not take for a resize.
+    var shown by remember { mutableStateOf<Shown?>(null) }
+    var slackPx by remember { mutableIntStateOf(0) }
+    shown?.let { FileSheet(model, it) { shown = null } }
 
     fun hardKey(e: KeyEvent): Boolean {
         if (e.type != KeyEventType.KeyDown || !writable) return false
@@ -207,7 +214,13 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             // A pane alone in the view sizes its window, zoomed over its siblings when it has any.
             val siblings = { a: String -> model.panes.any { it.address != a && windowOf(it.address) == windowOf(a) } }
             val tile: @Composable (Int, Modifier) -> Unit = { i, m ->
-                PaneTile(model, addresses[i], i == index, addresses.size > 1, fit, addresses[i] in held, siblings(addresses[i]), fitAgain, now, m, onDrop = { from -> model.swapTiles(addresses, from, addresses[i]) }, onClose = { model.closePane(addresses, addresses[i]) }) {
+                PaneTile(
+                    model, addresses[i], i == index, addresses.size > 1, fit, addresses[i] in held, siblings(addresses[i]), fitAgain, now, slackPx, m,
+                    onDrop = { from -> model.swapTiles(addresses, from, addresses[i]) },
+                    onClose = { model.closePane(addresses, addresses[i]) },
+                    onFile = { shown = it },
+                    onPrompt = { focusedIndex = i; fieldFocus.request() },
+                ) {
                     focusedIndex = i
                     focus.requestFocus()
                 }
@@ -216,11 +229,13 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         }
         Rule()
         model.sendError?.let { Text(" ! $it", color = p.alert, modifier = Modifier.padding(horizontal = 4.dp)) }
+        model.told?.let { Text(" $it", color = p.dim, modifier = Modifier.padding(horizontal = 4.dp)) }
+        LaunchedEffect(model.told) { if (model.told != null) { delay(4000); model.told = null } }
         val pane = state.pane
         when {
             pane == null -> Text(" …", color = p.dim, modifier = Modifier.padding(4.dp))
             !pane.writable -> Text(" read-only · ${pane.address}", color = p.dim, modifier = Modifier.padding(4.dp))
-            else -> InputBar(model, state, fieldFocus) { gained -> if (gained && hardware && !ime) keyboard?.hide() }
+            else -> InputBar(model, state, fieldFocus, onGrow = { slackPx = it }) { gained -> if (gained && hardware && !ime) keyboard?.hide() }
         }
         Text(
             state.error?.let { "! $it" } ?: state.updated.ifEmpty { "connecting" },
@@ -403,7 +418,7 @@ private class FieldFocus {
  * where the host has an inbox and the microphone button when the hub has a transcriber.
  */
 @Composable
-private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, onFieldFocus: (Boolean) -> Unit) {
+private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, onGrow: (Int) -> Unit, onFieldFocus: (Boolean) -> Unit) {
     val p = LocalPalette.current
     val line = key(state.address) { rememberTextFieldState() }
     val text = line.text.toString()
@@ -513,19 +528,22 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
             }
         }
     }
-    // While the first word is being typed, what the program takes is offered above the line; a
-    // tap takes one. Only constants and this client's own sent lines are ever offered.
-    val picks = if (recorder != null || hearing || sending != null) emptyList() else state.pane?.let { Complete.forPane(it, text, text.length, model.recent) }.orEmpty()
+    // While a word is being typed, what the program takes is offered above the line, then the
+    // words on the pane's screen, dimmer; a tap takes one. Nothing the hub said is ever offered.
+    val words = remember(state.content) { Complete.screenWords(state.content) }
+    val picks = if (recorder != null || hearing || sending != null) emptyList() else state.pane?.let { Complete.offers(it, text, text.length, model.recent, words) }.orEmpty()
     if (picks.isNotEmpty()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(" ⇥ ", color = p.faint, maxLines = 1)
             LazyRow(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                items(picks, key = { it }) { c ->
-                    Btn(c, { line.setTextAndPlaceCursorAtEnd(Complete.take(text, text.length, c).first); fieldFocus.request() }, enabled = !busy)
+                items(picks, key = { it.text }) { c ->
+                    Btn(if (c.word) "${c.text} ⇥" else c.text, { line.setTextAndPlaceCursorAtEnd(Complete.take(text, text.length, c.text).first); fieldFocus.request() }, enabled = !busy)
                 }
             }
         }
     }
+    // The field's height beyond one row is the view's to know: it is not a resize.
+    var oneRow by remember { mutableIntStateOf(Int.MAX_VALUE) }
     // The microphone sits between the line and the sending keys in every state, so a press and
     // its release are one gesture even though the line gives way to the meter in between.
     var pressedIdle by remember { mutableStateOf(false) }
@@ -550,7 +568,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
                 LaunchedEffect(fieldFocus.wanted) { if (fieldFocus.wanted) fieldFocus.give() }
                 Line(
                     ">", line,
-                    Modifier.weight(1f),
+                    Modifier.weight(1f).onSizeChanged { size -> oneRow = minOf(oneRow, size.height); onGrow((size.height - oneRow).coerceAtLeast(0)) },
                     hint = state.pane?.label ?: "",
                     keyboard = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Send),
                     focusRequester = fieldFocus.requester,
@@ -589,7 +607,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
-private fun PaneTile(model: AppModel, address: String, focused: Boolean, several: Boolean, fitAsked: Boolean, shared: Boolean, siblings: Boolean, fitAgain: Int, now: Long, modifier: Modifier, onDrop: (String) -> Unit, onClose: () -> Unit, onFocus: () -> Unit) {
+private fun PaneTile(model: AppModel, address: String, focused: Boolean, several: Boolean, fitAsked: Boolean, shared: Boolean, siblings: Boolean, fitAgain: Int, now: Long, slackPx: Int, modifier: Modifier, onDrop: (String) -> Unit, onClose: () -> Unit, onFile: (Shown) -> Unit, onPrompt: () -> Unit, onFocus: () -> Unit) {
     // Another tile of this window carries the fit: this one is held.
     val fit = fitAsked && !shared
     var asking by remember(address) { mutableStateOf(false) }
@@ -675,7 +693,8 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
             val colPx = advance100 * sizeSp / 100f
             val rowPx = with(density) { lineSp.sp.toPx() }
             val visibleCols = (widthPx / colPx).toInt().coerceAtLeast(8)
-            val visibleRows = (heightPx / rowPx).toInt().coerceAtLeast(1)
+            // The rows the text line took while a message is written are counted as if they were here.
+            val visibleRows = ((heightPx + slackPx) / rowPx).toInt().coerceAtLeast(1)
             val cols = if (fitting || reflow) visibleCols else paneCols
             val rows = remember(state.content, cols) { if (cols == paneCols && pane?.width == null) unwrapped else Ansi.rows(state.content, cols) }
             // The on-screen keyboard halves the tile for a moment; the host keeps its size then.
@@ -705,22 +724,47 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
             val paging = !scrolls && pane?.writable == true
             val wheel = pane?.mouse == true
             val page = if (wheel) rowPx else heightPx / 3f
-            // A tap is a click at the cell under the finger; the rows sit at the bottom. A tap
-            // on a link is the browser's: the text opens it and the host hears nothing.
+            // A tap is a click at the cell under the finger; the rows sit at the bottom, and the
+            // screen is the content's last rows less the blank ones the host left out. A tap on
+            // a link is the browser's: the text opens it and the host hears nothing; an inbox
+            // file or, on a host with roots, a printed path opens over the pane. A tap on the
+            // cursor's row (or the last row shown, when the cursor is on a blank one below) is a
+            // wish to type: the line takes the focus, after the click the program gets. A long
+            // press on a block copies it without its markers.
             val clickable = pane?.writable == true
+            val previews = clickable && model.hostPreviews(address)
             val top = (heightPx - rows.size * rowPx).coerceAtLeast(0f)
             val shown by rememberUpdatedState(rows)
+            val screenRows = (pane?.height ?: 0) - state.trimmed
+            val cursorRow = pane?.cursorY?.takeIf { it > 0 }?.coerceAtMost(screenRows) ?: screenRows
+            // The row under the finger, as an index into the rows shown and as a row of the pane.
+            fun rowAt(py: Float): Pair<Int, Int>? {
+                val t = ((py - top) / rowPx).toInt()
+                val index = (shown.size - visibleRows).coerceAtLeast(0) + t
+                if (py < top || index !in shown.indices) return null
+                return index to screenRows - (shown.size - 1 - index)
+            }
             Box(Modifier.fillMaxSize().pointerInput(address) { pinch { z -> zoom = (zoom * z).coerceIn(0.5f, 4f) } }
-                .pointerInput(address, clickable, top, colPx, rowPx) {
-                    if (!clickable) return@pointerInput
-                    detectTapGestures { at ->
+                .pointerInput(address, top, colPx, rowPx, previews, screenRows, cursorRow) {
+                    detectTapGestures(
+                        onLongPress = { at ->
+                            val (index, _) = rowAt(at.y) ?: return@detectTapGestures
+                            val plain = shown.map { r -> r.joinToString("") { it.text } }
+                            val b = Blocks.at(Blocks.find(plain), index) ?: return@detectTapGestures
+                            model.copyBlock(b.text, b.end - b.start + 1)
+                        },
+                    ) { at ->
                         val x = (at.x / colPx).toInt() + 1
-                        val y = ((at.y - top) / rowPx).toInt() + 1
+                        val (index, y) = rowAt(at.y) ?: return@detectTapGestures
+                        val row = shown[index].joinToString("") { it.text }
+                        if (Links.at(row, x - 1) != null) return@detectTapGestures
+                        Links.fileAt(row, x - 1)?.let { onFile(Shown(address, name = it.name)); return@detectTapGestures }
+                        if (previews) Links.pathAt(row, x - 1)?.let { onFile(Shown(address, path = it.path)); return@detectTapGestures }
+                        if (!clickable) return@detectTapGestures
                         val w = pane?.width ?: 0
                         val h = pane?.height ?: 0
-                        val row = shown.getOrNull(y - 1)?.joinToString("") { it.text }
-                        if (row != null && Links.at(row, x - 1) != null) return@detectTapGestures
-                        if (at.y >= top && x in 1..w && y in 1..h) model.click(address, x, y)
+                        if (x in 1..w && y in 1..h) model.click(address, x, y)
+                        if (y == cursorRow) onPrompt()
                     }
                 }
                 .then(if (sideways) Modifier.horizontalScroll(horizontal) else Modifier)
@@ -736,7 +780,7 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
                             if (notches != 0) {
                                 val at = change.position
                                 val cx = ((at.x / colPx).toInt() + 1).coerceIn(1, (pane?.width ?: 1).coerceAtLeast(1))
-                                val cy = (((at.y - top) / rowPx).toInt() + 1).coerceIn(1, (pane?.height ?: 1).coerceAtLeast(1))
+                                val cy = (rowAt(at.y)?.second ?: screenRows).coerceIn(1, (pane?.height ?: 1).coerceAtLeast(1))
                                 model.wheel(address, notches > 0, cx, cy, abs(notches))
                                 acc -= notches * page
                             }
