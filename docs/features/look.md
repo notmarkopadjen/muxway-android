@@ -41,3 +41,10 @@ Effects, on by default and off with the **effects** setting:
 
 Everything is drawn from `Palette` in `ui/Theme.kt`; the web's tokens are
 in the core repository under `web/src/styles/tokens.css`.
+
+## Security considerations
+
+Colours, fonts and effects only: nothing on this page reads input, keeps
+data or talks to the hub. What the screen may give away is covered where
+it arises: the screenshot block in [pane-view.md](pane-view.md), the
+notification text setting in [notifications.md](notifications.md).

@@ -5,6 +5,24 @@ gets an **admin** section at the end of Settings. Any other token never
 sees it: the app asks `/v1/me` once per connection and shows the section
 only when the hub says `"admin": true`.
 
+```mermaid
+sequenceDiagram
+    participant S as Settings
+    participant M as AppModel
+    participant H as hub
+    M->>H: GET /v1/me
+    H-->>M: {"admin": true}
+    M-->>S: the admin section
+    S->>M: open, or refresh
+    M->>H: GET /v1/admin/log?limit=200
+    M->>H: GET /v1/admin/overview
+    H-->>M: log lines, clients
+    S->>M: end (a browser session)
+    M->>H: DELETE /v1/admin/sessions/{id}
+    H-->>M: 204
+    M->>M: refresh
+```
+
 ```
 ─ admin ─────────────────────────── [refresh] ─
 log
