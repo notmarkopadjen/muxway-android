@@ -2,9 +2,68 @@
 ┌─ muxway-android ─┐
 ```
 
-Android client for [muxway](https://github.com/notmarkopadjen/muxway): your tmux panes on a phone, one per screen or side by side.
+Android client for [muxway](https://github.com/notmarkopadjen/muxway):
+your tmux panes on a phone, one per screen or side by side, and on a
+Wear OS watch.
 
-> Early development. The basics work: connect with a token, list panes, open one or several, switch with tabs, set up by scanning a code, size the host pane to the phone (fit) or read it at its own width with pinch zoom, type, send keys, scroll by swipe, see which pane calls for attention, be told when one does, and see it on a Wear OS watch: a face, complications, a tile, and a pane's tail with a few answers on the wrist.
+```
+[‹] [ ✳ ! fixing the build ][ bash · make ][ tail ]        ⤢ abc ⚙
+┌──────────────────────────────────────────────────────────────┐
+│ ✳ Claude · fixing the build · work/0.0 · write   ! permission │
+│ ⏺ Bash(go test ./pkg/store/...)                                │
+│   ⎿  ok   orbit/pkg/store  0.311s                              │
+│ ╭────────────────────────────────────────────╮                 │
+│ │ Do you want to proceed?                    │                 │
+│ │ ❯ 1. Yes                                   │                 │
+│ │   2. No                                    │                 │
+│ ╰────────────────────────────────────────────╯                 │
+└──────────────────────────────────────────────────────────────┘
+> type into alice-laptop/work/0.0                        [⇪] [◉] [⏎]
+[Esc] [Tab] [S-Tab] [^C] [↑] [↓] [←] [→] [BS] …
+✳ [/clear] [/compact] [/model] [/resume] …
+```
+
+> Works day to day: connect with a token or by scanning a code, list
+> panes, open one or several, switch with tabs, size the host pane to the
+> phone or read it at its own width with pinch zoom, type, send keys,
+> click and scroll in programs that take the mouse, see which pane calls
+> for attention and be told when one does; on a Wear OS watch, a face,
+> complications, a tile, and a pane's tail with a few answers and the
+> microphone on the wrist.
+
+## What it does
+
+- **Panes**, grouped by host, named by what runs in them. Tap opens,
+  hold picks up to four for one screen. `+ pane` splits a window, `+
+  session` starts one, where the host's agent allows it.
+- **The pane view**: tabs painted with each pane's state, one input bar
+  for the focused pane, a key bar, Claude Code's slash commands or a
+  shell's recent lines in a command row. **Fit** sizes the pane on the
+  host to the phone; off, pinch to zoom the host's own width.
+- **Notifications** when a pane waits: a question, a permission, idle,
+  done; a tap lands on the pane.
+- **The Claude Code lens** knows Claude's screen: a pane's state, its
+  question, and what to hide on a small display.
+- **The watch**: a watch face and complications that count the waiting
+  panes, a tile, and a pane on the wrist with a reply menu, a row of keys
+  and the microphone; *phone* opens the same pane on the phone behind the
+  lock screen. See [the watch](docs/features/watch.md).
+- **Several hubs**, each with its own token in the Android Keystore.
+- **Voice**: hold the microphone, speak, and the words the hub's
+  transcriber heard land on the input line to read and send.
+
+Screens: [connect](docs/features/connect.md),
+[panes](docs/features/panes.md), [pane view](docs/features/pane-view.md),
+[lenses](docs/features/lenses.md),
+[notifications](docs/features/notifications.md),
+[watch](docs/features/watch.md), [admin](docs/features/admin.md),
+[look](docs/features/look.md). How it is built:
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+The other clients, and the hub: [muxway](https://github.com/notmarkopadjen/muxway)
+(web client, protocol),
+[muxway-glasses-even](https://github.com/notmarkopadjen/muxway-glasses-even),
+[muxway-midp](https://github.com/notmarkopadjen/muxway-midp).
 
 ## Install
 
@@ -29,7 +88,7 @@ adb -s <watch> install watchface/build/outputs/apk/debug/watchface-debug.apk
 
 Then switch on **watch and notifications** in the phone app's settings,
 and **watch may answer** if the watch is to send keys and spoken lines to a
-pane. See [docs/features/watch.md](docs/features/watch.md).
+pane.
 
 ## Connect
 
@@ -43,11 +102,17 @@ In the app: hub URL (`https://hub.example.com`), paste the token, **save and
 connect**. Or skip the typing: pipe the same command into
 `scripts/connect-qr.py https://hub.example.com`, which prints a QR code,
 and tap **scan code** in the app. The token goes into the Android Keystore
-and is never shown again. Plain HTTP is accepted only for `localhost`, so a hub without TLS is
-reached through `adb reverse` or an SSH tunnel.
+and is never shown again. Plain HTTP is accepted only for `localhost`, so
+a hub without TLS is reached through `adb reverse` or an SSH tunnel.
 
-Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it works and
-[docs/features/](docs/features/) for each screen.
+## Tests
+
+```sh
+./gradlew test                            # unit tests
+MUXWAY_CORE=../muxway scripts/e2e.sh      # the suite against a real hub and agent; MUXWAY_UI=0 skips the device run
+```
+
+See [docs/testing.md](docs/testing.md).
 
 Contributors and AI agents: read [AGENTS.md](AGENTS.md) first.
 Security issues: see [SECURITY.md](SECURITY.md).
