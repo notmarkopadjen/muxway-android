@@ -40,10 +40,16 @@ object Commands {
         else -> null
     }
 
-    /** [recent] with [line] first, once; unchanged when the line is empty or too long. */
+    private val secretWords = Regex("""(?i)authorization|token|passw(or)?d|secret|mxt_|api[_-]?key""")
+    private val assignment = Regex("""(^|\s)(export\s+)?[A-Z][A-Z0-9_]*=""")
+
+    /** A line that may carry a credential: a known word, a token prefix, or an upper-case NAME=value. */
+    fun looksSecret(line: String) = secretWords.containsMatchIn(line) || assignment.containsMatchIn(line)
+
+    /** [recent] with [line] first, once; unchanged when the line is empty, too long or looks like a secret. */
     fun remembered(recent: List<String>, line: String): List<String> {
         val t = line.trim()
-        if (t.isEmpty() || t.length > LINE_MAX) return recent
+        if (t.isEmpty() || t.length > LINE_MAX || looksSecret(t)) return recent
         return (listOf(t) + recent.filter { it != t }).take(RECENT_MAX)
     }
 }

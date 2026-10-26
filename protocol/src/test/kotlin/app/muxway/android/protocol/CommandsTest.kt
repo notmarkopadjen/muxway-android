@@ -52,6 +52,24 @@ class CommandsTest {
     }
 
     @Test
+    fun aLineThatMayCarryASecretIsNotRemembered() {
+        val secret = listOf(
+            "curl -H 'Authorization: Bearer abc' https://hub.example.com",
+            "muxway hub token create --name phone",
+            "mysql -u alice --password=hunter2",
+            "cat /etc/passwd",
+            "echo mxt_" + "A".repeat(43),
+            "vault read secret/app",
+            "export API_KEY=abc", "OPENAI_API_KEY=abc ./run", "export HOME=/tmp", "FOO=bar make",
+        )
+        for (l in secret) assertTrue(l, Commands.looksSecret(l))
+        for (l in listOf("make test", "git status", "ls -la", "echo a=b", "lowercase=1 run", "cd ~/work")) assertFalse(l, Commands.looksSecret(l))
+        var recent = emptyList<String>()
+        for (l in listOf("make test") + secret) recent = Commands.remembered(recent, l)
+        assertEquals(listOf("make test"), recent)
+    }
+
+    @Test
     fun theListIsBounded() {
         var recent = emptyList<String>()
         for (i in 0 until Commands.RECENT_MAX + 3) recent = Commands.remembered(recent, "cmd $i")

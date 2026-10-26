@@ -265,7 +265,10 @@ the last); `n` keeps it. Elsewhere there is no `×`. See the core's
   app's own list, or a line you sent before, and `Enter`. Nothing from
   a pane, a title or the hub reaches the list; a pane dressed as Claude
   Code or a shell only chooses which row shows. The recent lines live in
-  the app's private preferences, with the settings.
+  the app's private preferences, with the settings; a line that looks
+  like it carries a credential (`token`, `password`, `secret`,
+  `Authorization`, an API key, a `mxt_` prefix, or an upper-case
+  `NAME=value` assignment) is never kept there.
 - Pane content is text, never interpreted beyond colours and attributes:
   only `ESC [ <digits ; :> m` survives, with parameters read as bounded
   integers; titles, hyperlinks, cursor movement, DCS and everything else
