@@ -55,6 +55,7 @@ fun App(model: AppModel) {
                         is Screen.Connect -> ConnectScreen(model)
                         is Screen.Panes -> PanesScreen(model)
                         is Screen.Scan -> ScanScreen(model)
+                        is Screen.Share -> ShareScreen(model)
                         is Screen.View -> ViewScreen(model, s.addresses)
                     }
                 }

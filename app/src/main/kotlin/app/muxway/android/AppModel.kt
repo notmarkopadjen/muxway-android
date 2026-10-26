@@ -43,6 +43,7 @@ sealed class Screen {
     data object Connect : Screen()
     data object Panes : Screen()
     data object Scan : Screen()
+    data object Share : Screen()
     data class View(val addresses: List<String>) : Screen()
 }
 
@@ -138,6 +139,10 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     private val inbox = mutableStateMapOf<String, Boolean>()
     private val inboxAt = HashMap<String, Long>()
 
+    /** The files another app shared, until a pane is picked for them or the share is dropped. */
+    var sharing by mutableStateOf(listOf<Uri>())
+        private set
+
     /** The host a new session is being named for, while its dialog shows. */
     var naming by mutableStateOf<String?>(null)
     var creating by mutableStateOf(false)
@@ -159,14 +164,38 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     fun open(s: Screen) {
         if (s is Screen.Panes) { selected.clear(); refreshList() }
+        if (s !is Screen.Share) sharing = emptyList()
         screen = s
     }
 
-    /** Back: pane view and settings return to the list; false when there is nowhere to go. */
+    /** Back: pane view, settings and the share chooser return to the list; false when there is nowhere to go. */
     fun back(): Boolean {
         if (screen is Screen.Panes || (screen is Screen.Connect && !ready())) return false
         open(if (screen is Screen.Scan) Screen.Connect else Screen.Panes)
         return true
+    }
+
+    /**
+     * Files another app shared: the chooser opens for a pane to take them, up to ten. Without
+     * a hub and a token the Connect screen says why.
+     */
+    fun share(uris: List<Uri>) {
+        if (!ready()) {
+            notice = "Connect to a hub first, then share again."
+            screen = Screen.Connect
+            return
+        }
+        sharing = uris.take(MAX_SHARE)
+        screen = Screen.Share
+        refreshList()
+    }
+
+    /** The shared files go to this pane, which opens; their paths land on its line. */
+    fun shareInto(address: String) {
+        val uris = sharing
+        sharing = emptyList()
+        if (uris.isNotEmpty()) sendFiles(address, uris)
+        open(Screen.View(listOf(address)))
     }
 
     /** Saves the preferences; the hubs are changed through [saveHub], [useHub] and [removeHub]. */
@@ -727,5 +756,6 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     private companion object {
         val CLOCK: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+        const val MAX_SHARE = 10
     }
 }

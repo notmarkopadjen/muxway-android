@@ -12,13 +12,32 @@ path lands on the input line for you to finish the sentence and send.
                                                         [⌨] [⇪] [◉] [type] [⏎]
 ```
 
-Two ways in, both landing on the line of the focused pane:
+Three ways in, each landing on the line of the focused pane:
 
 - **Paste.** An image the keyboard inserts (Gboard's stickers, GIFs and
   the clipboard's screenshot), or a long-press *Paste* of a clip that
   holds a file. Text pastes as text, as before.
 - **`⇪`**, right of `⌨`, opens the system picker; several files can be
   picked at once and go one after another.
+- **Share.** muxway is a share target for the eight types: a screenshot
+  shared from the gallery, a PDF from a browser, up to ten files at
+  once. The chooser lists the writable panes by host; those whose host
+  takes files carry `⇪` and are tappable, the others say `takes no
+  files` (no inbox on that host, or no write grant for this token). A
+  tap sends the files to that pane and opens it, the paths landing on
+  its line. *cancel* or back drops the share. A text shared without a
+  file opens the chooser only to say so; without a hub and a token the
+  Connect screen asks for them first.
+
+```
+┌─ muxway ─┐ share a file ─────────────────────── [cancel]
+ ─ alice-laptop ──────────────────────────────────────────
+│ ⇪ build server        work/0.0 · claude       ⟳ working │
+│ ⇪ review              work/0.1 · claude                 │
+ ─ bob-desktop ───────────────────────────────────────────
+│   shell               work/0.0 · bash     takes no files│
+  tap a pane: the files go to its host, their paths onto its line
+```
 
 While a file goes, the line reads `⇪ shot.png · 2.1 KiB…` in the
 field's place, as it reads `⟳ hearing…` for the microphone. Then the
@@ -52,7 +71,7 @@ sequenceDiagram
     participant M as AppModel
     participant H as Hub
     participant A as Agent
-    P->>L: paste an image, or ⇪ and pick
+    P->>L: paste an image, ⇪ and pick, or share and tap a pane
     L->>M: sendFiles(address, uris)
     M->>M: Attachments.read: content:// only, a type on the list, 8 MiB at most
     M-->>L: sending = "⇪ shot.png · 2.1 KiB…"
@@ -75,7 +94,12 @@ protocol module holds the list of types, the cap, the progress label,
 the path's landing on the line and the multipart body, built by hand:
 one part named `file`, called `file` whatever the phone calls it, with
 the file's type. `AppModel.sendFiles` runs one queue per pane: read,
-check, upload, the path to the line, the next.
+check, upload, the path to the line, the next. A share arrives at
+`MainActivity` as `ACTION_SEND` or `ACTION_SEND_MULTIPLE` with the
+files' content URIs; `AppModel.share` holds them while the chooser
+(`ShareScreen`) asks the hub about each writable pane, and
+`shareInto` queues them on the chosen pane and opens it; the paths land
+as above once the view is up.
 
 ## Security considerations
 
@@ -101,5 +125,11 @@ check, upload, the path to the line, the next.
 - A file is held in memory from read to answer, 8 MiB at most, one at a
   time per pane, and dropped. Nothing is written to this app's storage
   and nothing is logged; the hub audits who put what type and size where.
-- No new dependency and no new permission: the picker and the keyboard
-  grant this app a read of the one file, for the one time.
+- No new dependency and no new permission: the picker, the keyboard and
+  the sharing app grant this app a read of the one file, for the one
+  time.
+- `MainActivity` is exported already (the launcher, `muxway://open`);
+  the share filters admit `SEND` and `SEND_MULTIPLE` for the eight
+  types, ten files at most. Any app can start a share; nothing is read
+  or sent until the person taps a pane, and only the panes the hub says
+  take files can be tapped.

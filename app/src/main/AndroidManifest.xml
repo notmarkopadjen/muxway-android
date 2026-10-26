@@ -40,6 +40,20 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="muxway" android:host="open" />
             </intent-filter>
+            <!-- A file shared from another app goes to a pane the person picks, where the host's agent has an inbox. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/png" />
+                <data android:mimeType="image/jpeg" />
+                <data android:mimeType="image/gif" />
+                <data android:mimeType="image/webp" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="text/markdown" />
+                <data android:mimeType="application/json" />
+            </intent-filter>
         </activity>
         <service
             android:name=".watch.AttentionService"

@@ -14,7 +14,7 @@ flowchart LR
         P[Api, Json, Models, Lens, Board, Input, Ansi, Setup, HubUrl]
     end
     subgraph app[app: the phone]
-        UI[ui: Connect, Scan, Panes, View] --> M[AppModel]
+        UI[ui: Connect, Scan, Panes, Share, View] --> M[AppModel]
         M --> F[files: Attachments]
         M --> S[store: SettingsStore, Vault]
         S --> KS[(Android Keystore)]
@@ -50,7 +50,7 @@ flowchart LR
 - **files** reads a content URI the keyboard, the picker or a share
   handed over into memory, under the inbox's cap, with the type checked
   against its list; see [features/attachments.md](features/attachments.md).
-- **ui** is three Compose screens and a handful of widgets drawn as a
+- **ui** is four Compose screens and a handful of widgets drawn as a
   terminal: monospace, box-drawing frames, square corners.
 
 ## Screens
@@ -67,10 +67,14 @@ stateDiagram-v2
     View --> Connect: settings
     View --> Connect: token refused
     Panes --> Connect: token refused
+    [*] --> Share: a file shared from another app
+    Share --> View: tap a pane that takes files
+    Share --> Panes: cancel / back
 ```
 
-See [features/connect.md](features/connect.md), [features/panes.md](features/panes.md)
-and [features/pane-view.md](features/pane-view.md).
+See [features/connect.md](features/connect.md), [features/panes.md](features/panes.md),
+[features/pane-view.md](features/pane-view.md) and
+[features/attachments.md](features/attachments.md).
 
 ## Flows
 
@@ -150,7 +154,7 @@ client's side of it.
 | split, new session, close | `POST /v1/windows/{host}/{session}/{window}/panes`, `POST /v1/hosts/{host}/sessions`, `POST /v1/panes/{address}/close`, where the host allows them | pane view, pane list |
 | events | `GET /v1/events?after=cursor&wait=30&limit=50`, a long poll | pane list, watch service, the lens |
 | transcription | `GET /v1/transcribe` (`204` or `404`) to know there is one, `POST /v1/transcribe` with `audio/wav` | microphone button, the watch's clip |
-| files | `GET /v1/panes/{address}/files` (`204` or a refusal) to know the pane takes them, `POST` the same as `multipart/form-data` with one part `file` of a listed type, 8 MiB at most; the path answered lands on the input line | `⇪`, a paste into the line |
+| files | `GET /v1/panes/{address}/files` (`204` or a refusal) to know the pane takes them, `POST` the same as `multipart/form-data` with one part `file` of a listed type, 8 MiB at most; the path answered lands on the input line | `⇪`, a paste into the line, a share from another app |
 | admin | `GET /v1/me` for the grant, `GET /v1/admin/log?limit=200`, `GET /v1/admin/overview`, `DELETE /v1/admin/sessions/{id}` | the admin section of Settings |
 
 Not used: `/v1/auth/*` (the token is pasted or scanned, never exchanged
