@@ -151,4 +151,8 @@ end-to-end tests, the run.
 
 ## Test run
 
-Pending: recorded below once the suite has run.
+Local run `test-runs/20261026-105243-41e53f8`, recorded as
+[muxway-android#33](https://github.com/notmarkopadjen/muxway-android/issues/33):
+**passed**, 181 tests, 0 failed, 0 skipped, against a hub built from
+the core at `975d6ef`. Test 1 is `s04d`, test 6 `f16b`; the UI test
+waits for a device.
