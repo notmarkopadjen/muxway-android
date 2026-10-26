@@ -1,5 +1,7 @@
 # Feature: a usable pane view
 
+> Status: approved 2026-10-23, implemented the same day.
+
 > Second round after the first hands-on test. The owner wants to use the
 > app daily, so this round makes the pane view fit real panes: wide
 > full-screen programs, colour, glyphs, scrolling, and switching panes.

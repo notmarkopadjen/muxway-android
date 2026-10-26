@@ -1,5 +1,7 @@
 # Feature: fit, a hardware keyboard, and the web client's look
 
+> Status: approved 2026-10-24, implemented the same day in six rounds.
+
 > After the third hands-on test, with the core's resize endpoint deployed.
 
 ## 1. Goal

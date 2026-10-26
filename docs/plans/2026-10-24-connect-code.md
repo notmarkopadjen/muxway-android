@@ -1,5 +1,7 @@
 # Feature: the connect code
 
+> Status: approved 2026-10-23, implemented the same day.
+
 > Setting up a phone means typing a 47-character token. A QR code on the
 > hub owner's terminal and a scan in the app replace that.
 

@@ -1,6 +1,7 @@
 # Feature: the first Android client
 
-> Status: implemented 2026-10-23, awaiting the owner's hands-on test.
+> Status: implemented 2026-10-23. The owner's hands-on tests followed; what
+> they found is in the plans after this one, from a usable pane view on.
 
 ## 1. Goal
 
