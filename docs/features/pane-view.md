@@ -159,11 +159,15 @@ flowchart LR
   stays in, and an address wrapped onto a second row opens up to the
   row's end. A tap on a link is not a tap on the pane: nothing goes to
   the host, mouse mode or not. A path of the host's inbox
-  (`…/20261025-102235-56fwge.png`) is a link too, in any pane, and on
+  (`…/20261025-102235-56fwge.png`) is a link too, underlined the same
+  way, in any pane, and on
   a host whose owner named preview roots (`preview` in the hosts
   listing) any path with a slash in it or from `~` ending in a type the
   host shows, in a writable pane: a tap opens the file in a sheet over
-  the pane, an image as itself, a text as it is, anything else as its
+  the pane, an image as itself, a text as it is, a Markdown file
+  rendered as the terminal would draw it (headings, lists, quotes, code,
+  tables, rules; *plain* shows the source; a path in it is a link too,
+  opened from the same pane), anything else as its
   download only, with the name, the size, `⤓` (saved under Downloads
   under the file's own name), *open* for the types the phone shows
   (handed to the system read-only from the app's cache) and `×`. What

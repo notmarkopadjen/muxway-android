@@ -181,7 +181,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     // the tiles lose and the fit must not take for a resize.
     var shown by remember { mutableStateOf<Shown?>(null) }
     var slackPx by remember { mutableIntStateOf(0) }
-    shown?.let { FileSheet(model, it) { shown = null } }
+    shown?.let { FileSheet(model, it, onOpen = { next -> shown = next }) { shown = null } }
 
     fun hardKey(e: KeyEvent): Boolean {
         if (e.type != KeyEventType.KeyDown || !writable) return false
@@ -838,7 +838,9 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
             // A tile that gives way to another pane leaves its own at size; the view gives them
             // all back when it is left.
             DisposableEffect(address) { onDispose { model.keep(address) } }
-            val lines = remember(rows, p) { rows.map { styled(it, p) }.asReversed() }
+            val clickable = pane?.writable == true
+            val previews = clickable && model.hostPreviews(address)
+            val lines = remember(rows, p, previews) { rows.map { styled(it, p, previews) }.asReversed() }
             val style = base.copy(fontSize = sizeSp.sp, lineHeight = lineSp.sp)
             val sideways = !fitting && !reflow
             val horizontal = rememberScrollState()
@@ -859,8 +861,6 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
             // cursor's row (or the last row shown, when the cursor is on a blank one below) is a
             // wish to type: the line takes the focus, after the click the program gets. A long
             // press on a block copies it without its markers.
-            val clickable = pane?.writable == true
-            val previews = clickable && model.hostPreviews(address)
             val top = (heightPx - rows.size * rowPx).coerceAtLeast(0f)
             val shown by rememberUpdatedState(rows)
             val screenRows = (pane?.height ?: 0) - state.trimmed
@@ -953,15 +953,21 @@ private suspend fun PointerInputScope.pinch(onZoom: (Float) -> Unit) {
 
 private val linkStyles = TextLinkStyles(SpanStyle(textDecoration = TextDecoration.Underline))
 
-// Colours as the pane gave them; a web address in the row opens through the system.
-private fun styled(row: List<Ansi.Span>, p: Palette): AnnotatedString = buildAnnotatedString {
+// Colours as the pane gave them; a web address in the row opens through the system, and an
+// inbox file or, where the host previews, a printed path is underlined the same way.
+private fun styled(row: List<Ansi.Span>, p: Palette, paths: Boolean): AnnotatedString = buildAnnotatedString {
     for (s in row) {
         val st = spanStyle(s.style, p)
         if (st == null) append(s.text) else withStyle(st) { append(s.text) }
     }
-    for (l in Links.find(toString())) addLink(LinkAnnotation.Url(l.href, linkStyles), l.start, l.end)
+    val text = toString()
+    for (l in Links.find(text)) addLink(LinkAnnotation.Url(l.href, linkStyles), l.start, l.end)
+    for (f in Links.findFiles(text)) if (Links.at(text, f.start) == null) addStyle(underlined, f.start, f.end)
+    if (paths) for (l in Links.findPaths(text)) if (Links.at(text, l.start) == null && Links.fileAt(text, l.start) == null) addStyle(underlined, l.start, l.end)
     if (length == 0) append(" ")
 }
+
+private val underlined = SpanStyle(textDecoration = TextDecoration.Underline)
 
 private fun spanStyle(s: Ansi.Style, p: Palette): SpanStyle? {
     if (s == Ansi.Style.PLAIN) return null
