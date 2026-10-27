@@ -4,13 +4,14 @@ One or more panes on one screen, tabs above to switch, one input bar for the
 focused pane.
 
 ```
-[‹] [ ⟳ build ][ ! review ][ logs ]           ⤢ abc ⚙
+[‹] [ ⟳ build ][ ! review ][ logs ] [+]     ⤢ abc ⚙
 ┌──────────────────────────────────────────────────┐
-│ build · claude · write              ⟳ working 96×28│
+│ build · claude · write        ⟳ working 96×28 _ × │
 │ $ make test                                       │
 │ ok                                                │
 │ $ █                                               │
 └──────────────────────────────────────────────────┘
+ _ [ ? deploy ][ hub.log ]
 [Esc] [Tab][S-Tab][^C][↑][↓][←][→][BS] …   [Enter]
 > ______________________________ [⌨] [⇪] [◉] [type] [⏎]
  12:00:01
@@ -28,6 +29,29 @@ focused pane.
   border and its name in bold. Tapping another tab switches to that pane.
   The strip scrolls when the tabs do not fit and keeps the focused one in
   view, with several panes open as well.
+- **`+`** after the last tab opens the **add menu**, built from the
+  listing the app holds, in this order: `+ pane` (one more pane beside
+  the focused one on its host, where the token may type there), `+
+  session` (on the focused pane's host, where its agent starts sessions),
+  a rule, the panes minimised below, a rule, every other readable pane
+  not on screen, grouped by hub (with several), host and session in
+  listing order, each as its glyph and name with its place dimmed after
+  it. The focused pane and the open tiles are not listed. An entry the
+  token or the host does not allow is dimmed with the reason (`read only`,
+  `no sessions here`). A pick becomes one more tile, focused; with four
+  tiles the menu's heading says `four open: a pick replaces <focused>`
+  and the pick swaps into the focused tile, as a tab does. `+ pane` and
+  `+ session` ask the hub (the session through the same dialog as the
+  list's); a pick asks nothing. Back closes the menu. The rows are
+  `AddMenu.rows` in the protocol module, unit-tested.
+- **`_`** on a tile's header **minimises** it: the tile leaves the
+  arrangement and its tab moves to the **minimised row** right above the
+  key row, painted like a tab and still read every `every` seconds, so
+  its glyph keeps moving; its tab leaves the strip while it is below. A
+  tap on it brings the tile back, focused; the add menu lists it too. The
+  last tile cannot be minimised (its `_` is dim). Minimised panes belong
+  to the view's arrangement and are forgotten with it; the pane's fit is
+  released when it is minimised, as a closed tile's is.
 - The **controls** sit at the right end of the same row: `▦` (with
   several panes) the next arrangement, `⤢` fit on or off, `abc` the on-screen keyboard (only with the hardware keyboard
   setting), `⚙` settings.

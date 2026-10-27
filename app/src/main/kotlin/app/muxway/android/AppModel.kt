@@ -13,7 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import app.muxway.android.protocol.Address
+import app.muxway.android.protocol.AddMenu
 import app.muxway.android.protocol.AdminClient
 import app.muxway.android.protocol.Api
 import app.muxway.android.protocol.ApiException
@@ -24,6 +24,7 @@ import app.muxway.android.protocol.Files
 import app.muxway.android.protocol.Host
 import app.muxway.android.protocol.HubUrl
 import app.muxway.android.protocol.Input
+import app.muxway.android.protocol.Keys
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.LogLine
 import app.muxway.android.protocol.Pane
@@ -38,6 +39,7 @@ import app.muxway.android.store.Vault
 import app.muxway.android.watch.AttentionService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -49,11 +51,17 @@ sealed class Screen {
     data object Panes : Screen()
     data object Scan : Screen()
     data object Share : Screen()
+    /** The open panes by key (see [Keys]), tiles first in their order. */
     data class View(val addresses: List<String>) : Screen()
 }
 
-/** One open pane: what was last read and how it went. */
-class PaneState(val address: String) {
+/** The host a session is being named for, in its dialog; [into] is the view that asked, if one did. */
+data class Naming(val hub: String, val host: String, val into: List<String>? = null)
+
+/** One open pane, by its key: what was last read and how it went. */
+class PaneState(val key: String) {
+    /** The address its hub knows it by. */
+    val address = Keys.address(key)
     var pane by mutableStateOf<Pane?>(null)
     var content by mutableStateOf("")
     /** Blank rows at the bottom of the screen the host left out of [content]. */
@@ -96,46 +104,94 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     var settings by mutableStateOf(store.load())
         private set
-    var hasToken by mutableStateOf(vault.hasToken(settings.current))
-        private set
-    private var api: Api? = null
 
-    /** Whether the hub takes a wheel count; a hub from before the field says no once, then it is sent one notch at a time. */
-    private var wheelCounts = true
-
-    var screen by mutableStateOf<Screen>(if (ready()) Screen.Panes else Screen.Connect)
+    /** Whether any hub has a token: the app has somewhere to list from. */
+    var hasToken by mutableStateOf(false)
         private set
 
-    var hosts by mutableStateOf(listOf<Host>())
-    var panes by mutableStateOf(listOf<Pane>())
-    var listError by mutableStateOf<String?>(null)
-    var listing by mutableStateOf(false)
+    /**
+     * One hub the app talks to: its client, its listing and what it answered once. Every hub
+     * with a token is in use at the same time; a pane's key says which one it belongs to.
+     */
+    inner class Conn(val hub: Hub) {
+        private var api: Api? = null
+        var hosts by mutableStateOf(listOf<Host>())
+        var panes by mutableStateOf(listOf<Pane>())
+        var listError by mutableStateOf<String?>(null)
+        var listing by mutableStateOf(false)
+        var listJob: Job? = null
+        var cursor: Long? = null
+        var probed = false
+
+        /** Whether the hub has a transcriber, asked once per connection with the first listing. */
+        var transcriber by mutableStateOf(false)
+
+        /** Whether the token carries the admin grant, asked with the transcriber; Settings then shows the admin section. */
+        var admin by mutableStateOf(false)
+        var adminLog by mutableStateOf(listOf<LogLine>())
+        var adminClients by mutableStateOf(listOf<AdminClient>())
+        var adminError by mutableStateOf<String?>(null)
+        var adminLoading by mutableStateOf(false)
+
+        /** Whether the hub takes a wheel count; a hub from before the field says no once, then it is sent one notch at a time. */
+        var wheelCounts = true
+
+        val id get() = hub.id
+        val name get() = hub.name
+
+        fun api(): Api {
+            api?.let { return it }
+            val token = vault.token(hub.id)
+                ?: throw if (vault.hasToken(hub.id)) ApiException(0, "keystore") else ApiException(401, "unauthorized")
+            return Api(hub.url, token, userAgent).also { api = it }
+        }
+
+        fun forget() {
+            api = null
+            probed = false
+            wheelCounts = true
+            transcriber = false
+            admin = false
+            adminLog = emptyList()
+            adminClients = emptyList()
+            panes = emptyList()
+            hosts = emptyList()
+            listError = null
+            cursor = null
+        }
+    }
+
+    private val conns = LinkedHashMap<String, Conn>()
+
+    /** The hubs with a token, in the list's order; a connection is made the first time it is asked for. */
+    val connections: List<Conn>
+        get() = settings.hubs.filter { vault.hasToken(it.id) }.map { h ->
+            conns[h.id]?.takeIf { it.hub == h } ?: Conn(h).also { conns[h.id] = it }
+        }
+
+    var screen by mutableStateOf<Screen>(Screen.Connect)
+        private set
+
+    val hosts: List<Host> get() = connections.flatMap { it.hosts }
+    val panes: List<Pane> get() = connections.flatMap { it.panes }
+
+    /** Every hub's listing trouble on one line, each named when there are several. */
+    val listError: String?
+        get() {
+            val c = connections
+            return c.mapNotNull { x -> x.listError?.let { if (c.size > 1) "${x.name}: $it" else it } }.joinToString(" · ").ifEmpty { null }
+        }
+    val listing: Boolean get() = connections.any { it.listing }
     val selected = mutableStateListOf<String>()
-    private var listJob: Job? = null
-    private var cursor: Long? = null
 
     val views = mutableStateMapOf<String, PaneState>()
 
-    /** The kind of the last event the hub sent for each pane; `working` is what the lens wants. */
+    /** The kind of the last event a hub sent for each pane, by key; `working` is what the lens wants. */
     val lastKind = mutableStateMapOf<String, String>()
     var sendError by mutableStateOf<String?>(null)
 
-    /** Whether the hub has a transcriber, asked once per connection with the first listing. */
-    var transcriber by mutableStateOf(false)
-        private set
-    private var probed = false
-
-    /** Whether the token carries the admin grant, asked with the transcriber; Settings then shows the admin section. */
-    var admin by mutableStateOf(false)
-        private set
-    var adminLog by mutableStateOf(listOf<LogLine>())
-        private set
-    var adminClients by mutableStateOf(listOf<AdminClient>())
-        private set
-    var adminError by mutableStateOf<String?>(null)
-        private set
-    var adminLoading by mutableStateOf(false)
-        private set
+    /** The hubs whose token carries the admin grant; Settings shows a section for each. */
+    val adminHubs: List<Conn> get() = connections.filter { it.admin }
 
     /** The last lines sent to a shell, newest first; the command row offers them again. */
     val recent = mutableStateListOf<String>().also { it.addAll(store.recent()) }
@@ -159,23 +215,35 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         private set
 
     /** The host a new session is being named for, while its dialog shows. */
-    var naming by mutableStateOf<String?>(null)
+    var naming by mutableStateOf<Naming?>(null)
     var creating by mutableStateOf(false)
         private set
     var createError by mutableStateOf<String?>(null)
 
     init {
+        hasToken = settings.hubs.any { vault.hasToken(it.id) }
+        screen = if (ready()) Screen.Panes else Screen.Connect
         AttentionService.apply(app)
     }
 
-    private fun ready() = settings.hubUrl.isNotEmpty() && hasToken
+    private fun ready() = hasToken
 
-    private fun api(): Api {
-        api?.let { return it }
-        val token = vault.token(settings.current)
-            ?: throw if (vault.hasToken(settings.current)) ApiException(0, "keystore") else ApiException(401, "unauthorized")
-        return Api(settings.hubUrl, token, userAgent).also { api = it }
+    /**
+     * The connection a key belongs to; a bare address is the first hub's. A hub without a
+     * token still answers, with a client that refuses every call, so nothing here throws.
+     */
+    private fun conn(key: String): Conn {
+        val c = connections
+        c.firstOrNull { it.id == Keys.hub(key) }?.let { return it }
+        if (Keys.hub(key).isEmpty()) c.firstOrNull()?.let { return it }
+        val hub = settings.hubs.firstOrNull { it.id == Keys.hub(key) } ?: settings.hubs.firstOrNull() ?: Hub("", "", "")
+        return conns[hub.id]?.takeIf { it.hub == hub } ?: Conn(hub).also { if (hub.id.isNotEmpty()) conns[hub.id] = it }
     }
+
+    private fun api(key: String): Api = conn(key).api()
+
+    /** The hub's name for a key, for the menu and the list; "" with one hub. */
+    fun hubName(id: String): String = settings.hubs.firstOrNull { it.id == id }?.name ?: ""
 
     fun open(s: Screen) {
         if (s is Screen.Panes) { selected.clear(); refreshList() }
@@ -213,7 +281,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         open(Screen.View(listOf(address)))
     }
 
-    /** Saves the preferences; the hubs are changed through [saveHub], [useHub] and [removeHub]. */
+    /** Saves the preferences; the hubs are changed through [saveHub] and [removeHub]. */
     fun saveSettings(s: Settings) {
         settings = s.copy(hubs = settings.hubs, current = settings.current)
         store.save(settings)
@@ -241,59 +309,42 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         if (tok.isEmpty() && !vault.hasToken(hubId)) return "Paste a token"
         if (tok.isNotEmpty()) vault.store(hubId, tok)
         val hub = Hub(hubId, n, u)
-        settings = settings.copy(hubs = if (id == null) settings.hubs + hub else settings.hubs.map { if (it.id == id) hub else it })
-        useHub(hubId)
+        settings = settings.copy(hubs = if (id == null) settings.hubs + hub else settings.hubs.map { if (it.id == id) hub else it }, current = settings.current.ifEmpty { hubId })
+        store.save(settings)
+        // A changed hub starts over: its client, listing and views are built again.
+        conns.remove(hubId)
+        dropHub(hubId)
+        hasToken = settings.hubs.any { vault.hasToken(it.id) }
+        AttentionService.apply(getApplication())
+        notice = null
+        if (ready()) open(Screen.Panes)
         return null
     }
 
-    /** Makes [id] the hub the app talks to: the client, the list and the watch follow. */
-    fun useHub(id: String) {
-        val hub = settings.hubs.firstOrNull { it.id == id } ?: return
-        settings = settings.copy(current = id)
-        store.save(settings)
-        reset()
-        hasToken = vault.hasToken(id)
-        AttentionService.apply(getApplication())
-        if (hasToken) {
-            notice = null
-            open(Screen.Panes)
-        } else {
-            notice = "Paste or scan a token for ${hub.name}."
-            screen = Screen.Connect
-        }
-    }
-
-    /** Drops a hub and its token; the next in the list takes over when it was the current one. */
+    /** Drops a hub and its token; the others go on. */
     fun removeHub(id: String) {
         vault.clear(id)
-        val wasCurrent = settings.current == id
         val hubs = settings.hubs.filter { it.id != id }
-        settings = settings.copy(hubs = hubs, current = if (wasCurrent) hubs.firstOrNull()?.id ?: "" else settings.current)
+        settings = settings.copy(hubs = hubs, current = if (settings.current == id) hubs.firstOrNull()?.id ?: "" else settings.current)
         store.save(settings)
-        if (wasCurrent) reset()
-        hasToken = settings.current.isNotEmpty() && vault.hasToken(settings.current)
+        conns.remove(id)
+        dropHub(id)
+        hasToken = hubs.any { vault.hasToken(it.id) }
         notice = null
         AttentionService.apply(getApplication())
         if (!ready()) screen = Screen.Connect
     }
 
-    private fun reset() {
-        api = null
-        probed = false
-        wheelCounts = true
-        inbox.clear()
-        inboxAt.clear()
-        transcriber = false
-        admin = false
-        adminLog = emptyList()
-        adminClients = emptyList()
-        views.clear()
-        lastKind.clear()
-        panes = emptyList()
-        hosts = emptyList()
-        listError = null
-        selected.clear()
-        cursor = null
+    /** Forgets everything held for one hub: its views, events, inbox answers and selection. */
+    private fun dropHub(id: String) {
+        for (k in views.keys.toList()) if (Keys.hub(k) == id) views.remove(k)
+        for (k in lastKind.keys.toList()) if (Keys.hub(k) == id) lastKind.remove(k)
+        for (k in inbox.keys.toList()) if (Keys.hub(k) == id) { inbox.remove(k); inboxAt.remove(k) }
+        selected.removeAll { Keys.hub(it) == id }
+        (screen as? Screen.View)?.let { v ->
+            val rest = v.addresses.filter { Keys.hub(it) != id }
+            if (rest.size != v.addresses.size) screen = if (rest.isEmpty()) Screen.Panes else Screen.View(rest)
+        }
     }
 
     /**
@@ -320,152 +371,178 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun keepToken() {
-        val (_, hub) = pendingCode ?: return
         pendingCode = null
-        useHub(hub.id)
+        if (ready()) open(Screen.Panes)
     }
 
     /**
-     * `muxway://open?pane=<address>`, from a notification or the watch. Only a well-formed
-     * address of a listed pane opens anything; the link can set nothing else.
+     * `muxway://open?pane=<key>`, from a notification or the watch; a bare address is the
+     * first hub's. Only a well-formed key of a listed pane opens anything; the link can set
+     * nothing else.
      */
     fun openLink(uri: Uri?) {
         if (uri == null || uri.scheme != "muxway" || uri.host != "open" || !ready()) return
-        val address = uri.getQueryParameter("pane") ?: return
-        if (!Address.valid(address)) return
-        pendingOpen = address
-        if (panes.any { it.address == address }) openPending() else refreshList()
+        val given = uri.getQueryParameter("pane") ?: return
+        if (!Keys.valid(given)) return
+        val first = connections.firstOrNull() ?: return
+        val key = if (Keys.hub(given).isEmpty()) Keys.make(first.id, given) else given
+        pendingOpen = key
+        if (panes.any { it.key == key }) openPending() else refreshList()
     }
 
     private fun openPending() {
-        val address = pendingOpen ?: return
+        val key = pendingOpen ?: return
+        if (panes.none { it.key == key }) return
         pendingOpen = null
-        if (panes.any { it.address == address }) open(Screen.View(listOf(address)))
+        open(Screen.View(listOf(key)))
     }
 
+    /** Lists every hub; each answers on its own. */
     fun refreshList() {
-        if (listJob?.isActive == true) return
-        listJob = viewModelScope.launch {
-            listing = true
+        for (c in connections) refreshList(c)
+    }
+
+    private fun refreshList(c: Conn) {
+        if (c.listJob?.isActive == true) return
+        c.listJob = viewModelScope.launch {
+            c.listing = true
             try {
-                val (h, p) = withContext(Dispatchers.IO) { api().hosts() to api().panes() }
-                hosts = h
-                panes = p
-                listError = null
-                if (!probed) {
-                    transcriber = withContext(Dispatchers.IO) { api().hasTranscriber() }
-                    admin = withContext(Dispatchers.IO) { api().isAdmin() }
-                    probed = true
+                val (h, p) = withContext(Dispatchers.IO) { c.api().hosts() to c.api().panes() }
+                c.hosts = h.map { it.copy(hub = c.id) }
+                c.panes = p.map { it.copy(hub = c.id) }
+                c.listError = null
+                if (!c.probed) {
+                    c.transcriber = withContext(Dispatchers.IO) { c.api().hasTranscriber() }
+                    c.admin = withContext(Dispatchers.IO) { c.api().isAdmin() }
+                    c.probed = true
                 }
                 openPending()
             } catch (e: ApiException) {
-                listError = e.message
-                if (e.code == "unauthorized") tokenRefused()
+                c.listError = e.message
+                if (e.code == "unauthorized") tokenRefused(c)
             } finally {
-                listing = false
+                c.listing = false
             }
         }
     }
 
-    /** The hub's last 200 log lines and who is connected, for the admin section. */
-    fun refreshAdmin() {
-        if (!admin || adminLoading) return
+    /** The hub's last 200 log lines and who is connected, for its admin section. */
+    fun refreshAdmin(c: Conn) {
+        if (!c.admin || c.adminLoading) return
         viewModelScope.launch {
-            adminLoading = true
+            c.adminLoading = true
             try {
-                val (log, clients) = withContext(Dispatchers.IO) { api().adminLog() to api().adminClients() }
-                adminLog = log
-                adminClients = clients
-                adminError = null
+                val (log, clients) = withContext(Dispatchers.IO) { c.api().adminLog() to c.api().adminClients() }
+                c.adminLog = log
+                c.adminClients = clients
+                c.adminError = null
             } catch (e: ApiException) {
-                adminError = e.message
-                if (e.code == "forbidden") admin = false
-                if (e.code == "unauthorized") tokenRefused()
+                c.adminError = e.message
+                if (e.code == "forbidden") c.admin = false
+                if (e.code == "unauthorized") tokenRefused(c)
             } finally {
-                adminLoading = false
+                c.adminLoading = false
             }
         }
     }
 
-    fun endSession(id: String) {
+    fun endSession(c: Conn, id: String) {
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) { api().endSession(id) }
+                withContext(Dispatchers.IO) { c.api().endSession(id) }
             } catch (e: ApiException) {
-                adminError = e.message
+                c.adminError = e.message
             }
-            refreshAdmin()
+            refreshAdmin(c)
         }
     }
 
-    /** One more pane in the window of [pane], beside a wide pane or below a tall one; it opens. */
-    fun splitWindow(pane: Pane) = create(inDialog = false) {
+    /**
+     * One more pane in the window of [pane], beside a wide pane or below a tall one. It opens
+     * alone, or as one more tile of the view [into] when the view asked.
+     */
+    fun splitWindow(pane: Pane, into: List<String>? = null) = create(pane.hub, inDialog = false, into = into) {
         it.split(pane.host, pane.session, pane.windowIndex, if (pane.width > 2 * pane.height) "h" else "v")
     }
 
     /** A session named by the person on [host]; its pane opens and the dialog closes. */
-    fun startSession(host: String, name: String) {
+    fun startSession(hub: String, host: String, name: String, into: List<String>? = null) {
         val n = name.trim()
         if (!Api.SESSION_NAME.matches(n)) {
             createError = "a-z, 0-9, _ and -, up to 32"
             return
         }
-        create(inDialog = true) { it.newSession(host, n) }
+        create(hub, inDialog = true, into = into) { it.newSession(host, n) }
     }
 
-    private fun create(inDialog: Boolean, action: (Api) -> Pane) {
+    private fun create(hub: String, inDialog: Boolean, into: List<String>?, action: (Api) -> Pane) {
         if (creating) return
+        val c = connections.firstOrNull { it.id == hub } ?: return
         viewModelScope.launch {
             creating = true
             createError = null
             try {
-                val pane = withContext(Dispatchers.IO) { action(api()) }
+                val pane = withContext(Dispatchers.IO) { action(c.api()) }.copy(hub = c.id)
                 naming = null
-                open(Screen.View(listOf(pane.address)))
+                open(Screen.View(addTile(into.orEmpty(), pane.key)))
             } catch (e: ApiException) {
-                if (inDialog) createError = e.message else listError = e.message
-                if (e.code == "unauthorized") tokenRefused()
+                if (inDialog) createError = e.message else c.listError = e.message
+                if (e.code == "unauthorized") tokenRefused(c)
             } finally {
                 creating = false
             }
         }
     }
 
-    /** Holds a long poll on the hub's events; any event re-lists the panes. */
-    suspend fun followEvents() {
+    /** [key] as one more pane of the view [open]; at four tiles it takes the first tile's place. */
+    private fun addTile(open: List<String>, key: String): List<String> =
+        if (key in open) open else if (open.size < AddMenu.MAX_TILES) open + key else listOf(key) + open.drop(1)
+
+    /** The keys of every hub with a token, as a word, so the follow starts over when the set changes. */
+    val connectionIds: String get() = connections.joinToString(" ") { it.id }
+
+    /** Holds a long poll on every hub's events; any event re-lists that hub. */
+    suspend fun followEvents() = coroutineScope {
+        for (c in connections) launch { follow(c) }
+    }
+
+    private suspend fun follow(c: Conn) {
         while (true) {
             try {
-                val ev = withContext(Dispatchers.IO) { api().events(cursor, 30) }
-                cursor = ev.next
-                for (e in ev.events) if (e.address.isNotEmpty() && e.kind.isNotEmpty()) lastKind[e.address] = e.kind
-                if (ev.events.isNotEmpty()) refreshList()
+                val ev = withContext(Dispatchers.IO) { c.api().events(c.cursor, 30) }
+                c.cursor = ev.next
+                for (e in ev.events) if (e.address.isNotEmpty() && e.kind.isNotEmpty()) lastKind[Keys.make(c.id, e.address)] = e.kind
+                if (ev.events.isNotEmpty()) refreshList(c)
             } catch (e: ApiException) {
-                if (e.code == "unauthorized") { tokenRefused(); return }
+                if (e.code == "unauthorized") { tokenRefused(c); return }
                 delay(5_000)
             }
         }
     }
 
-    fun toggleSelected(address: String) {
-        if (!selected.remove(address) && selected.size < 4) selected.add(address)
+    fun toggleSelected(key: String) {
+        if (!selected.remove(key) && selected.size < AddMenu.MAX_TILES) selected.add(key)
     }
 
-    fun view(address: String) = views.getOrPut(address) { PaneState(address) }
+    fun view(key: String) = views.getOrPut(key) { PaneState(key) }
 
     /** What the lens says about a pane right now: waiting for you, working, or quiet. */
     fun status(pane: Pane, now: Long): Lens.Status {
-        val changed = views[pane.address]?.let { now - it.changedAt in 0..Lens.RECENT_SECONDS } == true
-        return Lens.status(pane, lastKind[pane.address], changed)
+        val changed = views[pane.key]?.let { now - it.changedAt in 0..Lens.RECENT_SECONDS } == true
+        return Lens.status(pane, lastKind[pane.key], changed)
     }
 
+    /** Whether the pane's hub has a transcriber: the microphone shows. */
+    fun transcriber(key: String): Boolean = connections.firstOrNull { it.id == Keys.hub(key) }?.transcriber == true
+
     /** One read of a pane; a 304 leaves the content alone. */
-    suspend fun pollOnce(address: String) {
-        val v = view(address)
+    suspend fun pollOnce(key: String) {
+        val v = view(key)
         try {
-            val r = withContext(Dispatchers.IO) { api().read(address, settings.lines, v.etag) }
+            val r = withContext(Dispatchers.IO) { api(key).read(v.address, settings.lines, v.etag) }
             if (r != null) {
                 val at = System.currentTimeMillis() / 1000
-                v.pane = r.pane
+                v.pane = r.pane.copy(hub = Keys.hub(key))
                 if (r.content != v.content && Lens.changeCounts(!v.read, v.ownAt, at)) v.changedAt = at
                 v.content = r.content
                 v.trimmed = r.trimmed
@@ -476,19 +553,19 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             v.updated = LocalTime.now().format(CLOCK)
         } catch (e: ApiException) {
             v.error = e.message
-            if (e.code == "unauthorized") tokenRefused()
+            if (e.code == "unauthorized") tokenRefused(conn(key))
             // The pane exited on the host: its tile has nothing left to show.
-            if (e.code == "not_found") drop(address)
+            if (e.code == "not_found") drop(key)
         }
     }
 
-    fun type(address: String, text: String, enter: Boolean): Boolean {
+    fun type(key: String, text: String, enter: Boolean): Boolean {
         val clean = Input.typed(text)
-        val sent = send(address) {
-            if (clean.isNotEmpty()) it.type(address, clean)
-            if (enter) it.key(address, "Enter")
+        val sent = send(key) { api, address ->
+            if (clean.isNotEmpty()) api.type(address, clean)
+            if (enter) api.key(address, "Enter")
         }
-        if (sent && enter && '\n' !in clean && view(address).pane?.let { Commands.isShell(it.command) } == true) remember(clean)
+        if (sent && enter && '\n' !in clean && view(key).pane?.let { Commands.isShell(it.command) } == true) remember(clean)
         return sent
     }
 
@@ -506,17 +583,17 @@ class AppModel(app: Application) : AndroidViewModel(app) {
      * A pane alone in the view sizes its [window] instead, with the pane [zoom]ed over its
      * siblings, so none of them is squeezed.
      */
-    fun fit(address: String, cols: Int, rows: Int, again: Boolean = false, window: Boolean = false, zoom: Boolean = false) {
-        val v = view(address)
-        val key = "${cols}x$rows${if (window) " window" else ""}${if (zoom) " zoom" else ""}"
+    fun fit(key: String, cols: Int, rows: Int, again: Boolean = false, window: Boolean = false, zoom: Boolean = false) {
+        val v = view(key)
+        val sizeKey = "${cols}x$rows${if (window) " window" else ""}${if (zoom) " zoom" else ""}"
         // Once per size, unless asked again, or the host drifted from it (another terminal sized
         // the window): then once more, after twenty seconds, and no further on its own, so two
         // clients never fight over a window; the header shows the drift and a tap sends again.
         val drifted = v.pane?.let { it.width != cols || it.height != rows } == true
         val stale = System.currentTimeMillis() - v.fitAt > 20_000
         if (again) v.fitRetried = false
-        if (v.fitKey == key && !again && !(drifted && stale && !v.fitRetried)) return
-        if (v.fitKey == key && !again) v.fitRetried = true
+        if (v.fitKey == sizeKey && !again && !(drifted && stale && !v.fitRetried)) return
+        if (v.fitKey == sizeKey && !again) v.fitRetried = true
         v.fitJob?.cancel()
         v.fitJob = viewModelScope.launch {
             delay(300)
@@ -524,18 +601,18 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             while (true) {
                 try {
                     v.ownAt = System.currentTimeMillis() / 1000
-                    val p = withContext(Dispatchers.IO) { api().resize(address, cols, rows, window, zoom) }
-                    v.fitKey = key
+                    val p = withContext(Dispatchers.IO) { api(key).resize(v.address, cols, rows, window, zoom) }
+                    v.fitKey = sizeKey
                     v.fitAt = System.currentTimeMillis()
                     v.fitted = true
-                    v.pane = p
+                    v.pane = p.copy(hub = Keys.hub(key))
                     v.etag = null
-                    pollOnce(address)
+                    pollOnce(key)
                     return@launch
                 } catch (e: ApiException) {
                     if (e.code == "rate_limited" && tries++ < 3) { delay(1100); continue }
                     v.error = e.message
-                    if (e.code == "unauthorized") tokenRefused()
+                    if (e.code == "unauthorized") tokenRefused(conn(key))
                     return@launch
                 } catch (e: IllegalArgumentException) {
                     return@launch
@@ -548,18 +625,18 @@ class AppModel(app: Application) : AndroidViewModel(app) {
      * A tile gone while the view stays: the pane keeps the size it was given, so a pane shown
      * again in its place is not sized twice, and nothing is sent when it comes back at that size.
      */
-    fun keep(address: String) {
-        views[address]?.fitJob?.cancel()
+    fun keep(key: String) {
+        views[key]?.fitJob?.cancel()
     }
 
     /** Gives back every pane this view sized; the view calls it when it is left. */
     fun releaseFits() {
-        for (address in views.keys.toList()) release(address)
+        for (key in views.keys.toList()) release(key)
     }
 
     /** Gives the pane back to tmux, if this app ever sized it. */
-    fun release(address: String) {
-        val v = views[address] ?: return
+    fun release(key: String) {
+        val v = views[key] ?: return
         v.fitJob?.cancel()
         v.fitKey = ""
         v.fitAt = 0L
@@ -568,21 +645,21 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         v.fitted = false
         v.ownAt = System.currentTimeMillis() / 1000
         viewModelScope.launch {
-            runCatching { withContext(Dispatchers.IO) { api().release(address) } }
+            runCatching { withContext(Dispatchers.IO) { api(key).release(v.address) } }
             v.etag = null
         }
     }
 
     /** A tap on the pane: a left click at the cell, when the pane's program has the mouse. */
-    fun click(address: String, x: Int, y: Int) = mouse(address, "left", x, y)
+    fun click(key: String, x: Int, y: Int) = mouse(key, "left", x, y)
 
     /**
      * Wheel notches at the cell, the smooth way to scroll a program that has the mouse. They
      * queue behind the request in flight and go as one counted request each, so a long drag
      * is a few requests and the program keeps up with the hand.
      */
-    fun wheel(address: String, up: Boolean, x: Int, y: Int, count: Int = 1) {
-        val v = view(address)
+    fun wheel(key: String, up: Boolean, x: Int, y: Int, count: Int = 1) {
+        val v = view(key)
         if (v.pane?.mouse == false) {
             sendError = ApiException.messageFor(400, "no_mouse_pane")
             return
@@ -598,31 +675,32 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         v.busy = true
         v.ownAt = System.currentTimeMillis() / 1000
         sendError = null
+        val c = conn(v.key)
         try {
             do {
                 while (true) {
                     val n = v.wheel.next() ?: break
-                    wheelCounts = withContext(Dispatchers.IO) { Wheel.deliver(api(), v.address, n, wheelCounts) }
+                    c.wheelCounts = withContext(Dispatchers.IO) { Wheel.deliver(c.api(), v.address, n, c.wheelCounts) }
                     v.etag = null
                     // The screen follows without holding the next request up.
-                    if (v.wheelRead?.isActive != true) v.wheelRead = viewModelScope.launch { pollOnce(v.address) }
+                    if (v.wheelRead?.isActive != true) v.wheelRead = viewModelScope.launch { pollOnce(v.key) }
                 }
                 v.wheelRead?.join()
-                pollOnce(v.address)
+                pollOnce(v.key)
             } while (v.wheel.size > 0)
         } catch (e: ApiException) {
             v.wheel.clear()
             sendError = mouseError(e)
-            if (e.code == "unauthorized") tokenRefused()
+            if (e.code == "unauthorized") tokenRefused(c)
         } finally {
             v.busy = false
         }
     }
 
-    private fun mouse(address: String, button: String, x: Int, y: Int) = send(address) {
-        if (view(address).pane?.mouse == false) throw ApiException(400, "no_mouse_pane")
+    private fun mouse(key: String, button: String, x: Int, y: Int) = send(key) { api, address ->
+        if (view(key).pane?.mouse == false) throw ApiException(400, "no_mouse_pane")
         try {
-            it.mouse(address, button, x, y)
+            api.mouse(address, button, x, y)
         } catch (e: ApiException) {
             throw ApiException(e.status, mouseCode(e))
         }
@@ -638,21 +716,21 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     private fun mouseError(e: ApiException) = ApiException.messageFor(e.status, mouseCode(e))
 
     /** False when the pane is still busy with the previous send. */
-    fun key(address: String, name: String) = send(address) { it.key(address, name) }
+    fun key(key: String, name: String) = send(key) { api, address -> api.key(address, name) }
 
     /**
-     * A spoken clip to the hub's transcriber; [heard] gets the words, which the bar shows and
-     * never sends by itself. A refusal lands in [sendError] like a refused send. False while
-     * the pane is still busy with a send.
+     * A spoken clip to the pane's hub's transcriber; [heard] gets the words, which the bar
+     * shows and never sends by itself. A refusal lands in [sendError] like a refused send.
+     * False while the pane is still busy with a send.
      */
-    fun transcribe(address: String, wav: ByteArray, heard: (String) -> Unit): Boolean {
-        val v = view(address)
+    fun transcribe(key: String, wav: ByteArray, heard: (String) -> Unit): Boolean {
+        val v = view(key)
         if (v.busy) return false
         viewModelScope.launch {
             v.busy = true
             sendError = null
             try {
-                val text = withContext(Dispatchers.IO) { api().transcribe(wav) }
+                val text = withContext(Dispatchers.IO) { api(key).transcribe(wav) }
                 if (text.isNotEmpty()) heard(text)
             } catch (e: ApiException) {
                 sendError = when (e.code) {
@@ -660,7 +738,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                     "bad_input" -> "Too short"
                     else -> e.message
                 }
-                if (e.code == "unauthorized") tokenRefused()
+                if (e.code == "unauthorized") tokenRefused(conn(key))
             } catch (e: IllegalArgumentException) {
                 sendError = "Too short"
             } finally {
@@ -671,19 +749,19 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Whether the pane takes files: true after a 204, false after a refusal, null while unasked. */
-    fun takesFiles(address: String): Boolean? = inbox[address]
+    fun takesFiles(key: String): Boolean? = inbox[key]
 
     /** Asks the hub whether the pane takes files, unless it answered within the minute. */
-    fun probeInbox(address: String) {
+    fun probeInbox(key: String) {
         val now = System.currentTimeMillis()
-        if (now - (inboxAt[address] ?: 0L) < 60_000) return
-        inboxAt[address] = now
+        if (now - (inboxAt[key] ?: 0L) < 60_000) return
+        inboxAt[key] = now
         viewModelScope.launch {
             try {
-                inbox[address] = withContext(Dispatchers.IO) { api().takesFiles(address) }
+                inbox[key] = withContext(Dispatchers.IO) { api(key).takesFiles(Keys.address(key)) }
             } catch (e: ApiException) {
                 // No connection: ask again next time.
-                inboxAt.remove(address)
+                inboxAt.remove(key)
             }
         }
     }
@@ -693,8 +771,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
      * host's inbox, and each path lands in [PaneState.landed] for the line to take. A refusal
      * goes to [sendError] with the file's name. Nothing is typed into the pane.
      */
-    fun sendFiles(address: String, uris: List<Uri>) {
-        val v = view(address)
+    fun sendFiles(key: String, uris: List<Uri>) {
+        val v = view(key)
         v.queued.addAll(uris)
         if (v.fileJob?.isActive == true) return
         v.fileJob = viewModelScope.launch {
@@ -710,14 +788,14 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 var tries = 0
                 while (true) {
                     try {
-                        val sent = withContext(Dispatchers.IO) { api().sendFile(address, f.bytes, f.type) }
+                        val sent = withContext(Dispatchers.IO) { api(key).sendFile(v.address, f.bytes, f.type) }
                         v.landed = v.landed + sent.path
                         break
                     } catch (e: ApiException) {
                         // One file every two seconds per principal: the next of a batch waits its turn.
                         if (e.code == "rate_limited" && tries++ < 3) { delay(2_100); continue }
                         sendError = "${f.name}: ${fileRefusal(e)}"
-                        if (e.code == "unauthorized") { v.queued.clear(); tokenRefused() }
+                        if (e.code == "unauthorized") { v.queued.clear(); tokenRefused(conn(key)) }
                         break
                     }
                 }
@@ -733,25 +811,31 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         else -> e.message?.replaceFirstChar { it.lowercase() } ?: e.code
     }
 
+    private fun hostOf(key: String): Host? {
+        val name = Keys.address(key).substringBefore('/')
+        return connections.firstOrNull { it.id == Keys.hub(key) }?.hosts?.firstOrNull { it.name == name }
+    }
+
     /** Whether the pane's host lets clients close panes; the pane must be writable as well. */
-    fun hostCloses(address: String): Boolean = hosts.any { it.name == address.substringBefore('/') && it.close }
+    fun hostCloses(key: String): Boolean = hostOf(key)?.close == true
 
     /** Whether the pane's host serves files a pane prints the paths of, to writers. */
-    fun hostPreviews(address: String): Boolean = hosts.any { it.name == address.substringBefore('/') && it.preview }
+    fun hostPreviews(key: String): Boolean = hostOf(key)?.preview == true
 
     /** A word for the person in the pane view that is not an error: what was copied, what was saved. */
     var told by mutableStateOf<String?>(null)
 
     /** A file of the host, by inbox name or by a printed path, for the sheet; null when refused. */
-    fun fetchFile(address: String, name: String?, path: String?, done: (Api.Fetched?) -> Unit) {
+    fun fetchFile(key: String, name: String?, path: String?, done: (Api.Fetched?) -> Unit) {
         viewModelScope.launch {
             try {
+                val address = Keys.address(key)
                 val f = withContext(Dispatchers.IO) {
-                    if (name != null) api().readFile(address, name) else api().previewFile(address, path ?: "")
+                    if (name != null) api(key).readFile(address, name) else api(key).previewFile(address, path ?: "")
                 }
                 done(f)
             } catch (e: ApiException) {
-                if (e.code == "unauthorized") tokenRefused()
+                if (e.code == "unauthorized") tokenRefused(conn(key))
                 done(null)
             }
         }
@@ -765,12 +849,12 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Closes the pane on its host; its tile leaves, and with none left the list shows. */
-    fun closePane(addresses: List<String>, address: String) {
+    fun closePane(key: String) {
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) { api().closePane(address) }
-                drop(address)
-                refreshList()
+                withContext(Dispatchers.IO) { api(key).closePane(Keys.address(key)) }
+                drop(key)
+                refreshList(conn(key))
             } catch (e: ApiException) {
                 sendError = e.message
             }
@@ -778,11 +862,11 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Takes a pane out of the view it is open in; the last tile leaves the view for the list. */
-    private fun drop(address: String) {
+    private fun drop(key: String) {
         val view = screen as? Screen.View ?: return
-        if (address !in view.addresses) return
-        views.remove(address)
-        val rest = view.addresses - address
+        if (key !in view.addresses) return
+        views.remove(key)
+        val rest = view.addresses - key
         open(if (rest.isEmpty()) Screen.Panes else Screen.View(rest))
     }
 
@@ -794,12 +878,18 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Replaces one open pane by another, keeping the others. */
-    fun swap(addresses: List<String>, at: Int, address: String) {
-        screen = Screen.View(addresses.mapIndexed { i, a -> if (i == at) address else a })
+    fun swap(addresses: List<String>, at: Int, key: String) {
+        screen = Screen.View(addresses.mapIndexed { i, a -> if (i == at) key else a })
     }
 
-    private fun send(address: String, action: (Api) -> Unit): Boolean {
-        val v = view(address)
+    /** One more tile: [key] joins the view, or, with four tiles on screen ([full]), takes the focused tile's place. */
+    fun addPane(addresses: List<String>, focusedAt: Int, key: String, full: Boolean) {
+        if (key in addresses) return
+        screen = Screen.View(if (!full) addresses + key else addresses.mapIndexed { i, a -> if (i == focusedAt) key else a })
+    }
+
+    private fun send(key: String, action: (Api, String) -> Unit): Boolean {
+        val v = view(key)
         if (v.busy) return false
         // What the pane prints next is this client's doing, not the program working on its own.
         v.ownAt = System.currentTimeMillis() / 1000
@@ -807,12 +897,12 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             v.busy = true
             sendError = null
             try {
-                withContext(Dispatchers.IO) { action(api()) }
+                withContext(Dispatchers.IO) { action(api(key), v.address) }
                 v.etag = null
-                pollOnce(address)
+                pollOnce(key)
             } catch (e: ApiException) {
                 sendError = e.message
-                if (e.code == "unauthorized") tokenRefused()
+                if (e.code == "unauthorized") tokenRefused(conn(key))
             } catch (e: IllegalArgumentException) {
                 sendError = "Nothing to send"
             } finally {
@@ -824,22 +914,17 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * A 401 is final: the token is wrong, expired or revoked. It is deleted so nothing
-     * retries it, which would only run the hub's lockout up for this network.
+     * retries it, which would only run the hub's lockout up for this network. The other
+     * hubs go on; with none left the Connect screen says why.
      */
-    private fun tokenRefused() {
-        api = null
-        probed = false
-        wheelCounts = true
-        transcriber = false
-        admin = false
-        adminLog = emptyList()
-        adminClients = emptyList()
-        vault.clear(settings.current)
-        hasToken = false
-        views.clear()
-        panes = emptyList()
-        notice = "The hub refused the stored token, so it was forgotten. Paste or scan a new one."
-        if (screen !is Screen.Connect) screen = Screen.Connect
+    private fun tokenRefused(c: Conn) {
+        vault.clear(c.id)
+        c.forget()
+        conns.remove(c.id)
+        dropHub(c.id)
+        hasToken = settings.hubs.any { vault.hasToken(it.id) }
+        notice = "${c.name} refused the stored token, so it was forgotten. Paste or scan a new one."
+        if (!ready() && screen !is Screen.Connect) screen = Screen.Connect
         AttentionService.apply(getApplication())
     }
 

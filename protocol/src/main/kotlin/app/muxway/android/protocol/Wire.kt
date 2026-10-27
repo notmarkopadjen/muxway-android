@@ -44,7 +44,7 @@ object Wire {
         val o = obj(bytes) ?: return null
         val id = short(o, "id")
         val address = o.optString("address")
-        if (id.isEmpty() || !Address.valid(address)) return null
+        if (id.isEmpty() || !Keys.valid(address)) return null
         return when (path) {
             READ -> Read(id, address, short(o, "etag"))
             KEY -> Key(id, address, short(o, "key"))
@@ -57,7 +57,7 @@ object Wire {
         val o = obj(bytes) ?: return null
         val id = short(o, "id")
         val address = o.optString("address")
-        if (id.isEmpty() || !Address.valid(address)) return null
+        if (id.isEmpty() || !Keys.valid(address)) return null
         val arr = o.optJSONArray("lines")
         val lines = arr?.let { a ->
             val out = ArrayList<String>(minOf(a.length(), MAX_LINES))

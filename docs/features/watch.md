@@ -320,7 +320,7 @@ watch's microphone.
 
 | Setting | Default | Effect |
 |---|---|---|
-| watch and notifications | off | the background service: notifications on the phone, the board to the watch |
+| watch and notifications | off | the background service: notifications on the phone, the board of every hub's panes to the watch |
 | notification text | off | the notification's text travels to the shade and the watch; kind and pane name always do |
 | watch may answer | off | the watch may send `Enter`, `Esc`, `y`, `n`, `^C` and a spoken line to a writable pane through the phone, phone locked or not; off, the pane screen shows the tail and *phone* only |
 
@@ -330,6 +330,10 @@ watch's microphone.
   and, when the owner allows it, the notification text. A lost watch gives
   an attacker what a glance at its face gives. The board is app-private on
   both ends; the Data Layer binds same-signature apps only.
+- **Rows carry keys.** A row names its pane by the phone's key, `<hub
+  id>:<address>`; the watch passes it back as it is, and the phone's gate
+  sends the request to that pane's hub. The watch never learns a hub's
+  address or token.
 - **The watch can type, and only when allowed.** Decided by the owner
   for the pane screen, and widened on 2026-10-25 to a line typed on the
   watch: an unlocked watch (on the wrist, or with its PIN) can send seven

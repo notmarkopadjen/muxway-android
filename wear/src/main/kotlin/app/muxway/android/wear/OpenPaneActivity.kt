@@ -16,7 +16,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import androidx.wear.compose.material.Text
-import app.muxway.android.protocol.Address
+import app.muxway.android.protocol.Keys
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -26,7 +26,7 @@ class OpenPaneActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val address = intent.getStringExtra(ADDRESS)?.takeIf(Address::valid)
+        val address = intent.getStringExtra(ADDRESS)?.takeIf(Keys::valid)
         setContent {
             Box(Modifier.fillMaxSize().background(Palette.bg).padding(16.dp), contentAlignment = Alignment.Center) {
                 Text(line, color = Palette.ink, fontFamily = Palette.mono, textAlign = TextAlign.Center)

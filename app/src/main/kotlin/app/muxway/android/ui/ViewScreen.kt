@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -47,6 +48,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -57,6 +59,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -67,6 +70,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -110,19 +114,24 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import app.muxway.android.AppModel
+import app.muxway.android.Naming
 import app.muxway.android.PaneState
 import app.muxway.android.Screen
 import app.muxway.android.audio.Recorder
+import app.muxway.android.protocol.AddMenu
 import app.muxway.android.protocol.Ansi
 import app.muxway.android.protocol.Clip
 import app.muxway.android.protocol.Commands
 import app.muxway.android.protocol.Complete
 import app.muxway.android.protocol.Files
 import app.muxway.android.protocol.Input
+import app.muxway.android.protocol.Keys
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Links
 import app.muxway.android.protocol.Blocks
@@ -132,15 +141,20 @@ import kotlin.math.abs
 
 /**
  * One or more panes, side by side in landscape and stacked in portrait. The top row is the tab
- * strip, coloured by each pane's state, and the controls; a swipe across the page moves to the
- * neighbouring pane; one input bar serves the focused pane.
+ * strip, coloured by each pane's state, `+` for one more, and the controls; a swipe across the
+ * page moves to the neighbouring pane; a pane minimised waits in a row above the keys; one
+ * input bar serves the focused pane. [addresses] are keys, every open pane of the view.
  */
 @Composable
 fun ViewScreen(model: AppModel, addresses: List<String>) {
     val p = LocalPalette.current
+    // Minimised panes are open but not tiles: their tabs wait in the row above the keys.
+    var parked by rememberSaveable(saver = listSaver<MutableState<List<String>>, String>({ it.value }, { mutableStateOf(it) })) { mutableStateOf(listOf()) }
+    val minimised = parked.filter { it in addresses }
+    val tiles = addresses.filter { it !in minimised }.ifEmpty { addresses.take(1) }
     var focusedIndex by rememberSaveable { mutableIntStateOf(0) }
-    val index = focusedIndex.coerceIn(0, addresses.lastIndex)
-    val focused = addresses[index]
+    val index = focusedIndex.coerceIn(0, tiles.lastIndex)
+    val focused = tiles[index]
     val state = model.view(focused)
     // Fit: the host pane follows the tile, as a terminal would. On by default.
     var fit by rememberSaveable(addresses) { mutableStateOf(true) }
@@ -158,8 +172,11 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     val now = ticker()
-    val order = model.panes.map { it.address }.ifEmpty { addresses }
+    val order = model.panes.map { it.key }.ifEmpty { addresses }
     DisposableEffect(Unit) { onDispose { model.releaseFits() } }
+    // The `+` menu after the tabs, and the session dialog it may open.
+    var adding by remember { mutableStateOf(false) }
+    model.naming?.takeIf { it.into != null }?.let { SessionDialog(it, model) }
     // A file of the host over the pane; the height the text line takes beyond one row, which
     // the tiles lose and the fit must not take for a resize.
     var shown by remember { mutableStateOf<Shown?>(null) }
@@ -173,10 +190,34 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         return true
     }
 
-    fun show(address: String) {
-        val at = addresses.indexOf(address)
-        if (at >= 0) focusedIndex = at else model.swap(addresses, index, address)
+    fun show(key: String) {
+        val at = tiles.indexOf(key)
+        when {
+            at >= 0 -> focusedIndex = at
+            key in minimised -> {
+                parked = minimised - key
+                focusedIndex = addresses.filter { it !in parked }.indexOf(key)
+            }
+            else -> model.swap(addresses, addresses.indexOf(focused), key)
+        }
         focus.requestFocus()
+    }
+
+    // An existing pane from the menu: one more tile, focused; at four it takes the focused tile's place.
+    fun add(key: String) {
+        if (key in minimised) { show(key); return }
+        val full = tiles.size >= AddMenu.MAX_TILES
+        focusedIndex = if (full) index else tiles.size
+        model.addPane(addresses, addresses.indexOf(focused), key, full)
+        focus.requestFocus()
+    }
+
+    // `_`: the tile leaves for the row above the keys and gives its size back; the last tile stays.
+    fun minimise(key: String) {
+        if (tiles.size < 2) return
+        model.release(key)
+        parked = minimised + key
+        if (key == focused) focusedIndex = 0
     }
 
     // The strip comes round at either end, as ] and [ do in the browser.
@@ -199,8 +240,12 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Btn("‹", { model.open(Screen.Panes) })
-            Tabs(model, addresses, focused, now, Modifier.weight(1f), ::show)
-            if (addresses.size > 1) Btn("▦", { layout = layout.next(addresses.size) })
+            Tabs(model, tiles, minimised, focused, now, Modifier.weight(1f), ::show)
+            Box {
+                Btn("+", { adding = true }, selected = adding, modifier = Modifier.testTag("add"))
+                if (adding) AddMenuPopup(model, addresses, tiles, minimised, focused, now, onClose = { adding = false }) { add(it) }
+            }
+            if (tiles.size > 1) Btn("▦", { layout = layout.next(tiles.size) })
             // Tap: fit on, or send this size once more when it is on already; hold: fit off.
             Btn("⤢", { if (fit) fitAgain++ else fit = true }, selected = fit, enabled = writable, onLongClick = { fit = false })
             if (hardware) Btn("abc", { ime = !ime; if (ime) { fieldFocus.request(); keyboard?.show() } else keyboard?.hide() }, selected = ime)
@@ -209,25 +254,29 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         Rule()
         Box(Modifier.weight(1f)) {
             // Tiles of one window share one fit; the others of it are held.
-            val windowOf = { a: String -> model.panes.firstOrNull { it.address == a }?.let { "${it.host}/${it.session}/${it.windowIndex}" } ?: a }
-            val held = TileFit.held(addresses, focused, windowOf)
+            val windowOf = { a: String -> model.panes.firstOrNull { it.key == a }?.let { "${it.hub}/${it.host}/${it.session}/${it.windowIndex}" } ?: a }
+            val held = TileFit.held(tiles, focused, windowOf)
             // A pane alone in the view sizes its window, zoomed over its siblings when it has any.
-            val siblings = { a: String -> model.panes.any { it.address != a && windowOf(it.address) == windowOf(a) } }
+            val siblings = { a: String -> model.panes.any { it.key != a && windowOf(it.key) == windowOf(a) } }
             val tile: @Composable (Int, Modifier) -> Unit = { i, m ->
-                PaneTile(
-                    model, addresses[i], i == index, addresses.size > 1, fit, addresses[i] in held, siblings(addresses[i]), fitAgain, now, slackPx, m,
-                    onDrop = { from -> model.swapTiles(addresses, from, addresses[i]) },
-                    onClose = { model.closePane(addresses, addresses[i]) },
-                    onFile = { shown = it },
-                    onPrompt = { focusedIndex = i; fieldFocus.request() },
-                ) {
-                    focusedIndex = i
-                    focus.requestFocus()
+                key(tiles[i]) {
+                    PaneTile(
+                        model, tiles[i], i == index, tiles.size > 1, fit, tiles[i] in held, siblings(tiles[i]), fitAgain, now, slackPx, m,
+                        onDrop = { from -> model.swapTiles(addresses, from, tiles[i]) },
+                        onClose = { model.closePane(tiles[i]) },
+                        onMinimise = if (tiles.size > 1) ({ minimise(tiles[i]) }) else null,
+                        onFile = { shown = it },
+                        onPrompt = { focusedIndex = i; fieldFocus.request() },
+                    ) {
+                        focusedIndex = i
+                        focus.requestFocus()
+                    }
                 }
             }
-            Tiles(addresses.size, layout, tile)
+            Tiles(tiles.size, layout, tile)
         }
         Rule()
+        if (minimised.isNotEmpty()) MinimisedRow(model, minimised, now) { show(it) }
         model.sendError?.let { Text(" ! $it", color = p.alert, modifier = Modifier.padding(horizontal = 4.dp)) }
         model.told?.let { Text(" $it", color = p.dim, modifier = Modifier.padding(horizontal = 4.dp)) }
         LaunchedEffect(model.told) { if (model.told != null) { delay(4000); model.told = null } }
@@ -352,10 +401,10 @@ private fun stateColours(status: Lens.Status?): Pair<Color, Color> {
  * thickest and its name in bold. Tapping a closed one swaps it into the focused tile.
  */
 @Composable
-private fun Tabs(model: AppModel, open: List<String>, focused: String, now: Long, modifier: Modifier, onTap: (String) -> Unit) {
+private fun Tabs(model: AppModel, open: List<String>, minimised: List<String>, focused: String, now: Long, modifier: Modifier, onTap: (String) -> Unit) {
     val p = LocalPalette.current
     val panes = ArrayList<Pair<String, Pane?>>()
-    for (pane in model.panes) panes.add(pane.address to pane)
+    for (pane in model.panes) if (pane.key !in minimised) panes.add(pane.key to pane)
     for (a in open) if (panes.none { it.first == a }) panes.add(a to model.view(a).pane)
     val list = rememberLazyListState()
     LaunchedEffect(focused, panes.size) { panes.indexOfFirst { it.first == focused }.takeIf { it >= 0 }?.let { list.animateScrollToItem(it) } }
@@ -374,10 +423,87 @@ private fun Tabs(model: AppModel, open: List<String>, focused: String, now: Long
             ) {
                 status?.let { Lens.glyph(it, pane?.attention?.kind) }?.let { Text("$it ", color = ink, maxLines = 1, modifier = if (waiting) Modifier.alpha(pulse()) else Modifier) }
                 Text(
-                    pane?.name ?: address.substringAfter('/'), color = ink, maxLines = 1,
+                    pane?.name ?: Keys.address(address).substringAfter('/'), color = ink, maxLines = 1,
                     style = LocalTextStyle.current.copy(fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal, shadow = null),
                 )
             }
+        }
+    }
+}
+
+/**
+ * The panes minimised out of the tiles, as tabs right above the keys, each still read so its
+ * state keeps moving; a tap brings the tile back.
+ */
+@Composable
+private fun MinimisedRow(model: AppModel, keys: List<String>, now: Long, onTap: (String) -> Unit) {
+    val p = LocalPalette.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val every = model.settings.refreshSeconds
+    Row(Modifier.fillMaxWidth().background(p.bg).horizontalScroll(rememberScrollState()).testTag("minimised"), verticalAlignment = Alignment.CenterVertically) {
+        Text(" _ ", color = p.faint, maxLines = 1)
+        for (k in keys) key(k) {
+            LaunchedEffect(k, every) {
+                lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                    while (true) {
+                        model.pollOnce(k)
+                        delay(every * 1000L)
+                    }
+                }
+            }
+            val pane = model.panes.firstOrNull { it.key == k } ?: model.view(k).pane
+            val status = pane?.let { model.status(it, now) }
+            val (back, ink) = stateColours(status)
+            Row(
+                Modifier.padding(2.dp).border(1.dp, p.ink).background(back).clickable { onTap(k) }.padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                status?.let { Lens.glyph(it, pane?.attention?.kind) }?.let { Text("$it ", color = ink, maxLines = 1, modifier = if (status == Lens.Status.WAITING) Modifier.alpha(pulse()) else Modifier) }
+                Text(pane?.name ?: Keys.address(k).substringAfter('/'), color = ink, maxLines = 1, style = LocalTextStyle.current.copy(shadow = null))
+            }
+        }
+    }
+    Rule()
+}
+
+/**
+ * The `+` menu: one more pane beside the focused one, a session on its host, the minimised
+ * panes, then every other pane by hub, host and session; a pick becomes a tile.
+ */
+@Composable
+private fun AddMenuPopup(model: AppModel, addresses: List<String>, tiles: List<String>, minimised: List<String>, focused: String, now: Long, onClose: () -> Unit, onPick: (String) -> Unit) {
+    val p = LocalPalette.current
+    val rows = AddMenu.rows(model.panes, model.hosts, tiles, minimised, focused) { model.hubName(it) }
+    BackHandler(onBack = onClose)
+    Popup(alignment = Alignment.TopEnd, onDismissRequest = onClose, properties = PopupProperties(focusable = true)) {
+        Column(
+            Modifier.width(300.dp).border(1.dp, p.ink).background(p.panel).padding(4.dp).testTag("add-menu")
+                .then(Modifier.heightIn(max = 420.dp)).verticalScroll(rememberScrollState()),
+        ) {
+            val item: @Composable (String, String?, String?, () -> Unit) -> Unit = { label, place, reason, act ->
+                Row(
+                    Modifier.fillMaxWidth().clickable(enabled = reason == null, onClick = act).padding(horizontal = 4.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(label, color = if (reason == null) p.ink else p.faint, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    (reason ?: place)?.let { Text("  $it", color = p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)) }
+                }
+            }
+            for (row in rows) when (row) {
+                is AddMenu.Row.NewPane -> item("+ pane", "beside ${row.pane.name}", row.reason) {
+                    onClose(); model.splitWindow(row.pane, into = addresses)
+                }
+                is AddMenu.Row.NewSession -> item("+ session", "on ${row.host}", row.reason) {
+                    onClose(); model.createError = null; model.naming = Naming(row.hub, row.host, into = addresses)
+                }
+                is AddMenu.Row.Rule -> Rule(Modifier.padding(vertical = 2.dp))
+                is AddMenu.Row.Heading -> Text(row.text, color = p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
+                is AddMenu.Row.Item -> {
+                    val g = Lens.glyph(model.status(row.pane, now), row.pane.attention?.kind)?.let { "$it " } ?: ""
+                    item("$g${row.pane.name}", if (row.minimised) "minimised" else row.pane.label, null) { onClose(); onPick(row.pane.key) }
+                }
+            }
+            if (rows.isEmpty()) Text("nothing to add", color = p.dim, modifier = Modifier.padding(4.dp))
         }
     }
 }
@@ -424,7 +550,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
     val text = line.text.toString()
     fun send(enter: Boolean) {
         if (text.isEmpty() && !enter) return
-        model.type(state.address, text, enter)
+        model.type(state.key, text, enter)
         line.clearText()
     }
     val busy = state.busy
@@ -432,13 +558,13 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
     // Files for the pane's program: from the keyboard or a pasted clip through the line, from
     // the picker through ⇪, from a share through the chooser. Each path lands on the line with
     // a space after it, focused; nothing is sent. A host without an inbox is told about.
-    LaunchedEffect(state.address) { model.probeInbox(state.address) }
-    val takes = model.takesFiles(state.address)
+    LaunchedEffect(state.address) { model.probeInbox(state.key) }
+    val takes = model.takesFiles(state.key)
     val sending = state.sending
     fun files(uris: List<Uri>) {
         if (uris.isEmpty()) return
         if (takes == false) model.sendError = "No inbox on ${state.pane?.host ?: state.address.substringBefore('/')}: its agent needs --inbox"
-        else model.sendFiles(state.address, uris)
+        else model.sendFiles(state.key, uris)
     }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { files(it) }
     LaunchedEffect(state.landed) {
@@ -467,7 +593,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
             model.sendError = "Too short"
             return
         }
-        hearing = model.transcribe(state.address, clip.wav()) { heard ->
+        hearing = model.transcribe(state.key, clip.wav()) { heard ->
             val t = line.text.toString()
             line.setTextAndPlaceCursorAtEnd(if (t.isEmpty()) heard else "$t $heard")
             fieldFocus.request()
@@ -500,15 +626,15 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
     BackHandler(enabled = board && recorder == null) { board = false }
     BackHandler(enabled = recorder != null) { dropClip() }
     DisposableEffect(state.address) { onDispose { dropClip() } }
-    if (board && writable) state.pane?.let { KeyboardPanel(model, state.address, it.host) { board = false } }
+    if (board && writable) state.pane?.let { KeyboardPanel(model, state.key, it.host) { board = false } }
     Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Btn("Esc", { model.key(state.address, "Escape") }, enabled = !busy)
+        Btn("Esc", { model.key(state.key, "Escape") }, enabled = !busy)
         LazyRow(Modifier.weight(1f)) {
             items(Input.KEYS.filter { it.first != "Escape" && it.first != "Enter" }, key = { it.first }) { (name, label) ->
-                Btn(label, { model.key(state.address, name) }, enabled = !busy)
+                Btn(label, { model.key(state.key, name) }, enabled = !busy)
             }
         }
-        Btn("Enter", { model.key(state.address, "Enter") }, enabled = !busy)
+        Btn("Enter", { model.key(state.key, "Enter") }, enabled = !busy)
     }
     state.pane?.let { Commands.forPane(it, model.recent) }?.let { (kind, commands) ->
         val claude = kind == Commands.Kind.CLAUDE
@@ -520,7 +646,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (i == fixed) Text(" │ ", color = p.faint, maxLines = 1)
                         Btn(c.label, {
-                            if (c.send) model.type(state.address, c.text, enter = true)
+                            if (c.send) model.type(state.key, c.text, enter = true)
                             else { line.setTextAndPlaceCursorAtEnd(c.text); fieldFocus.request() }
                         }, enabled = !busy)
                     }
@@ -582,7 +708,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
         Btn("⌨\uFE0E", { board = !board }, selected = board, enabled = writable, modifier = Modifier.testTag("keyboard-open"))
         if (takes == true) Btn("⇪", { pick.launch(Files.MIMES.toTypedArray()) }, enabled = !busy && sending == null, modifier = Modifier.testTag("files"))
         // Held, it records until the finger lifts; tapped, it records and the next tap stops.
-        if (model.transcriber) {
+        if (model.transcriber(state.key)) {
             Btn(
                 if (recorder != null) "■" else "◉", {}, enabled = !busy && !hearing,
                 onDown = { pressedIdle = recorder == null; if (pressedIdle) speak() },
@@ -607,7 +733,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
-private fun PaneTile(model: AppModel, address: String, focused: Boolean, several: Boolean, fitAsked: Boolean, shared: Boolean, siblings: Boolean, fitAgain: Int, now: Long, slackPx: Int, modifier: Modifier, onDrop: (String) -> Unit, onClose: () -> Unit, onFile: (Shown) -> Unit, onPrompt: () -> Unit, onFocus: () -> Unit) {
+private fun PaneTile(model: AppModel, address: String, focused: Boolean, several: Boolean, fitAsked: Boolean, shared: Boolean, siblings: Boolean, fitAgain: Int, now: Long, slackPx: Int, modifier: Modifier, onDrop: (String) -> Unit, onClose: () -> Unit, onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onPrompt: () -> Unit, onFocus: () -> Unit) {
     // Another tile of this window carries the fit: this one is held.
     val fit = fitAsked && !shared
     var asking by remember(address) { mutableStateOf(false) }
@@ -662,6 +788,8 @@ private fun PaneTile(model: AppModel, address: String, focused: Boolean, several
                 val held = shared || (state.fitKey.isNotEmpty() && state.fitKey != "${pane.width}x${pane.height}")
                 Text(" ${pane.width}×${pane.height}${if (held) " held" else ""} ", color = if (held) p.alert else ink, maxLines = 1)
             }
+            // Minimising keeps the pane open in the row above the keys; off on the last tile.
+            Text(" _ ", color = if (onMinimise != null) ink else p.faint, maxLines = 1, modifier = Modifier.clickable(enabled = onMinimise != null) { onMinimise?.invoke() }.testTag("minimise"))
             // Closing ends what runs in the pane on the host: the header asks first.
             if (pane?.writable == true && model.hostCloses(address)) {
                 if (asking) {

@@ -31,7 +31,8 @@ fun App(model: AppModel) {
     // While connected and in the foreground: a long poll on events, and a re-list every 15 s.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val connected = model.screen !is Screen.Connect
-    LaunchedEffect(connected) {
+    val hubs = model.connectionIds
+    LaunchedEffect(connected, hubs) {
         if (!connected) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             launch { model.followEvents() }

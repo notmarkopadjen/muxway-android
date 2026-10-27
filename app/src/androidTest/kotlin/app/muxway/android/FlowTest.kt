@@ -10,13 +10,18 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onChildren
+import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ActivityScenario
+import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.muxway.android.store.Hub
@@ -46,6 +51,8 @@ class FlowTest {
     private val hub = args.getString("hub") ?: ""
     private val token = args.getString("token") ?: ""
     private val adminToken = args.getString("adminToken") ?: ""
+    private val hub2 = args.getString("hub2") ?: ""
+    private val token2 = args.getString("token2") ?: ""
     private var scenario: ActivityScenario<MainActivity>? = null
     private var step = 0
 
@@ -61,6 +68,14 @@ class FlowTest {
     fun close() {
         scenario?.close()
         Vault(context).clear("test")
+        Vault(context).clear("two")
+    }
+
+    /** The second hub joins the list; its host is bob-server. */
+    private fun seedSecondHub() {
+        assumeTrue("hub2 and token2 come from scripts/ui-tests.sh", hub2.isNotEmpty() && token2.isNotEmpty())
+        SettingsStore(context).save(Settings(hubs = listOf(Hub("test", "test", hub), Hub("two", "two", hub2)), current = "test", refreshSeconds = 1))
+        Vault(context).store("two", token2)
     }
 
     private fun shot(name: String) {
@@ -182,5 +197,56 @@ class FlowTest {
         await("scratch/0.0")
         await("$ ")
         shot("new-session")
+    }
+
+    @Test
+    fun theAddMenuAddsATileAndTheHeaderMinimisesIt() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        rule.onNodeWithTag("add").performClick()
+        rule.onNodeWithTag("add-menu").assertExists()
+        await("+ session")
+        shot("add-menu")
+        await("+ pane").performClick()
+        // Two tiles: two headers with the mode, two `_`.
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 2 }
+        shot("added")
+        rule.onAllNodesWithTag("minimise")[1].performClick()
+        rule.onNodeWithTag("minimised").assertExists()
+        rule.onAllNodesWithTag("minimise").assertCountEquals(1)
+        shot("minimised")
+        // The menu lists it as minimised; a tap on the row brings it back.
+        rule.onNodeWithTag("add").performClick()
+        await("minimised")
+        Espresso.pressBack()
+        rule.onNodeWithTag("minimised").onChildren().onLast().performClick()
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 2 }
+        rule.onAllNodesWithTag("minimised").assertCountEquals(0)
+        shot("restored")
+    }
+
+    @Test
+    fun everyHubIsListedAndOpensSideBySide() {
+        seedSecondHub()
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0")
+        await("ops/0.0")
+        rule.onNodeWithTag("hub:test").assertExists()
+        rule.onNodeWithTag("hub:two").assertExists()
+        shot("two-hubs")
+        await("work/0.0").performTouchInput { longClick() }
+        await("ops/0.0").performClick()
+        await("open 2 side by side").performClick()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 2 }
+        rule.onNode(hasSetTextAction()).performTextInput("echo from-two-hubs")
+        rule.onNodeWithText("⏎").performClick()
+        await("from-two-hubs")
+        shot("two-hubs-side-by-side")
+        rule.onNodeWithText("‹").performClick()
+        await("ops/0.0")
+        rule.onNodeWithText("settings").performClick()
+        await("save and connect")
+        rule.onAllNodes(hasText(token2.substring(4, 20), substring = true)).assertCountEquals(0)
     }
 }

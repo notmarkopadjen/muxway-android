@@ -10,18 +10,20 @@ preferences. For an admin token, Settings ends with the
 
 A hub gathers hosts; a person with a hub at home and one at work has two
 addresses and two tokens. The app keeps a list of hubs, each with its own
-token in the Keystore, and talks to **one at a time**: the `▸` marks it,
-and with more than one hub the pane list's header says which (`panes ·
-work`). The decision behind it, taken on 2026-10-24 for every client:
-hubs stay separate. No list mixes two hubs' panes, no hub relays another,
-and switching rebuilds the client, the pane list and the watch service
-for the hub chosen. A single hub looks as it always did.
+token in the Keystore, and talks to **all of them at once**: the pane
+list shows every hub's panes, each hub under its own line, and panes of
+two hubs open side by side. The decision of 2026-10-24 (one hub at a
+time, hubs never mixed) was reversed by the owner on 2026-10-27, for
+every client: see `docs/plans/2026-10-27-every-hub.md`. A single hub
+looks as it always did. The `▸` marks a hub that has a token; a hub
+without one says so and is listed nowhere until it gets one.
 
 ```
 ┌─ muxway ─┐  connect ──────────────── [panes]
 ─ hubs ─────────────────────────── + hub ─
 ▸ home   https://hub.example.com   [edit] [×]
-  work   https://work.example.com  [use] [edit] [×]
+▸ work   https://work.example.com  [edit] [×]
+  lab    https://lab.example.com · no token  [edit] [×]
 hub home
 name   [home                       ]
 hub    [https://hub.example.com    ]
@@ -37,13 +39,18 @@ token  [stored · paste to replace  ]
 | token | Pasted once, then kept in the Keystore under the hub's own id. The field is a password field and is empty after saving; the hint says `stored`. |
 
 **save and connect** checks the URL and the name, stores the token when
-one was pasted, and switches to that hub: the pane list opens. **use**
-switches to another hub with the token it has. **edit** puts a hub in
-the form; **+ hub** empties it for a new one. **×** removes a hub and its
-token; when it was the one in use, the next in the list takes over.
-**scan code** opens the camera for a connect code (below), which adds the
-hub it names with its token, or, for a hub already in the list, asks
-whether the new token replaces the stored one.
+one was pasted, and opens the pane list, where the hub now has its
+panes. **edit** puts a hub in the form; **+ hub** empties it for a new
+one. **×** removes a hub and its token; the others go on. **scan code**
+opens the camera for a connect code (below), which adds the hub it names
+with its token, or, for a hub already in the list, asks whether the new
+token replaces the stored one.
+
+Inside the app a pane is known by its **key**, `<hub id>:<address>`, so
+two hubs' panes never collide and every request goes to the hub the
+pane came from with the address that hub knows. The key never reaches a
+hub. A link or a watch row with a bare address means the first hub,
+which keeps links from before working.
 
 ```mermaid
 flowchart TD
@@ -53,11 +60,14 @@ flowchart TD
     T -- yes --> V[Vault.store id: AES-GCM, Keystore key]
     T -- no, one stored for the hub --> W
     T -- no, none --> E2[Paste a token]
-    V --> W["use: current = id; client, list and watch rebuilt"]
-    W --> P[Panes]
-    L[use on another row] --> W
-    R[× on a row] --> D["Vault.clear id; next hub takes over"]
+    V --> W["a client for the hub; its listing and events join the others"]
+    W --> P[Panes: every hub]
+    R[× on a row] --> D["Vault.clear id; its panes leave the list"]
 ```
+
+A hub that refuses its token has that token forgotten, and the Connect
+screen says which hub; the other hubs stay listed. Only with no token
+left at all does the app start on the Connect screen.
 
 An install from before the list keeps its one hub under a fixed id, and
 the token stored before moves under that id the first time it is asked
@@ -75,7 +85,7 @@ for.
 | assume a hardware keyboard | The input field takes focus without raising the on-screen keyboard; `abc` in the pane view's top row brings it up. The input connection stays, so dictation keyboards keep working. Off by default. |
 | effects | Glow, scanlines, vignette, power-on and pulses (see [look](look.md)). On by default. |
 | reflow | With fit off, reflow long rows to the screen instead of scaling the pane's width. Off by default. |
-| watch and notifications | Follow the panes of the hub in use in the background: a notification when one waits, the board to a paired watch (see [notifications](notifications.md) and [the watch](watch.md)). Off by default. |
+| watch and notifications | Follow the panes of every hub in the background: a notification when one waits, the board to a paired watch (see [notifications](notifications.md) and [the watch](watch.md)). Off by default. |
 | notification text | Send what a pane said to the notification shade and the watch, not only its kind and name. Off by default. |
 
 **save settings** keeps them and returns to the panes.

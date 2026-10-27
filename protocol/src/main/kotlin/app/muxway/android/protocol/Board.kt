@@ -4,7 +4,7 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
-/** One pane as a glanceable client shows it. [state] is one of [Board.QUIET], [Board.WORKING], [Board.WAITING]. */
+/** One pane as a glanceable client shows it: [address] is its key (see [Keys]); [state] is one of [Board.QUIET], [Board.WORKING], [Board.WAITING]. */
 data class Row(val address: String, val name: String, val state: Int, val kind: String, val at: Long, val text: String) {
     val status: Lens.Status
         get() = when (state) {
@@ -61,7 +61,7 @@ data class Board(val rows: List<Row>, val at: Long, val live: Boolean) {
                 val s = status(p)
                 val a = p.attention
                 Row(
-                    address = p.address,
+                    address = p.key,
                     name = p.name,
                     state = when (s) { Lens.Status.WAITING -> WAITING; Lens.Status.WORKING -> WORKING; Lens.Status.QUIET -> QUIET },
                     kind = if (s == Lens.Status.WAITING) a?.kind.orEmpty() else "",
@@ -83,7 +83,7 @@ data class Board(val rows: List<Row>, val at: Long, val live: Boolean) {
                 for (i in 0 until minOf(arr.length(), MAX_ROWS)) {
                     val r = arr.optJSONObject(i) ?: continue
                     val address = clean(r.optString("address"))
-                    if (!Address.valid(address)) continue
+                    if (!Keys.valid(address)) continue
                     rows.add(Row(address, clean(r.optString("name")), r.optInt("state").coerceIn(QUIET, WAITING), clean(r.optString("kind")), r.optLong("at"), clean(r.optString("text"))))
                 }
                 Board(rows, o.optLong("at"), o.optBoolean("live"))

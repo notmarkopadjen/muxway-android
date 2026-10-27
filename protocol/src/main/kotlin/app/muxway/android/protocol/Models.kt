@@ -4,7 +4,7 @@ package app.muxway.android.protocol
  * [sessions]: the host's agent lets clients start sessions; [close]: and close writable panes;
  * [preview]: it serves files under roots its owner named, to writers, when a pane prints their paths.
  */
-data class Host(val name: String, val online: Boolean, val sessions: Boolean = false, val close: Boolean = false, val keys: Int = 0, val preview: Boolean = false)
+data class Host(val name: String, val online: Boolean, val sessions: Boolean = false, val close: Boolean = false, val keys: Int = 0, val preview: Boolean = false, val hub: String = "")
 
 data class Attention(val kind: String, val at: Long, val text: String)
 
@@ -29,8 +29,13 @@ data class Pane(
     /** The cursor's cell, 1-based, where the program waits for input; 0 when the hub does not say. */
     val cursorX: Int = 0,
     val cursorY: Int = 0,
+    /** The app's id for the hub that listed the pane; "" before the app set it. */
+    val hub: String = "",
 ) {
     val writable get() = mode == "write"
+
+    /** What the app knows the pane by: the hub and the address (see [Keys]). */
+    val key get() = Keys.make(hub, address)
 
     /** The alias when there is one, else session/window.pane. */
     val label get() = alias.ifEmpty { "$session/$windowIndex.$paneIndex" }

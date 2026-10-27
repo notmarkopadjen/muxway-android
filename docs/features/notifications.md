@@ -1,7 +1,7 @@
 # Notifications on the phone
 
 With the **watch and notifications** setting on, the app follows the panes
-while it is closed and tells you when one waits: a question, a permission,
+of every hub it has a token for while it is closed and tells you when one waits: a question, a permission,
 idle or done. The AI coding agent in the pane (Claude Code is the one
 tested) tells the hub through its hooks, as the core's
 [notifications](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/notifications.md)
@@ -44,14 +44,18 @@ sequenceDiagram
         H-->>S: panes with attention
         S->>N: post new waits, clear ended ones, update the summary
     end
-    N->>A: tap: muxway://open?pane=alice-laptop/work/0.0
-    A->>A: View on that pane
+    N->>A: tap: muxway://open?pane=h1:alice-laptop/work/0.0
+    A->>A: View on that pane, of hub h1
 ```
 
 The service starts when the setting is switched on, when the app opens
-with it on, and after a reboot. It stops with the setting, when the token
-is forgotten, and when the hub refuses the token (which, as in the app,
-forgets the token; the summary says so). While the app is open it runs its
+with it on, and after a reboot. One long poll runs per hub; the board
+and the notifications are the union of what every hub says. It stops
+with the setting, when every token is forgotten, and when the last hub
+refuses its token (a refusal, as in the app, forgets that hub's token;
+the summary says so, and the other hubs go on). The link a notification
+carries names the pane by its key, `<hub id>:<address>`; a bare address
+means the first hub. While the app is open it runs its
 own poll as well; two held requests cost the hub nothing it minds.
 
 Android 13 and later ask for permission to post notifications when the

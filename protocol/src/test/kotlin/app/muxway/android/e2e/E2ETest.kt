@@ -508,7 +508,7 @@ class E2ETest {
         val (api, _) = setup()
         val address = "$HOST/work/0.0"
         var allowed = false
-        val gate = WatchGate(api, { api.panes() }, { allowed })
+        val gate = WatchGate({ api }, { api.panes() }, { allowed })
         api.type(address, "read -p 'Deploy to prod? (y/N) ' a; echo \"answer=\$a\"")
         api.key(address, "Enter")
         waitPane("Deploy to prod?")
@@ -543,7 +543,7 @@ class E2ETest {
         cleanups.add(stt::close)
         val (api, _) = setup(sttUrl = stt.url + "/v1/audio/transcriptions")
         val address = "$HOST/work/0.0"
-        val gate = WatchGate(api, { api.panes() }, { true })
+        val gate = WatchGate({ api }, { api.panes() }, { true })
         assertTrue(gate.read(Wire.Read("r1", address, "")).transcriber)
         val heard = gate.transcribe("c1", Clip.wav(ByteArray(Clip.SAMPLE_RATE * 2)))
         assertEquals("", heard.error)

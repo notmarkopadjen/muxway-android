@@ -45,7 +45,7 @@ private fun Toggle(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
 }
 
 /**
- * The hubs this phone knows, one in use, and the form that adds or changes one; then the
+ * The hubs this phone knows, every one with a token in use, and the form that adds or changes one; then the
  * preferences. With no hub yet it is the form alone, as the first screen.
  */
 @Composable
@@ -53,7 +53,7 @@ fun ConnectScreen(model: AppModel) {
     val p = LocalPalette.current
     val saved = model.settings
     // The form edits one hub, or with null adds a new one.
-    var editing by rememberSaveable { mutableStateOf(saved.current.ifEmpty { null }) }
+    var editing by rememberSaveable { mutableStateOf(saved.hubs.firstOrNull()?.id) }
     val hub = saved.hubs.firstOrNull { it.id == editing }
     var name by rememberSaveable(editing) { mutableStateOf(hub?.name ?: "") }
     var url by rememberSaveable(editing) { mutableStateOf(hub?.url ?: "") }
@@ -80,7 +80,7 @@ fun ConnectScreen(model: AppModel) {
         problem = model.saveHub(editing, name, url, token)
         if (problem == null) {
             token = ""
-            editing = model.settings.current
+            editing = editing ?: model.settings.hubs.lastOrNull()?.id
         }
     }
 
@@ -105,7 +105,7 @@ fun ConnectScreen(model: AppModel) {
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(4.dp)) {
         Frame("muxway", crumb = "connect") {
-            if (model.hasToken && saved.hubUrl.isNotEmpty()) Btn("panes", { model.back() })
+            if (model.hasToken) Btn("panes", { model.back() })
         }
         Spacer(Modifier.height(8.dp))
         model.notice?.let { Text("! $it", color = p.alert, modifier = Modifier.padding(vertical = 4.dp)) }
@@ -115,10 +115,9 @@ fun ConnectScreen(model: AppModel) {
             }) {
                 for (h in saved.hubs) {
                     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (h.id == saved.current) "▸ " else "  ", color = p.accent, maxLines = 1)
+                        Text(if (model.hasTokenFor(h.id)) "▸ " else "  ", color = p.accent, maxLines = 1)
                         Text(h.name, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        Text(h.url, color = p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(2f))
-                        if (h.id != saved.current) Btn("use", { model.useHub(h.id) })
+                        Text(if (model.hasTokenFor(h.id)) h.url else "${h.url} · no token", color = p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(2f))
                         Btn("edit", { editing = h.id; problem = null }, selected = editing == h.id)
                         Btn("×", { if (editing == h.id) editing = null; model.removeHub(h.id) })
                     }
@@ -174,7 +173,7 @@ fun ConnectScreen(model: AppModel) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Btn("save settings", ::saveSettings)
         }
-        if (model.admin && model.hasToken) AdminSection(model)
+        for (c in model.adminHubs) AdminSection(model, c)
         Spacer(Modifier.height(12.dp))
         Text("  https only. plain http reaches localhost alone.\n  each hub's token is kept in the keystore and never shown again.", color = p.dim)
     }

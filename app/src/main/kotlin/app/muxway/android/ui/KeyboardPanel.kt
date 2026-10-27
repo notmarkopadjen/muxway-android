@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.muxway.android.AppModel
 import app.muxway.android.protocol.Keyboard
+import app.muxway.android.protocol.Keys
 import kotlinx.coroutines.delay
 
 /**
@@ -64,7 +65,7 @@ fun KeyboardPanel(model: AppModel, address: String, host: String, onClose: () ->
     Column(Modifier.fillMaxWidth().border(1.dp, p.ink).background(p.bg).testTag("keyboard")) {
         Row(Modifier.fillMaxWidth().background(p.panel).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("┌─ keyboard ─ ", color = p.dim, maxLines = 1, fontSize = 12.sp)
-            Text(address, color = p.accent, maxLines = 1, fontSize = 12.sp, modifier = Modifier.weight(1f).testTag("keyboard-target"))
+            Text(Keys.address(address), color = p.accent, maxLines = 1, fontSize = 12.sp, modifier = Modifier.weight(1f).testTag("keyboard-target"))
             Btn("_", { folded = !folded })
             Btn("×", onClose, modifier = Modifier.testTag("keyboard-close"))
         }

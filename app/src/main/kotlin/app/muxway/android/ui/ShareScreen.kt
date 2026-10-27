@@ -31,7 +31,7 @@ fun ShareScreen(model: AppModel) {
     val now = ticker()
     val n = model.sharing.size
     val writable = model.panes.filter { it.writable }
-    LaunchedEffect(writable.map { it.address }) { for (pane in writable) model.probeInbox(pane.address) }
+    LaunchedEffect(writable.map { it.key }) { for (pane in writable) model.probeInbox(pane.key) }
     Column(Modifier.fillMaxSize().padding(4.dp)) {
         Frame("muxway", crumb = if (n == 1) "share a file" else "share $n files") {
             Btn("cancel", { model.open(Screen.Panes) })
@@ -45,7 +45,7 @@ fun ShareScreen(model: AppModel) {
             if (n > 0) for ((host, panes) in writable.groupBy { it.host }) {
                 item(key = "host:$host") {
                     Panel(host, Modifier.padding(vertical = 4.dp)) {
-                        for (pane in panes) ShareRow(pane, model.status(pane, now), model.takesFiles(pane.address)) { model.shareInto(pane.address) }
+                        for (pane in panes) ShareRow(pane, model.status(pane, now), model.takesFiles(pane.key)) { model.shareInto(pane.key) }
                     }
                 }
             }

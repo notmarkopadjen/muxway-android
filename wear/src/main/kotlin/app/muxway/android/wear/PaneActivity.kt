@@ -55,7 +55,7 @@ import androidx.wear.compose.material.PositionIndicator
 import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
 import androidx.wear.input.RemoteInputIntentHelper
-import app.muxway.android.protocol.Address
+import app.muxway.android.protocol.Keys
 import app.muxway.android.protocol.Ansi
 import app.muxway.android.protocol.Board
 import app.muxway.android.protocol.ClaudeLens
@@ -116,7 +116,7 @@ class PaneActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        address = intent.getStringExtra(ADDRESS)?.takeIf(Address::valid) ?: run { finish(); return }
+        address = intent.getStringExtra(ADDRESS)?.takeIf(Keys::valid) ?: run { finish(); return }
         val row = BoardStore.load(this).rows.firstOrNull { it.address == address }
         setContent { if (menu) Menu() else Screen(row) }
         lifecycleScope.launch {

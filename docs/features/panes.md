@@ -1,17 +1,26 @@
 # The pane list
 
-Every pane the token may read, from `GET /v1/panes`, grouped by host.
+Every pane every hub lists for its token, from each hub's `GET /v1/panes`,
+grouped by hub (with more than one) and by host.
 
 ```
 ┌─ muxway · panes ───────────── [refresh] [settings] ─┐
+══ home ══════════════════════════════════════════════
 ── alice-laptop ───────────────────────── + session ──
 * build        node          ! permission
 * work/0.0     bash
 │  + pane
   work/1.0     tail
 ── bob-desktop ──────────────────────────── offline ──
+══ work ═══════════════════════════ ! No connection ══
   tap to open · hold to pick several
 ```
+
+- With several hubs each has a line, `══ name ══`, over its hosts, and
+  its own trouble at the line's end; one hub has no line, and its trouble
+  shows above the list as before. Hosts of one hub never mix with
+  another's. A pane is known by its key, `<hub id>:<address>` (see
+  [connect](connect.md)), so a pick of several can span hubs.
 
 - A row is the pane's name (the title its program set, else the alias or
   `session/window.pane`), then its place and command. `*` marks a pane

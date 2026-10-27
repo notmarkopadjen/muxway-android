@@ -41,7 +41,7 @@ class WatchGateTest {
     private fun json(status: Int, body: String, headers: Map<String, String> = emptyMap()) =
         Response(status, body.toByteArray(), mapOf("Content-Type" to "application/json") + headers)
 
-    private fun gate() = WatchGate(Api(server.url, token, "test"), { panes }, { allowed }, { now })
+    private fun gate() = WatchGate({ Api(server.url, token, "test") }, { panes }, { allowed }, { now })
 
     private fun bodies() = seen.filter { it.path.endsWith("/input") }.map { String(it.body) }
 

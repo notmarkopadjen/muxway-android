@@ -4,24 +4,7 @@
 
 Android client for [muxway](https://github.com/notmarkopadjen/muxway):
 your tmux panes on a phone, one per screen or side by side, and on a
-Wear OS watch.
-
-```
-[‹] [ ✳ ! fixing the build ][ bash · make ][ tail ]        ⤢ abc ⚙
-┌──────────────────────────────────────────────────────────────┐
-│ ✳ Claude · fixing the build · work/0.0 · write   ! permission │
-│ ⏺ Bash(go test ./pkg/store/...)                                │
-│   ⎿  ok   orbit/pkg/store  0.311s                              │
-│ ╭────────────────────────────────────────────╮                 │
-│ │ Do you want to proceed?                    │                 │
-│ │ ❯ 1. Yes                                   │                 │
-│ │   2. No                                    │                 │
-│ ╰────────────────────────────────────────────╯                 │
-└──────────────────────────────────────────────────────────────┘
-> type into alice-laptop/work/0.0                        [⇪] [◉] [⏎]
-[Esc] [Tab] [S-Tab] [^C] [↑] [↓] [←] [→] [BS] …
-✳ [/clear] [/compact] [/model] [/resume] …
-```
+Wear OS watch. Security first: a tmux pane is a shell.
 
 > Works day to day: connect with a token or by scanning a code, list
 > panes, open one or several, switch with tabs, size the host pane to the
@@ -31,36 +14,68 @@ Wear OS watch.
 > complications, a tile, and a pane's tail with a few answers and the
 > microphone on the wrist.
 
-## What it does
+## Only here
 
-- **Panes**, grouped by host, named by what runs in them. Tap opens,
-  hold picks up to four for one screen. `+ pane` splits a window, `+
-  session` starts one, where the host's agent allows it.
-- **The pane view**: tabs painted with each pane's state, one input bar
-  for the focused pane, a key bar, Claude Code's slash commands or a
-  shell's recent lines in a command row. **Fit** sizes the pane on the
-  host to the phone; off, pinch to zoom the host's own width.
-- **Notifications** when a pane waits: a question, a permission, idle,
-  done, as the AI coding agent in the pane reports them to the hub
-  through its hooks; a tap lands on the pane.
-- **Lenses**: a lens knows one agent's screen. **The Claude Code lens**
-  knows Claude's: a pane's state, its question, and what to hide on a
-  small display. Only Claude Code has been tested so far; another agent
-  needs its own hooks calling `muxway notify` on the host, and a lens for
-  its screen.
-- **The watch**: a watch face and complications that count the waiting
-  panes, a tile, and a pane on the wrist with a reply menu, a row of keys
-  and the microphone; *phone* opens the same pane on the phone behind the
-  lock screen. See [the watch](docs/features/watch.md).
-- **Several hubs**, each with its own token in the Android Keystore.
-- **Voice**: hold the microphone, speak, and the words the hub's
-  transcriber heard land on the input line to read and send.
-- **Attachments**: paste a screenshot into the line, pick files with
-  `⇪`, or share a file from any app into a pane, where the host's agent
-  has an inbox; each goes to the host and its path lands on the line
-  for you to finish the sentence and send.
+What the phone and the watch add to reaching a terminal from a pocket:
 
-Screens: [connect](docs/features/connect.md),
+<table>
+<tr>
+<td width="72" valign="top"><img src="docs/images/icons/tiles.png" width="54" alt=""></td>
+<td><strong>Panes from several machines on one screen.</strong> Hold to pick up to
+four panes from any mix of hosts and open them together: side by side
+on an unfolded or landscape screen, stacked in portrait, each live and
+typable, the focused one's tab lit. <code>+ pane</code> splits a window
+and <code>+ session</code> starts one, where the host's agent allows it.</td>
+</tr>
+<tr>
+<td valign="top"><img src="docs/images/icons/notify.png" width="54" alt=""></td>
+<td><strong>Your AI agent calls you.</strong> When the agent in a pane asks a question,
+wants a permission, goes idle or finishes, the pane lights up in the
+list, the phone buzzes, the watch face and its complications count the
+waiting panes, and a tap lands on the pane behind the lock screen.
+Claude Code is the agent tested so far.</td>
+</tr>
+<tr>
+<td valign="top"><img src="docs/images/icons/lens.png" width="54" alt=""></td>
+<td><strong>A pane on the wrist.</strong> The watch shows a pane's tail through the
+Claude Code lens, with the agent's answers as a reply menu, a row of
+keys and the microphone; <em>phone</em> opens the same pane on the phone.
+The watch may type only when the phone's owner allows it.</td>
+</tr>
+<tr>
+<td valign="top"><img src="docs/images/icons/voice.png" width="54" alt=""></td>
+<td><strong>Voice input.</strong> Hold the microphone on the phone or the watch, speak,
+and the words the hub's transcriber heard land on the input line for
+you to read; nothing is sent until you say so.</td>
+</tr>
+<tr>
+<td valign="top"><img src="docs/images/icons/files.png" width="54" alt=""></td>
+<td><strong>Files both ways.</strong> Paste a screenshot into the line, pick files with
+<code>⇪</code>, or share from any app into a pane: the file lands in the
+host's inbox and its path on your line. A path a pane prints is a link; a
+tap shows the image or the text over the pane, or hands the file to the
+system.</td>
+</tr>
+<tr>
+<td valign="top"><img src="docs/images/icons/keys.png" width="54" alt=""></td>
+<td><strong>Keys a phone keyboard lacks.</strong> A key bar with Esc, Tab, Ctrl-C and
+the arrows, Claude Code's slash commands or a shell's recent lines in a
+command row, any word on the screen completed, and the mouse for programs
+that take it: a tap clicks, a drag scrolls. Every key goes through a
+fixed grammar, never a raw escape sequence.</td>
+</tr>
+</table>
+
+Besides: several hubs at once, each with its own token in the Android
+Keystore and its panes in the one list; `+` after the tabs adds a pane,
+new or existing, and `_` on a header parks a tile in a row above the
+keys;
+**fit** sizes the pane on the host to the phone, or pinch to read it at
+the host's own width; amber by default, phosphor green, and paper for
+daylight; a lens knows one agent's screen, and the Claude Code lens is
+the one there is today.
+
+The features: [connect](docs/features/connect.md),
 [panes](docs/features/panes.md), [pane view](docs/features/pane-view.md),
 [lenses](docs/features/lenses.md),
 [notifications](docs/features/notifications.md),

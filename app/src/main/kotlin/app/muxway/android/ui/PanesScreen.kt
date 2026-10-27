@@ -25,11 +25,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import app.muxway.android.AppModel
+import app.muxway.android.Naming
 import app.muxway.android.Screen
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Pane
@@ -39,52 +41,68 @@ import app.muxway.android.protocol.Pane
 fun PanesScreen(model: AppModel) {
     val p = LocalPalette.current
     val now = ticker()
-    val byHost = model.panes.groupBy { it.host }
-    val offline = model.hosts.filter { !it.online && it.name !in byHost }
-    val quiet = model.hosts.filter { it.online && it.name !in byHost }
+    val conns = model.connections
+    val several = conns.size > 1
 
     Column(Modifier.fillMaxSize().padding(4.dp)) {
-        val hubName = model.settings.hub?.name
-        Frame("muxway", crumb = if (model.settings.hubs.size > 1 && hubName != null) "panes · $hubName" else "panes") {
+        Frame("muxway", crumb = "panes") {
             Btn(if (model.listing) "…" else "refresh", { model.refreshList() }, enabled = !model.listing)
             Btn("settings", { model.open(Screen.Connect) })
         }
-        model.listError?.let { Text("! $it", color = p.alert, modifier = Modifier.padding(4.dp)) }
         LazyColumn(Modifier.weight(1f)) {
             if (model.panes.isEmpty() && model.listError == null && !model.listing) {
                 item { Text("  no pane is exposed to this token", color = p.dim, modifier = Modifier.padding(8.dp)) }
             }
-            for ((host, panes) in byHost) {
-                val starts = model.hosts.any { it.name == host && it.sessions }
-                item(key = "host:$host") {
-                    Panel(host, Modifier.padding(vertical = 4.dp), actions = {
-                        if (starts) Text("+ session", color = p.dim, maxLines = 1, modifier = Modifier.clickable { model.createError = null; model.naming = host })
-                    }) {
-                        // Under a window's panes, when one of them is writable, a row that splits it.
-                        for ((_, inWindow) in panes.groupBy { it.session to it.windowIndex }) {
-                            for (pane in inWindow) {
-                                PaneRow(pane, model.status(pane, now), pane.address in model.selected,
-                                    onTap = { if (model.selected.isEmpty()) model.open(Screen.View(listOf(pane.address))) else model.toggleSelected(pane.address) },
-                                    onHold = { model.toggleSelected(pane.address) })
+            // Every hub, one under another; with several each has its own line and its own trouble.
+            for (c in conns) {
+                val byHost = c.panes.groupBy { it.host }
+                val offline = c.hosts.filter { !it.online && it.name !in byHost }
+                val quiet = c.hosts.filter { it.online && it.name !in byHost }
+                if (several) item(key = "hub:${c.id}") { HubRow(c.name, c.listError) }
+                else c.listError?.let { item(key = "error:${c.id}") { Text("! $it", color = p.alert, modifier = Modifier.padding(4.dp)) } }
+                for ((host, panes) in byHost) {
+                    val starts = c.hosts.any { it.name == host && it.sessions }
+                    item(key = "host:${c.id}:$host") {
+                        Panel(host, Modifier.padding(vertical = 4.dp), actions = {
+                            if (starts) Text("+ session", color = p.dim, maxLines = 1, modifier = Modifier.clickable { model.createError = null; model.naming = Naming(c.id, host) })
+                        }) {
+                            // Under a window's panes, when one of them is writable, a row that splits it.
+                            for ((_, inWindow) in panes.groupBy { it.session to it.windowIndex }) {
+                                for (pane in inWindow) {
+                                    PaneRow(pane, model.status(pane, now), pane.key in model.selected,
+                                        onTap = { if (model.selected.isEmpty()) model.open(Screen.View(listOf(pane.key))) else model.toggleSelected(pane.key) },
+                                        onHold = { model.toggleSelected(pane.key) })
+                                }
+                                inWindow.firstOrNull { it.writable }?.let { source -> NewPaneRow(enabled = !model.creating) { model.splitWindow(source) } }
                             }
-                            inWindow.firstOrNull { it.writable }?.let { source -> NewPaneRow(enabled = !model.creating) { model.splitWindow(source) } }
                         }
                     }
                 }
-            }
-            for (h in quiet) {
-                item(key = "host:${h.name}") {
-                    HostRow(h.name, "online · nothing exposed")
-                    if (h.sessions) Text("  + session", color = p.dim, modifier = Modifier.clickable { model.createError = null; model.naming = h.name }.padding(4.dp))
+                for (h in quiet) {
+                    item(key = "host:${c.id}:${h.name}") {
+                        HostRow(h.name, "online · nothing exposed")
+                        if (h.sessions) Text("  + session", color = p.dim, modifier = Modifier.clickable { model.createError = null; model.naming = Naming(c.id, h.name) }.padding(4.dp))
+                    }
                 }
+                for (h in offline) item(key = "host:${c.id}:${h.name}") { HostRow(h.name, "offline") }
             }
-            for (h in offline) item(key = "host:${h.name}") { HostRow(h.name, "offline") }
             // The way to open a selection comes right after the list, not pinned to the screen's foot.
             if (model.selected.isNotEmpty()) item(key = "selection") { SelectionBar(model) }
         }
         Text(if (model.selected.isEmpty()) "  tap to open · hold to pick several" else "  ${model.selected.size}/4 · hold to pick more", color = p.dim, modifier = Modifier.padding(4.dp))
     }
-    model.naming?.let { host -> SessionDialog(host, model) }
+    model.naming?.takeIf { it.into == null }?.let { SessionDialog(it, model) }
+}
+
+/** `═══ work ═══`, a hub's line over its hosts, with its trouble when it has any. */
+@Composable
+private fun HubRow(name: String, error: String?) {
+    val p = LocalPalette.current
+    Row(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp).testTag("hub:$name"), verticalAlignment = Alignment.CenterVertically) {
+        Text("══ $name ", color = p.accent, maxLines = 1)
+        Text("═".repeat(60), color = p.dim, maxLines = 1, overflow = TextOverflow.Clip, modifier = Modifier.weight(1f))
+        error?.let { Text(" ! $it ══", color = p.alert, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    }
 }
 
 /** `│  + pane`, dim, under the panes of a window where typing is allowed. */
@@ -95,13 +113,14 @@ private fun NewPaneRow(enabled: Boolean, onTap: () -> Unit) {
     Rule()
 }
 
-/** The name of a session to start on [host]: Enter or `start` asks the hub, back or `cancel` drops it. */
+/** The name of a session to start on a host: Enter or `start` asks the hub, back or `cancel` drops it. */
 @Composable
-private fun SessionDialog(host: String, model: AppModel) {
+internal fun SessionDialog(naming: Naming, model: AppModel) {
     val p = LocalPalette.current
+    val host = naming.host
     var name by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
-    val start = { model.startSession(host, name) }
+    val start = { model.startSession(naming.hub, host, name, naming.into) }
     Dialog(onDismissRequest = { model.naming = null }) {
         Panel("+ session · $host", active = true) {
             Field("name", name, { name = it; model.createError = null }, hint = "a-z, 0-9, _ and -", focusRequester = focus, onEnter = start,
