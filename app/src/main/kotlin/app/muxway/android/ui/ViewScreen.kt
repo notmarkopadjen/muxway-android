@@ -960,7 +960,8 @@ private fun styled(row: List<Ansi.Span>, p: Palette, paths: Boolean): AnnotatedS
         val st = spanStyle(s.style, p)
         if (st == null) append(s.text) else withStyle(st) { append(s.text) }
     }
-    val text = toString()
+    // The builder's own toString is not its text.
+    val text = row.joinToString("") { it.text }
     for (l in Links.find(text)) addLink(LinkAnnotation.Url(l.href, linkStyles), l.start, l.end)
     for (f in Links.findFiles(text)) if (Links.at(text, f.start) == null) addStyle(underlined, f.start, f.end)
     if (paths) for (l in Links.findPaths(text)) if (Links.at(text, l.start) == null && Links.fileAt(text, l.start) == null) addStyle(underlined, l.start, l.end)
