@@ -1,10 +1,12 @@
 package app.muxway.android.ui
 
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.content.ReceiveContentListener
 import androidx.compose.foundation.content.TransferableContent
 import androidx.compose.foundation.content.consume
@@ -47,7 +50,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
@@ -65,6 +80,8 @@ import androidx.compose.ui.unit.sp
 import android.content.ContentResolver
 import android.net.Uri
 import app.muxway.android.protocol.Input
+import app.muxway.android.protocol.Lens
+import app.muxway.android.protocol.Pane
 
 /** `┌─ muxway ─┐ crumb ──── actions`: the header, brand in the pixel font. */
 @Composable
@@ -303,4 +320,60 @@ fun pulse(): Float {
     val t = rememberInfiniteTransition(label = "pulse")
     val a by t.animateFloat(1f, 0.4f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "pulse")
     return a
+}
+
+/** The lens's mark: the kind's letter, pulsing, while the pane waits; a turning ring while it works. */
+@Composable
+fun Mark(status: Lens.Status, kind: String?, color: Color) {
+    when (status) {
+        Lens.Status.WAITING -> Text(Lens.glyph(status, kind) ?: "!", color = color, maxLines = 1, modifier = Modifier.alpha(pulse()))
+        Lens.Status.WORKING -> WorkingRing(color)
+        Lens.Status.QUIET -> {}
+    }
+}
+
+/** A ring with a gap, drawn rather than typed so it is the same in every font; it turns with effects on. */
+@Composable
+fun WorkingRing(color: Color, modifier: Modifier = Modifier) {
+    val fontSize = LocalTextStyle.current.fontSize
+    val size = with(LocalDensity.current) { if (fontSize.isSp) fontSize.toDp() * 0.8f else 10.dp }
+    val angle = if (LocalEffects.current) {
+        val t = rememberInfiniteTransition(label = "ring")
+        t.animateFloat(0f, 360f, infiniteRepeatable(tween(1600, easing = LinearEasing)), label = "ring").value
+    } else 0f
+    Canvas(modifier.size(size)) {
+        val stroke = this.size.width / 6f
+        drawArc(color, angle, 270f, false, topLeft = Offset(stroke / 2, stroke / 2), size = Size(this.size.width - stroke, this.size.height - stroke), style = Stroke(stroke))
+    }
+}
+
+/**
+ * The pane's name, Claude's mark before Claude, and its status after it in italics and dimmer;
+ * as a [tab], Claude's codename alone.
+ */
+@Composable
+fun PaneName(pane: Pane, ink: Color, dim: Color, bold: Boolean = false, tab: Boolean = false, modifier: Modifier = Modifier) {
+    val p = LocalPalette.current
+    val d = Lens.describe(pane)
+    val weight = if (bold) FontWeight.Bold else FontWeight.Normal
+    val text = buildAnnotatedString {
+        if (tab && d.claude) withStyle(SpanStyle(fontWeight = weight)) { append(d.status.ifEmpty { d.name }) }
+        else {
+            withStyle(SpanStyle(fontWeight = weight)) { append(d.name) }
+            if (d.status.isNotEmpty()) withStyle(SpanStyle(color = dim, fontStyle = FontStyle.Italic)) { append(" · ${d.status}") }
+        }
+    }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        if (d.claude) Text("${Lens.MARK} ", color = p.claude, maxLines = 1, style = LocalTextStyle.current.copy(shadow = null))
+        Text(text, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(shadow = null))
+    }
+}
+
+/** A shadow in [color] around the box, outside it, so no neighbour moves; [strength] fades it. */
+fun Modifier.glow(color: Color, strength: Float): Modifier = drawBehind {
+    val step = 3.dp.toPx()
+    for (i in 1..4) {
+        val d = step * i
+        drawRect(color.copy(alpha = strength * 0.28f / i), topLeft = Offset(-d, -d), size = Size(size.width + 2 * d, size.height + 2 * d), style = Stroke(step))
+    }
 }

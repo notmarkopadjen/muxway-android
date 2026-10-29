@@ -62,7 +62,7 @@ data class Board(val rows: List<Row>, val at: Long, val live: Boolean) {
                 val a = p.attention
                 Row(
                     address = p.key,
-                    name = p.name,
+                    name = p.tab,
                     state = when (s) { Lens.Status.WAITING -> WAITING; Lens.Status.WORKING -> WORKING; Lens.Status.QUIET -> QUIET },
                     kind = if (s == Lens.Status.WAITING) a?.kind.orEmpty() else "",
                     at = a?.at ?: 0L,

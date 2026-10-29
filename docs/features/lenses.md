@@ -10,13 +10,13 @@ nothing else in the app knows what it looks for.
 ## The Claude Code lens
 
 A pane is Claude Code's when its command is `claude` or its title starts
-with Claude's mark `✳` (Claude sets the title to the mark and the session's
-name). The lens answers one of three states:
+with one of Claude's sparks (`✳ ✶ ✻ ✽ ✢`; Claude leads its title with one
+and follows it with what it is on). The lens answers one of three states:
 
 | State | When | Glyph |
 |---|---|---|
-| waiting for you | the listing carries a notification: `permission`, `question`, `idle`, `done` | `!` `?` `z` `✓`, the theme's ink inverted |
-| working | the last event the hub sent for the pane was `working` (Claude's hook on a submitted prompt), or the app is reading the pane and its screen changed in the last 10 s by itself | `⟳`, dim |
+| waiting for you | the listing carries a notification: `permission`, `question`, `idle`, `done`; except an `idle` one on a Claude pane whose screen moved in the last 10 s, which is Claude's own background work and counts as working | `!` `?` `z` `✓`, the theme's ink inverted and pulsing; a waiting tile also glows in the ink, a shadow outside its box that moves no neighbour |
+| working | the last event the hub sent for the pane was `working` (Claude's hook on a submitted prompt), or the app is reading the pane and its screen changed in the last 10 s by itself | a turning ring, drawn, not typed, so it is the same in every font; still with effects off; dim |
 | quiet | anything else | nothing |
 
 A change this client caused is not the program working: the first read of
@@ -27,9 +27,13 @@ a pane that was already working says so before the next event arrives.
 
 The glyph sits before the pane's name in the tab strip, in the pane's
 header with the word (`! permission`, `⟳ working`), and in the pane list.
-The name is the title without the mark, so a tab reads `⟳ build server`
-rather than `✳ build server`. Panes without a lens show notifications
-the same way and never show "working".
+A pane is named as the guideline says (`Lens.describe`): Claude Code is
+*Claude*, with its mark `✳` in Claude's colour before it and the status
+it writes into the title (its codename) after a dot, in italics and
+dimmer: `✳ Claude · fixing the build`; a tab shows the codename alone. Any
+other pane is its command, then the title when that adds something:
+`vim · notes.md`, `bash`. Panes without a lens show notifications the
+same way and never show "working".
 
 Tabs and headers are painted with the state: the theme's ink, inverted, while
 the pane waits for you, dim while it works, plain when quiet. Selection

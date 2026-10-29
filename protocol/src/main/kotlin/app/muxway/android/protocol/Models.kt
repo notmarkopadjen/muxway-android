@@ -40,8 +40,14 @@ data class Pane(
     /** The alias when there is one, else session/window.pane. */
     val label get() = alias.ifEmpty { "$session/$windowIndex.$paneIndex" }
 
-    /** What tabs and headers show: the title the program set (without Claude Code's mark), else the label. */
+    /** The name with its status: the command and what the program says of itself, or Claude and its codename. */
     val name get() = Lens.name(this)
+
+    /** A tab's name: Claude's codename alone, else [name]. */
+    val tab get() = Lens.tab(this)
+
+    /** The tmux address, `host/session/window.pane`, second to the name. */
+    val place get() = "$host/$session/$windowIndex.$paneIndex"
 }
 
 /** A resize's answer: the pane as listed, and every pane of its window when the host moved them. */

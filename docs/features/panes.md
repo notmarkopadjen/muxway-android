@@ -22,9 +22,12 @@ grouped by hub (with more than one) and by host.
   another's. A pane is known by its key, `<hub id>:<address>` (see
   [connect](connect.md)), so a pick of several can span hubs.
 
-- A row is the pane's name (the title its program set, else the alias or
-  `session/window.pane`), then its place and command. `*` marks a pane
-  this token may write.
+- A row is `*` for a pane this token may write, the lens's glyph, the
+  pane's name (its command and what the program says of itself, or
+  *Claude* and its codename, see [lenses](lenses.md)), its place
+  `host/session/window.pane` dimmed, and the lens's word. A host with
+  panes says `online` on its line; a hub whose listing failed shows the
+  reason on its line and nothing under it until the next refresh answers.
 - A pane with a pending notification shows `! <kind>` in the attention
   colour: `question`, `permission`, `idle` or `done`, see the core's
   [notifications](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/notifications.md).

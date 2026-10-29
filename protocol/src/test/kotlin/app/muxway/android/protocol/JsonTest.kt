@@ -57,7 +57,8 @@ class JsonTest {
     fun theNameIsTheCleanedTitleWhenThereIsOne() {
         val p = Json.panes("""{"panes":[{"session":"work","window_index":0,"pane_index":1,"alias":"logs","title":"\u001b]0;x\u0007\u2733 build \u001b[1mserver\u0007"}]}""").single()
         assertEquals("logs", p.label)
-        assertEquals("build server", p.name)
+        assertEquals("Claude · build server", p.name)
+        assertEquals("build server", p.tab)
     }
 
     @Test

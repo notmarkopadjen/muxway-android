@@ -21,8 +21,9 @@ focused pane.
 
 - `‹` at the top left goes back to the pane list.
 - The **tab strip** lists every pane the token may read, in listing order,
-  by name: the title the program set (Claude Code's is the session's name)
-  or `session/window.pane`. Each tab is **painted with its state** from
+  by name: Claude Code's codename behind Claude's mark, else the command
+  and what the program says of itself (see [lenses](lenses.md)). Each tab
+  is **painted with its state** from
   the [Claude lens](lenses.md): the attention colour when the pane waits
   for you (`!` `?` `z` `✓`, pulsing), dim when it works (`⟳`), plain when
   quiet. Selection never changes the colour: the open pane has a thick
@@ -36,10 +37,10 @@ focused pane.
   a rule, the panes minimised below, a rule, every other readable pane
   not on screen, grouped by hub (with several), host and session in
   listing order, each as its glyph and name with its place dimmed after
-  it. The focused pane and the open tiles are not listed. An entry the
+  it, a minimised one too. The focused pane and the open tiles are not listed. An entry the
   token or the host does not allow is dimmed with the reason (`read only`,
   `no sessions here`). A pick becomes one more tile, focused; with four
-  tiles the menu's heading says `four open: a pick replaces <focused>`
+  panes open, tiles and minimised together, the menu's heading says `four open: a pick replaces <focused>`
   and the pick swaps into the focused tile, as a tab does. `+ pane` and
   `+ session` ask the hub (the session through the same dialog as the
   list's); a pick asks nothing. Back closes the menu. The rows are
@@ -66,9 +67,12 @@ focused pane.
   below; four add a two-by-two grid. The bar between two panes drags to
   resize them; no pane goes under fifteen percent. Long-press a pane's
   header and drop it on another tile to swap the two. The arrangement is
-  the phone's own and never reaches the host. Each header is painted like its tab, with the pane's name, command and mode,
-  the lens's word (`! permission`, `⟳ working`) and, with fit on, the
-  size; the focused one has the thick border and bold name.
+  the phone's own and never reaches the host, except when the tiles are
+  every pane of one window (see *Fit*). Each header is painted like its
+  tab, with the pane's name (its status in italics, dimmer) and mode, the
+  lens's word (`! permission`, `⟳ working`) and, with fit on, the size;
+  the focused one has the thick border and bold name; a waiting tile
+  glows in the ink around its box.
 - The line under the input shows the time of the last successful read, or
   the error.
 

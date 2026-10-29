@@ -53,18 +53,21 @@ fun PanesScreen(model: AppModel) {
             if (model.panes.isEmpty() && model.listError == null && !model.listing) {
                 item { Text("  no pane is exposed to this token", color = p.dim, modifier = Modifier.padding(8.dp)) }
             }
-            // Every hub, one under another; with several each has its own line and its own trouble.
+            // Every hub, one under another; with several each has its own line and its own
+            // trouble. A hub that did not answer shows the reason and nothing under it.
             for (c in conns) {
-                val byHost = c.panes.groupBy { it.host }
-                val offline = c.hosts.filter { !it.online && it.name !in byHost }
-                val quiet = c.hosts.filter { it.online && it.name !in byHost }
+                val failed = c.listError != null
+                val byHost = if (failed) emptyMap() else c.panes.groupBy { it.host }
+                val offline = if (failed) emptyList() else c.hosts.filter { !it.online && it.name !in byHost }
+                val quiet = if (failed) emptyList() else c.hosts.filter { it.online && it.name !in byHost }
                 if (several) item(key = "hub:${c.id}") { HubRow(c.name, c.listError) }
                 else c.listError?.let { item(key = "error:${c.id}") { Text("! $it", color = p.alert, modifier = Modifier.padding(4.dp)) } }
                 for ((host, panes) in byHost) {
                     val starts = c.hosts.any { it.name == host && it.sessions }
                     item(key = "host:${c.id}:$host") {
                         Panel(host, Modifier.padding(vertical = 4.dp), actions = {
-                            if (starts) Text("+ session", color = p.dim, maxLines = 1, modifier = Modifier.clickable { model.createError = null; model.naming = Naming(c.id, host) })
+                            if (starts) Text("+ session · ", color = p.dim, maxLines = 1, modifier = Modifier.clickable { model.createError = null; model.naming = Naming(c.id, host) })
+                            Text("online", color = p.dim, maxLines = 1)
                         }) {
                             // Under a window's panes, when one of them is writable, a row that splits it.
                             for ((_, inWindow) in panes.groupBy { it.session to it.windowIndex }) {
@@ -165,13 +168,16 @@ private fun PaneRow(pane: Pane, status: Lens.Status, selected: Boolean, onTap: (
         Modifier.fillMaxWidth().background(bg).combinedClickable(onClick = onTap, onLongClick = onHold).padding(horizontal = 4.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val dim = if (selected) p.bg.copy(alpha = 0.7f) else p.dim
         Text(if (pane.writable) "* " else "  ", color = fg)
-        Text(pane.name, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-        Text("  ${pane.label} · ${pane.command}", color = if (selected) p.bg else p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        Lens.glyph(status, pane.attention?.kind)?.let { g ->
-            val waiting = status == Lens.Status.WAITING
-            Text(" $g ${Lens.word(status, pane.attention?.kind)}", color = if (selected) p.bg else if (waiting) p.attention else p.dim, maxLines = 1,
-                modifier = if (waiting && !selected) Modifier.alpha(pulse()) else Modifier)
+        if (status != Lens.Status.QUIET) {
+            Mark(status, pane.attention?.kind, if (selected) p.bg else if (status == Lens.Status.WAITING) p.attention else p.dim)
+            Text(" ", maxLines = 1)
+        }
+        PaneName(pane, fg, dim, modifier = Modifier.weight(1f, fill = false))
+        Text("  ${pane.place}", color = dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Lens.word(status, pane.attention?.kind)?.let { w ->
+            Text(" $w", color = if (selected) p.bg else if (status == Lens.Status.WAITING) p.attention else p.dim, maxLines = 1)
         }
     }
     Rule()

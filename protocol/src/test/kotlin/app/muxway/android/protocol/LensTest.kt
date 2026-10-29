@@ -59,10 +59,28 @@ class LensTest {
     }
 
     @Test
-    fun theNameDropsClaudesMark() {
-        assertEquals("muxway android", Lens.name(pane("claude", "✳ muxway android")))
-        assertEquals("alice@laptop: ~", Lens.name(pane("bash", "alice@laptop: ~")))
-        assertEquals("work/0.0", Lens.name(pane("bash", "✳")))
-        assertEquals("work/0.0", Lens.name(pane("bash", "")))
+    fun anIdleNoticeWhileTheScreenMovesIsWorking() {
+        assertEquals(Lens.Status.WORKING, Lens.status(pane("claude", "✳ x", "idle"), null, true))
+        assertEquals(Lens.Status.WAITING, Lens.status(pane("claude", "✳ x", "idle"), "working", false))
+        assertEquals(Lens.Status.WAITING, Lens.status(pane("claude", "✳ x", "question"), null, true))
+        assertEquals(Lens.Status.WAITING, Lens.status(pane("bash", "", "idle"), null, true))
+    }
+
+    @Test
+    fun claudeIsNamedWithItsCodenameAndAnythingElseByItsCommand() {
+        assertEquals(Lens.Description(true, "Claude", "muxway android"), Lens.describe(pane("claude", "✳ muxway android")))
+        assertEquals(Lens.Description(true, "Claude", "fixing the build"), Lens.describe(pane("node", "✻ fixing the build")))
+        assertEquals(Lens.Description(true, "Claude", ""), Lens.describe(pane("claude", "claude")))
+        assertEquals(Lens.Description(false, "vim", "notes.md"), Lens.describe(pane("vim", "notes.md")))
+        assertEquals(Lens.Description(false, "bash", ""), Lens.describe(pane("bash", "bash")))
+        assertEquals(Lens.Description(false, "work/0.0", ""), Lens.describe(pane("", "")))
+        assertEquals("Claude · muxway android", Lens.name(pane("claude", "✳ muxway android")))
+        assertEquals("bash · alice@laptop: ~", Lens.name(pane("bash", "alice@laptop: ~")))
+        assertEquals("Claude", Lens.name(pane("bash", "✳")))
+        assertEquals("bash", Lens.name(pane("bash", "")))
+        assertEquals("muxway android", Lens.tab(pane("claude", "✳ muxway android")))
+        assertEquals("Claude", Lens.tab(pane("claude", "")))
+        assertEquals("vim · notes.md", Lens.tab(pane("vim", "notes.md")))
+        assertEquals("alice-laptop/work/0.0", pane("vim", "notes.md").place)
     }
 }

@@ -16,10 +16,28 @@ object Lens {
     /** How long after this client's own input or resize a change of content is its own doing. */
     const val OWN_SECONDS = 3L
 
-    /** Claude Code sets the pane title to a star and the session's name. */
+    /** Claude Code's mark, and the sparks it leads its title with before what it is on. */
     const val MARK = "✳"
+    private val SPARKS = Regex("^[✳✶✻✽✢]\\s*")
 
-    fun isClaude(p: Pane) = p.command == "claude" || p.title.startsWith(MARK)
+    fun isClaude(p: Pane) = p.command == "claude" || SPARKS.containsMatchIn(p.title)
+
+    /** What a pane is, for a person: the program, and what it says about itself. */
+    data class Description(val claude: Boolean, val name: String, val status: String)
+
+    /**
+     * Claude Code is named Claude, with the status it writes into the title (its "codename")
+     * after; anything else is its command, with the title when that adds something.
+     */
+    fun describe(p: Pane): Description {
+        val title = p.title.trim()
+        if (isClaude(p)) {
+            val status = title.replace(SPARKS, "").trim()
+            return Description(true, "Claude", if (status == p.command) "" else status)
+        }
+        val name = p.command.ifEmpty { p.label }
+        return Description(false, name, if (title == p.command) "" else title)
+    }
 
     /**
      * Whether a change of content seen at [at] says the program is working: the first read of a
@@ -27,8 +45,12 @@ object Lens {
      */
     fun changeCounts(firstRead: Boolean, ownAt: Long, at: Long): Boolean = !firstRead && at - ownAt >= OWN_SECONDS
 
+    /**
+     * [changed]: the screen moved in the last [RECENT_SECONDS]. An idle notice while it still
+     * moves is the program's own background work, not a pane waiting for its owner.
+     */
     fun status(p: Pane, lastKind: String?, changed: Boolean): Status = when {
-        p.attention != null -> Status.WAITING
+        p.attention != null && !(p.attention.kind == "idle" && isClaude(p) && changed) -> Status.WAITING
         isClaude(p) && (lastKind == "working" || changed) -> Status.WORKING
         else -> Status.QUIET
     }
@@ -53,6 +75,9 @@ object Lens {
         Status.QUIET -> null
     }
 
-    /** The title without Claude Code's own mark, so the glyph can take its place. */
-    fun name(p: Pane): String = p.title.removePrefix(MARK).trim().ifEmpty { p.label }
+    /** The name with the status after it: `Claude · fixing the build`, `vim · notes.md`. */
+    fun name(p: Pane): String = describe(p).let { if (it.status.isEmpty()) it.name else "${it.name} · ${it.status}" }
+
+    /** A tab's name: the codename alone for Claude Code, else the name. */
+    fun tab(p: Pane): String = describe(p).let { if (it.claude) it.status.ifEmpty { it.name } else name(p) }
 }

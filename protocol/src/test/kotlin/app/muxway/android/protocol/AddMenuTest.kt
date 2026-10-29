@@ -63,8 +63,12 @@ class AddMenuTest {
         val four = listOf(a0.key, a1.key, a2.key, b0.key)
         val more = pane("home", "alice-laptop", "work", 7)
         val rows = AddMenu.rows(panes + more, hosts, four, emptyList(), a0.key)
-        assertTrue(rows.contains(AddMenu.Row.Heading("four open: a pick replaces build")))
+        assertTrue(rows.contains(AddMenu.Row.Heading("four open: a pick replaces bash · build")))
         assertEquals(listOf(more.key to false), items(rows))
+        // A minimised pane is open too: three tiles and one below are four.
+        val three = AddMenu.rows(panes + more, hosts, four.take(3), listOf(b0.key), a0.key)
+        assertTrue(three.contains(AddMenu.Row.Heading("four open: a pick replaces bash · build")))
+        assertTrue(AddMenu.rows(panes + more, hosts, four.take(3), emptyList(), a0.key).none { it is AddMenu.Row.Heading && it.text.startsWith("four") })
     }
 
     @Test

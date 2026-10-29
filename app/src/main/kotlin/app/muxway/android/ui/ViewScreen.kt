@@ -207,10 +207,11 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         focus.requestFocus()
     }
 
-    // An existing pane from the menu: one more tile, focused; at four it takes the focused tile's place.
+    // An existing pane from the menu: one more tile, focused; at four open, the minimised
+    // counted, it takes the focused tile's place.
     fun add(key: String) {
         if (key in minimised) { show(key); return }
-        val full = tiles.size >= AddMenu.MAX_TILES
+        val full = addresses.size >= AddMenu.MAX_TILES
         focusedIndex = if (full) index else tiles.size
         model.addPane(addresses, addresses.indexOf(focused), key, full)
         focus.requestFocus()
@@ -435,6 +436,10 @@ private fun stateColours(status: Lens.Status?): Pair<Color, Color> {
     }
 }
 
+/** The dimmer ink for a status next to [ink]: the theme's dim on plain ground, a fainter ink on painted. */
+@Composable
+private fun dimOf(status: Lens.Status?, ink: Color): Color = if (status == null || status == Lens.Status.QUIET) LocalPalette.current.dim else ink.copy(alpha = 0.7f)
+
 /**
  * Every pane the token may read, each painted with its state: attention colour when it waits for
  * you, dim when it works, plain when quiet. Open panes have a thick border, the focused one the
@@ -461,11 +466,9 @@ private fun Tabs(model: AppModel, open: List<String>, minimised: List<String>, f
                     .clickable { onTap(address) }.padding(horizontal = 8.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                status?.let { Lens.glyph(it, pane?.attention?.kind) }?.let { Text("$it ", color = ink, maxLines = 1, modifier = if (waiting) Modifier.alpha(pulse()) else Modifier) }
-                Text(
-                    pane?.name ?: Keys.address(address).substringAfter('/'), color = ink, maxLines = 1,
-                    style = LocalTextStyle.current.copy(fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal, shadow = null),
-                )
+                if (status != null && status != Lens.Status.QUIET) { Mark(status, pane?.attention?.kind, ink); Text(" ", maxLines = 1) }
+                if (pane != null) PaneName(pane, ink, dimOf(status, ink), bold = isFocused, tab = true)
+                else Text(Keys.address(address).substringAfter('/'), color = ink, maxLines = 1, style = LocalTextStyle.current.copy(fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal, shadow = null))
             }
         }
     }
@@ -498,8 +501,9 @@ private fun MinimisedRow(model: AppModel, keys: List<String>, now: Long, onTap: 
                 Modifier.padding(2.dp).border(1.dp, p.ink).background(back).clickable { onTap(k) }.padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                status?.let { Lens.glyph(it, pane?.attention?.kind) }?.let { Text("$it ", color = ink, maxLines = 1, modifier = if (status == Lens.Status.WAITING) Modifier.alpha(pulse()) else Modifier) }
-                Text(pane?.name ?: Keys.address(k).substringAfter('/'), color = ink, maxLines = 1, style = LocalTextStyle.current.copy(shadow = null))
+                if (status != null && status != Lens.Status.QUIET) { Mark(status, pane?.attention?.kind, ink); Text(" ", maxLines = 1) }
+                if (pane != null) PaneName(pane, ink, dimOf(status, ink), tab = true)
+                else Text(Keys.address(k).substringAfter('/'), color = ink, maxLines = 1, style = LocalTextStyle.current.copy(shadow = null))
             }
         }
     }
@@ -530,7 +534,7 @@ private fun AddMenuPopup(model: AppModel, addresses: List<String>, tiles: List<S
                 }
             }
             for (row in rows) when (row) {
-                is AddMenu.Row.NewPane -> item("+ pane", "beside ${row.pane.name}", row.reason) {
+                is AddMenu.Row.NewPane -> item("+ pane", "beside ${row.pane.tab}", row.reason) {
                     onClose(); model.splitWindow(row.pane, into = addresses)
                 }
                 is AddMenu.Row.NewSession -> item("+ session", "on ${row.host}", row.reason) {
@@ -540,7 +544,8 @@ private fun AddMenuPopup(model: AppModel, addresses: List<String>, tiles: List<S
                 is AddMenu.Row.Heading -> Text(row.text, color = p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
                 is AddMenu.Row.Item -> {
                     val g = Lens.glyph(model.status(row.pane, now), row.pane.attention?.kind)?.let { "$it " } ?: ""
-                    item("$g${row.pane.name}", if (row.minimised) "minimised" else row.pane.label, null) { onClose(); onPick(row.pane.key) }
+                    val mark = if (Lens.isClaude(row.pane)) "${Lens.MARK} " else ""
+                    item("$g$mark${row.pane.tab}", row.pane.place, null) { onClose(); onPick(row.pane.key) }
                 }
             }
             if (rows.isEmpty()) Text("nothing to add", color = p.dim, modifier = Modifier.padding(4.dp))
@@ -809,23 +814,28 @@ private fun PaneTile(
             }
         }
     }
+    val waiting = status == Lens.Status.WAITING
+    // A waiting pane's cell glows in the ink, outside its box: nothing around it moves.
+    val glow = if (waiting) Modifier.glow(p.ink, pulse()) else Modifier
     Column(
-        modifier.padding(2.dp).border(edge, if (several && focused) p.ink else p.faint).clickable(onClick = onFocus)
+        modifier.padding(2.dp).then(glow).border(edge, if (several && focused) p.ink else p.faint).clickable(onClick = onFocus)
             .then(if (several) Modifier.dragAndDropTarget(shouldStartDragAndDrop = { it.mimeTypes().contains(MIME) }, target = target) else Modifier),
     ) {
-        val title = pane?.let { "${it.name} · ${it.command} · ${it.mode}" } ?: address
-        val waiting = status == Lens.Status.WAITING
         val header = Modifier.fillMaxWidth().background(back).padding(horizontal = 4.dp, vertical = 2.dp)
             .then(if (several) Modifier.dragAndDropSource {
                 detectDragGesturesAfterLongPress { _, _ -> startTransfer(DragAndDropTransferData(ClipData.newPlainText(MIME, address))) }
             } else Modifier)
         Row(header, verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                title, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
-                style = LocalTextStyle.current.copy(fontWeight = if (several && focused) FontWeight.Bold else FontWeight.Normal, shadow = null),
-            )
-            status?.let { Lens.glyph(it, pane?.attention?.kind) }?.let { g ->
-                Text(" $g ${Lens.word(status, pane?.attention?.kind)} ", color = ink, maxLines = 1, modifier = if (waiting) Modifier.alpha(pulse()) else Modifier)
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                if (pane != null) {
+                    PaneName(pane, ink, dimOf(status, ink), bold = several && focused, modifier = Modifier.weight(1f, fill = false))
+                    Text(" · ${pane.mode}", color = ink, maxLines = 1, style = LocalTextStyle.current.copy(shadow = null))
+                } else Text(address, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(shadow = null))
+            }
+            if (status != null && status != Lens.Status.QUIET) {
+                Text(" ", maxLines = 1)
+                Mark(status, pane?.attention?.kind, ink)
+                Text(" ${Lens.word(status, pane?.attention?.kind)} ", color = ink, maxLines = 1, modifier = if (waiting) Modifier.alpha(pulse()) else Modifier)
             }
             if (fitAsked && pane?.writable == true) {
                 // Alert colour when the host did not keep this phone's size: another terminal holds

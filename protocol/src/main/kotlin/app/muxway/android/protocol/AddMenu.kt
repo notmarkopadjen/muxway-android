@@ -38,7 +38,7 @@ object AddMenu {
             out.add(Row.NewPane(pane, if (!pane.writable) "read only" else null))
             out.add(Row.NewSession(pane.hub, pane.host, if (host?.sessions != true) "no sessions here" else null))
         }
-        if (open.size >= MAX_TILES) out.add(Row.Heading("four open: a pick replaces ${pane?.name ?: "the focused pane"}"))
+        if (open.size + minimised.size >= MAX_TILES) out.add(Row.Heading("four open: a pick replaces ${pane?.tab ?: "the focused pane"}"))
         val below = minimised.mapNotNull { k -> panes.firstOrNull { it.key == k } }
         if (below.isNotEmpty()) {
             out.add(Row.Rule)
