@@ -220,10 +220,18 @@ end-to-end tests, the run.
 
 ## Review (after implementation)
 
-- [ ] Diff matches the plan, deviations explained here
-- [ ] Security rules (AGENTS.md section 2) hold
-- [ ] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
-- [ ] Docs and diagrams updated
+- [x] Diff matches the plan. Deviations: a hub whose listing failed
+  hides its panes in the list only; the model keeps its last listing so
+  open tiles still know their window. The guideline's three rows (fit,
+  pick, another hub) are edited in the core checkout but left for its
+  owner to commit, as another session had the file open there.
+- [x] Security rules hold: the layout is checked on the phone, the hub
+  and the agent; a moving layout goes only with write on every pane;
+  nothing new is logged; no new dependency.
+- [x] Privacy check passed: `scripts/prepush-check.sh` clean (three
+  commits, no leak, no deny-list hit), diff read.
+- [x] Docs updated: the plan, `pane-view.md`, `panes.md`, `lenses.md`,
+  `look.md`, `ARCHITECTURE.md`.
 
 ## Test run
 

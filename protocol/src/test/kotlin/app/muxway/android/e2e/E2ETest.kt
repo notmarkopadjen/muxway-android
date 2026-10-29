@@ -196,11 +196,12 @@ class E2ETest {
         val stacked = WindowLayout.Node.Split(false, listOf(WindowLayout.Node.Leaf(0), WindowLayout.Node.Leaf(1)))
         val sizes = listOf(WindowLayout.Size(60, 20), WindowLayout.Size(60, 15))
         val before = core.layout()
-        // A stranger's id, a pane left out, the pane scope, a layout past the cap: all refused, nothing moved.
+        // A stranger's id (the agent's bad_input), a pane left out (a move the hub reads as not
+        // allowed), the pane scope, a layout past the cap: all refused, nothing moved.
         val stranger = WindowLayout.exact(stacked, sizes, listOf(ids[0], "%999")).layout
         assertEquals(400, post(tok, address, """{"cols":60,"rows":36,"scope":"window","layout":"$stranger"}""", "resize"))
         val one = WindowLayout.exact(WindowLayout.Node.Leaf(0), sizes.take(1), ids.take(1)).layout
-        assertEquals(400, post(tok, address, """{"cols":60,"rows":20,"scope":"window","layout":"$one"}""", "resize"))
+        assertEquals(403, post(tok, address, """{"cols":60,"rows":20,"scope":"window","layout":"$one"}""", "resize"))
         val both = WindowLayout.exact(stacked, sizes, ids)
         assertEquals(400, post(tok, address, """{"cols":60,"rows":36,"layout":"${both.layout}"}""", "resize"))
         assertEquals(400, post(tok, address, """{"cols":60,"rows":36,"scope":"window","layout":"0000,${"1x1,0,0,1,".repeat(300)}"}""", "resize"))
@@ -605,6 +606,7 @@ class E2ETest {
         api.split(HOST, "work", 0, "h")
         waitFor("two panes") { api.panes().size == 2 }
         val ids = api.panes().map { it.paneId }
+        val width = core.width()
         assertTrue(core.layout(), core.layout().contains("{"))
         // The phone stacks the two tiles: the host's window takes that shape at the tiles' exact sizes.
         val stacked = WindowLayout.Node.Split(false, listOf(WindowLayout.Node.Leaf(0), WindowLayout.Node.Leaf(1)))
@@ -625,8 +627,10 @@ class E2ETest {
         assertEquals(2, m.panes.size)
         assertEquals(ids[1], m.panes.first { it.address == address }.paneId)
         waitFor("the listing follows") { api.panes().first().paneId == ids[1] }
+        // Released, the window is back to its own size; panes that were moved stay where they are.
         api.release(address)
-        waitFor("the window is back to its own shape") { core.layout().contains("{") }
+        waitFor("the window is back to its own size") { core.width() == width }
+        assertTrue(core.layout(), core.layout().contains("["))
     }
 
     @Test
