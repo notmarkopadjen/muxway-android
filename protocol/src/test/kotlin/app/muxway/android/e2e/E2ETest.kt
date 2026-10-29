@@ -606,7 +606,7 @@ class E2ETest {
         api.split(HOST, "work", 0, "h")
         waitFor("two panes") { api.panes().size == 2 }
         val ids = api.panes().map { it.paneId }
-        val width = core.width()
+        assertFalse(core.manual())
         assertTrue(core.layout(), core.layout().contains("{"))
         // The phone stacks the two tiles: the host's window takes that shape at the tiles' exact sizes.
         val stacked = WindowLayout.Node.Split(false, listOf(WindowLayout.Node.Leaf(0), WindowLayout.Node.Leaf(1)))
@@ -618,6 +618,7 @@ class E2ETest {
         assertEquals(60, r.pane.width)
         assertEquals(20, r.pane.height)
         waitFor("tmux stacks the panes") { core.layout().contains("[") }
+        assertTrue(core.manual())
         assertEquals("60x20", core.size("work:0.0"))
         assertEquals("60x15", core.size("work:0.1"))
         // The tiles swapped: the panes move on the host, and the answer lists them at their new addresses.
@@ -627,9 +628,10 @@ class E2ETest {
         assertEquals(2, m.panes.size)
         assertEquals(ids[1], m.panes.first { it.address == address }.paneId)
         waitFor("the listing follows") { api.panes().first().paneId == ids[1] }
-        // Released, the window is back to its own size; panes that were moved stay where they are.
+        // Released, the window is its clients' to size again (none here, so it keeps the size it
+        // has); panes that were moved stay where they are.
         api.release(address)
-        waitFor("the window is back to its own size") { core.width() == width }
+        waitFor("the window is back to automatic sizing") { !core.manual() }
         assertTrue(core.layout(), core.layout().contains("["))
     }
 

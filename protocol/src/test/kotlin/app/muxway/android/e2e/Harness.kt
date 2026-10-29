@@ -127,6 +127,9 @@ class Core(private val logs: File) {
 
     fun size(target: String): String = tmux("display-message", "-p", "-t", target, "#{pane_width}x#{pane_height}").trim()
 
+    /** Whether the first window is sized by hand (a fit holds it) rather than by its clients. */
+    fun manual(): Boolean = tmux("show-options", "-wv", "-t", "work:0", "window-size").trim() == "manual"
+
     fun notify(kind: String, text: String) = cli("notify", "--dir", agentDir.path, "--pane", paneId(), "--kind", kind, "--text", text)
 
     fun close() {
