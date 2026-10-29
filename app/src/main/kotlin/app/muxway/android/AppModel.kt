@@ -82,8 +82,15 @@ class PaneState(val key: String) {
     var fitKey = ""
     var fitAt = 0L
     var fitRetried = false
-    var fitted = false
+    var fitted by mutableStateOf(false)
     var fitJob: Job? = null
+
+    /** What another state of the same pane carries over when its key changes. */
+    fun take(o: PaneState) {
+        pane = o.pane; content = o.content; trimmed = o.trimmed; etag = o.etag; error = o.error; updated = o.updated
+        changedAt = o.changedAt; read = o.read; ownAt = o.ownAt
+        fitKey = o.fitKey; fitAt = o.fitAt; fitRetried = o.fitRetried; fitted = o.fitted
+    }
 
     /** Files on their way to the host's inbox: the one going, the ones waiting, the paths that landed. */
     var sending by mutableStateOf<String?>(null)
@@ -583,13 +590,18 @@ class AppModel(app: Application) : AndroidViewModel(app) {
      * A pane alone in the view sizes its [window] instead, with the pane [zoom]ed over its
      * siblings, so none of them is squeezed.
      */
-    fun fit(key: String, cols: Int, rows: Int, again: Boolean = false, window: Boolean = false, zoom: Boolean = false) {
+    /**
+     * With a [layout] the whole window is laid out as the tiles are, [mates] being the tiles'
+     * keys, re-read after; when the host moved panes the tiles follow them by id.
+     */
+    fun fit(key: String, cols: Int, rows: Int, again: Boolean = false, window: Boolean = false, zoom: Boolean = false, layout: String? = null, mates: List<String> = emptyList()) {
         val v = view(key)
-        val sizeKey = "${cols}x$rows${if (window) " window" else ""}${if (zoom) " zoom" else ""}"
+        val sizeKey = "${cols}x$rows${if (window) " window" else ""}${if (zoom) " zoom" else ""}${layout?.let { " $it" } ?: ""}"
         // Once per size, unless asked again, or the host drifted from it (another terminal sized
         // the window): then once more, after twenty seconds, and no further on its own, so two
         // clients never fight over a window; the header shows the drift and a tap sends again.
-        val drifted = v.pane?.let { it.width != cols || it.height != rows } == true
+        // With a layout the pane's size is its tile's, not the window's: no drift to read.
+        val drifted = layout == null && v.pane?.let { it.width != cols || it.height != rows } == true
         val stale = System.currentTimeMillis() - v.fitAt > 20_000
         if (again) v.fitRetried = false
         if (v.fitKey == sizeKey && !again && !(drifted && stale && !v.fitRetried)) return
@@ -601,13 +613,17 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             while (true) {
                 try {
                     v.ownAt = System.currentTimeMillis() / 1000
-                    val p = withContext(Dispatchers.IO) { api(key).resize(v.address, cols, rows, window, zoom) }
+                    val r = withContext(Dispatchers.IO) { api(key).resize(v.address, cols, rows, window, zoom, layout) }
                     v.fitKey = sizeKey
                     v.fitAt = System.currentTimeMillis()
                     v.fitted = true
-                    v.pane = p.copy(hub = Keys.hub(key))
+                    v.pane = r.pane.copy(hub = Keys.hub(key))
                     v.etag = null
-                    pollOnce(key)
+                    for (m in mates) views[m]?.let { if (it !== v) { it.ownAt = v.ownAt; it.etag = null } }
+                    val moved = if (r.panes.isNotEmpty()) follow(key, r.panes) else emptyMap()
+                    val lead = moved[key] ?: key
+                    pollOnce(lead)
+                    for (m in mates) (moved[m] ?: m).let { if (it != lead) launch { pollOnce(it) } }
                     return@launch
                 } catch (e: ApiException) {
                     if (e.code == "rate_limited" && tries++ < 3) { delay(1100); continue }
@@ -635,6 +651,31 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Gives the pane back to tmux, if this app ever sized it. */
+    /**
+     * The host moved the window's panes into the layout's order, so their addresses changed: the
+     * listing takes the answer, and the open tiles follow their panes by id, each tile's state
+     * carried to its new key. The old keys to the new ones.
+     */
+    private fun follow(key: String, panes: List<Pane>): Map<String, String> {
+        val c = conn(key)
+        val fresh = panes.map { it.copy(hub = c.id) }
+        val byId = fresh.associateBy { it.paneId }
+        val before = c.panes.associate { it.key to it.paneId }
+        c.panes = c.panes.map { p -> if (p.hub == c.id && p.host == fresh[0].host) byId[p.paneId] ?: p else p }
+        val view = screen as? Screen.View ?: return emptyMap()
+        val moved = LinkedHashMap<String, String>()
+        for (a in view.addresses) {
+            val id = before[a] ?: views[a]?.pane?.paneId ?: continue
+            val next = byId[id]?.key ?: continue
+            if (next != a) moved[a] = next
+        }
+        if (moved.isEmpty()) return moved
+        val states = moved.keys.associateWith { views.remove(it) }
+        for ((old, next) in moved) states[old]?.let { view(next).take(it) }
+        screen = Screen.View(view.addresses.map { moved[it] ?: it })
+        return moved
+    }
+
     fun release(key: String) {
         val v = views[key] ?: return
         v.fitJob?.cancel()

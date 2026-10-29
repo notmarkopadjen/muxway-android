@@ -23,6 +23,9 @@ class Api(private val baseUrl: String, private val token: String, private val us
         private const val MAX_FILE = 8 * 1024 * 1024
         /** What a client may name a session it starts. */
         val SESSION_NAME = Regex("^[a-z0-9_-]{1,32}$")
+
+        /** A layout string as tmux writes it: the checksum, then cells of digits, `x,{}[]` and ids. */
+        val LAYOUT = Regex("^[0-9a-f]{4},[0-9x,{}\\[\\]]+$")
         private val SESSION_ID = Regex("^[A-Za-z0-9_-]{1,16}$")
     }
 
@@ -60,23 +63,28 @@ class Api(private val baseUrl: String, private val token: String, private val us
     /**
      * Sizes the pane on the host, as a terminal would; answers the pane as listed afterwards.
      * With [window] the whole window takes the size, and with [zoom] the pane is shown alone in
-     * it, as tmux's own zoom does, so no neighbour is squeezed.
+     * it, as tmux's own zoom does, so no neighbour is squeezed. A [layout], with the window
+     * scope only, lays the window's panes out as the tiles are: a tmux layout string naming
+     * exactly the window's panes; when it moves them the answer lists them all.
      */
-    fun resize(address: String, cols: Int, rows: Int, window: Boolean = false, zoom: Boolean = false): Pane {
+    fun resize(address: String, cols: Int, rows: Int, window: Boolean = false, zoom: Boolean = false, layout: String? = null): Resized {
         require(cols in 20..500 && rows in 5..300) { "size" }
-        return Json.resized(post("panes/${encode(address)}/resize", Json.size(cols, rows, window, zoom)).body)
+        if (layout != null) {
+            require(window && layout.length <= WindowLayout.MAX_BYTES && LAYOUT.matches(layout)) { "layout" }
+        }
+        return Json.resized(post("panes/${encode(address)}/resize", Json.size(cols, rows, window, zoom, layout)).body)
     }
 
     /** One more pane in a window, beside ("h") or below ("v") a pane there you may type into; the new pane. */
     fun split(host: String, session: String, window: Int, direction: String): Pane {
         require(direction == "h" || direction == "v") { "direction" }
-        return Json.resized(post("windows/${encode("$host/$session")}/$window/panes", Json.direction(direction)).body)
+        return Json.resized(post("windows/${encode("$host/$session")}/$window/panes", Json.direction(direction)).body).pane
     }
 
     /** A session on a host whose agent allows it, named [name]; its first pane. */
     fun newSession(host: String, name: String): Pane {
         require(SESSION_NAME.matches(name)) { "session name" }
-        return Json.resized(post("hosts/${encode(host)}/sessions", Json.name(name)).body)
+        return Json.resized(post("hosts/${encode(host)}/sessions", Json.name(name)).body).pane
     }
 
     /** Closes the pane on its host, ending what runs in it; where the agent allows it. */

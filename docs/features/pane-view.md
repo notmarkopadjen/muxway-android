@@ -101,12 +101,29 @@ flowchart LR
   shows the host's size in the alert colour with "held". Tapping `⤢`
   while it is on sends the size again at once, and holding it turns fit
   off. A pane shorter than the tile sits at the bottom with empty rows
-  above; nothing can make 27 host rows fill 44. Tiles that are panes of
-  one tmux window share one fit, because two fits on one row can only
-  undo each other: the focused tile's pane fits (or the first of them,
-  when the focus is in another window) and the others say "held", keep
-  fit off and are scaled to their tile; the focus moving to another tile
-  of the window moves the fit there, releasing the previous pane.
+  above; nothing can make 27 host rows fill 44. **One fit per window:**
+  tiles that are every pane of one tmux window, every one writable, fit
+  the window as one (`"scope": "window"` with a `layout`), laid out as
+  the tiles are, so each pane is its tile and the host's panes follow
+  the phone's arrangement and its dragged splits
+  (`docs/plans/2026-10-29-one-window-fit-and-parity.md`). The layout is
+  exact: each pane gets as many cells as its tile holds, a split side by
+  side is as wide as its tiles plus a divider between each two and as
+  tall as the shortest, a stack as tall as its tiles plus the dividers
+  and as wide as the narrowest, so no pane is given rows its tile cannot
+  show; the tiles of a stack lose a header each and a tile across from
+  them keeps that much spare. The first tile's pane carries the fit;
+  the others send nothing; a header says "held" when the host did not
+  keep the share the layout gave its pane. A layout whose shape is not
+  the window's moves panes on the host, which renames them: the tiles
+  follow their panes by id and keep their arrangement. Tiles that are
+  only **some** of a window's panes, or any of them read-only, share one
+  fit, because two fits on one row can only undo each other: the focused
+  tile's pane fits (or the first of them, when the focus is in another
+  window) and the others say "held", keep fit off, are scaled to their
+  tile and keep the size they have; the focus moving to another tile of
+  the window moves the fit there, and the pane left behind keeps its
+  size until the view is left.
   A pane **alone in the view** sizes its whole window instead
   (`"scope": "window"`), with the pane zoomed over its siblings
   (`"zoom": true`, tmux's own zoom) when the window holds any, so no

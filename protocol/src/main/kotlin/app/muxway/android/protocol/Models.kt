@@ -44,6 +44,9 @@ data class Pane(
     val name get() = Lens.name(this)
 }
 
+/** A resize's answer: the pane as listed, and every pane of its window when the host moved them. */
+data class Resized(val pane: Pane, val panes: List<Pane> = emptyList())
+
 /** [trimmed]: blank rows at the bottom of the screen the host left out of [content]. */
 data class PaneRead(val pane: Pane, val content: String, val etag: String, val trimmed: Int = 0) {
     /** How many of [content]'s last rows are the screen: the pane's rows less the blank ones left out. */

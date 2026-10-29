@@ -57,7 +57,7 @@ class ApiTest {
     @Test
     fun resizeSendsColsAndRowsAndReleaseSendsFitAuto() {
         answer = { json(200, """{"pane":{"address":"h/w/0.0","width":40,"height":12,"mode":"write"}}""") }
-        val p = api().resize("h/w/0.0", 40, 12)
+        val p = api().resize("h/w/0.0", 40, 12).pane
         assertEquals(40, p.width)
         assertEquals(12, p.height)
         api().release("h/w/0.0")
@@ -84,6 +84,24 @@ class ApiTest {
         assertEquals(false, plain.has("zoom"))
         // The size is checked here, whatever the scope, so nothing silly leaves the phone.
         assertThrows(IllegalArgumentException::class.java) { api().resize("h/w/0.0", 2, 12, window = true, zoom = true) }
+    }
+
+    @Test
+    fun aLayoutGoesWithTheWindowScopeOnlyAndTheAnswersPanesAreRead() {
+        answer = { json(200, """{"pane":{"address":"h/w/0.1","pane_id":"%3","width":60,"height":20,"mode":"write"},"panes":[{"address":"h/w/0.0","pane_id":"%4"},{"address":"h/w/0.1","pane_id":"%3"}]}""") }
+        val layout = "1d6c,121x39,0,0{60x39,0,0,3,60x39,0,0,4}"
+        val r = api().resize("h/w/0.0", 121, 39, window = true, layout = layout)
+        assertEquals("h/w/0.1", r.pane.address)
+        assertEquals(listOf("%4", "%3"), r.panes.map { it.paneId })
+        val sent = org.json.JSONObject(String(seen.single().body))
+        assertEquals("window", sent.getString("scope"))
+        assertEquals(layout, sent.getString("layout"))
+        assertEquals(false, sent.has("zoom"))
+        // A layout without the window scope, over the hub's cap, or not a layout at all never leaves the phone.
+        assertThrows(IllegalArgumentException::class.java) { api().resize("h/w/0.0", 121, 39, layout = layout) }
+        assertThrows(IllegalArgumentException::class.java) { api().resize("h/w/0.0", 121, 39, window = true, layout = "0000," + "1x1,0,0,1,".repeat(300)) }
+        assertThrows(IllegalArgumentException::class.java) { api().resize("h/w/0.0", 121, 39, window = true, layout = "1d6c,121x39,0,0,3;kill-server") }
+        assertEquals(1, seen.size)
     }
 
     @Test

@@ -75,10 +75,13 @@ object Json {
         JSONObject().put("mouse", JSONObject().put("button", button).put("x", x).put("y", y)
             .apply { if (count > 1) put("count", count) }).toString()
 
-    /** A resize: the pane alone, or its whole window, with the pane zoomed over its siblings. */
-    fun size(cols: Int, rows: Int, window: Boolean = false, zoom: Boolean = false): String =
+    /**
+     * A resize: the pane alone, or its whole window, with the pane zoomed over its siblings or
+     * laid out as [layout] says.
+     */
+    fun size(cols: Int, rows: Int, window: Boolean = false, zoom: Boolean = false, layout: String? = null): String =
         JSONObject().put("cols", cols).put("rows", rows)
-            .apply { if (window) { put("scope", "window"); if (zoom) put("zoom", true) } }
+            .apply { if (window) { put("scope", "window"); if (zoom) put("zoom", true); if (layout != null) put("layout", layout) } }
             .toString()
 
     fun fitAuto(): String = JSONObject().put("fit", "auto").toString()
@@ -87,8 +90,8 @@ object Json {
 
     fun name(n: String): String = JSONObject().put("name", n).toString()
 
-    /** The pane an answer carries: after a resize, a split or a new session. */
-    fun resized(body: String): Pane = parse(body) { o -> pane(o.getJSONObject("pane")) }
+    /** The pane an answer carries, after a resize, a split or a new session, and the window's panes when it lists them. */
+    fun resized(body: String): Resized = parse(body) { o -> Resized(pane(o.getJSONObject("pane")), list(o.optJSONArray("panes")) { pane(it) }) }
 
     private fun pane(o: JSONObject): Pane {
         val a = o.optJSONObject("attention")

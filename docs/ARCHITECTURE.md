@@ -150,7 +150,7 @@ client's side of it.
 | typing | `POST /v1/panes/{address}/input` with `{"text"}` (control characters removed, 4096 bytes at most) | input bar, watch |
 | keys | the same with `{"key"}`; the grammar (`C-`, `M-`, `S-` on any key, chords) where the host says `keys: 2`, the old names elsewhere | key row, keyboard, hardware keyboard, watch |
 | mouse | the same with `{"mouse": {button, x, y}}`, only when the pane reports the mouse on; `count` (2 to 50, wheel buttons only) turns the wheel that many notches in one request, left out where the hub answered `bad_input` to it | taps, the notches of a drag |
-| fit | `POST /v1/panes/{address}/resize` with `{cols, rows}`, `scope: window` and `zoom` for a pane alone, `{"fit": "auto"}` to give it back | tiles |
+| fit | `POST /v1/panes/{address}/resize` with `{cols, rows}`, `scope: window` and `zoom` for a pane alone, `scope: window` and a `layout` naming the window's panes when the tiles are every one of them (`protocol/.../WindowLayout.kt`), `{"fit": "auto"}` to give it back | tiles |
 | split, new session, close | `POST /v1/windows/{host}/{session}/{window}/panes`, `POST /v1/hosts/{host}/sessions`, `POST /v1/panes/{address}/close`, where the host allows them | pane view, pane list |
 | events | `GET /v1/events?after=cursor&wait=30&limit=50`, a long poll | pane list, watch service, the lens |
 | transcription | `GET /v1/transcribe` (`204` or `404`) to know there is one, `POST /v1/transcribe` with `audio/wav` | microphone button, the watch's clip |

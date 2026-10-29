@@ -11,6 +11,7 @@ import app.muxway.android.protocol.Files
 import app.muxway.android.protocol.Keyboard
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.WatchGate
+import app.muxway.android.protocol.WindowLayout
 import app.muxway.android.protocol.Wire
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -80,9 +81,9 @@ class E2ETest {
         e.code == "bad_json"
     }
 
-    /** A raw input body with the bearer token, as a hostile or odd client would send it; the status. */
-    private fun post(tok: String, address: String, body: String): Int {
-        val c = java.net.URL("${core.url}/v1/panes/$address/input").openConnection() as java.net.HttpURLConnection
+    /** A raw body with the bearer token, as a hostile or odd client would send it; the status. */
+    private fun post(tok: String, address: String, body: String, op: String = "input"): Int {
+        val c = java.net.URL("${core.url}/v1/panes/$address/$op").openConnection() as java.net.HttpURLConnection
         c.requestMethod = "POST"
         c.doOutput = true
         c.setRequestProperty("Authorization", "Bearer $tok")
@@ -183,6 +184,32 @@ class E2ETest {
         assertThrows(IllegalArgumentException::class.java) { api.mouse(address, "left", 1, 1, 2) }
         api.key(address, "C-c")
         waitFor("shell back") { core.command() == "bash" }
+    }
+
+    @Test
+    fun s04e_aWindowLayoutNamesExactlyTheWindowsPanesAndMovingThemNeedsWriteOnAll() {
+        val (api, tok) = setup()
+        val address = "$HOST/work/0.0"
+        api.split(HOST, "work", 0, "h")
+        waitFor("two panes") { api.panes().size == 2 }
+        val ids = api.panes().map { it.paneId }
+        val stacked = WindowLayout.Node.Split(false, listOf(WindowLayout.Node.Leaf(0), WindowLayout.Node.Leaf(1)))
+        val sizes = listOf(WindowLayout.Size(60, 20), WindowLayout.Size(60, 15))
+        val before = core.layout()
+        // A stranger's id, a pane left out, the pane scope, a layout past the cap: all refused, nothing moved.
+        val stranger = WindowLayout.exact(stacked, sizes, listOf(ids[0], "%999")).layout
+        assertEquals(400, post(tok, address, """{"cols":60,"rows":36,"scope":"window","layout":"$stranger"}""", "resize"))
+        val one = WindowLayout.exact(WindowLayout.Node.Leaf(0), sizes.take(1), ids.take(1)).layout
+        assertEquals(400, post(tok, address, """{"cols":60,"rows":20,"scope":"window","layout":"$one"}""", "resize"))
+        val both = WindowLayout.exact(stacked, sizes, ids)
+        assertEquals(400, post(tok, address, """{"cols":60,"rows":36,"layout":"${both.layout}"}""", "resize"))
+        assertEquals(400, post(tok, address, """{"cols":60,"rows":36,"scope":"window","layout":"0000,${"1x1,0,0,1,".repeat(300)}"}""", "resize"))
+        assertEquals(before, core.layout())
+        // A token that may write only one pane of the window sizes it but does not move its panes.
+        val partial = Api(relay.url, core.token(write = address), "muxway-android-e2e")
+        val e = assertThrows(ApiException::class.java) { partial.resize(address, both.cols, both.rows, window = true, layout = both.layout) }
+        assertEquals("read_only", e.code)
+        assertEquals(before, core.layout())
     }
 
     @Test
@@ -348,7 +375,7 @@ class E2ETest {
         val (api, _) = setup()
         val address = "$HOST/work/0.0"
         val before = api.panes().single()
-        val fitted = api.resize(address, 40, 12)
+        val fitted = api.resize(address, 40, 12).pane
         assertEquals(40, fitted.width)
         assertEquals(12, fitted.height)
         waitFor("tmux shows 40 columns") { core.width() == 40 }
@@ -561,7 +588,7 @@ class E2ETest {
         api.split(HOST, "work", 0, "v")
         waitFor("two panes") { api.panes().size == 2 }
         assertFalse(core.zoomed())
-        val fitted = api.resize(address, 60, 20, window = true, zoom = true)
+        val fitted = api.resize(address, 60, 20, window = true, zoom = true).pane
         assertEquals(60, fitted.width)
         assertEquals(20, fitted.height)
         // Zoomed, the pane has the whole window: its sibling is not squeezed to make room.
@@ -569,6 +596,37 @@ class E2ETest {
         waitFor("the pane fills the window") { core.width() == 60 }
         api.release(address)
         waitFor("the window is unzoomed and back to its own size") { !core.zoomed() && core.width() != 60 }
+    }
+
+    @Test
+    fun f25_tilesThatAreEveryPaneOfAWindowFitItAsOneLaidOutAsTheTiles() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        api.split(HOST, "work", 0, "h")
+        waitFor("two panes") { api.panes().size == 2 }
+        val ids = api.panes().map { it.paneId }
+        assertTrue(core.layout(), core.layout().contains("{"))
+        // The phone stacks the two tiles: the host's window takes that shape at the tiles' exact sizes.
+        val stacked = WindowLayout.Node.Split(false, listOf(WindowLayout.Node.Leaf(0), WindowLayout.Node.Leaf(1)))
+        val sizes = listOf(WindowLayout.Size(60, 20), WindowLayout.Size(60, 15))
+        val exact = WindowLayout.exact(stacked, sizes, ids)
+        assertEquals(60, exact.cols)
+        assertEquals(36, exact.rows)
+        val r = api.resize(address, exact.cols, exact.rows, window = true, layout = exact.layout)
+        assertEquals(60, r.pane.width)
+        assertEquals(20, r.pane.height)
+        waitFor("tmux stacks the panes") { core.layout().contains("[") }
+        assertEquals("60x20", core.size("work:0.0"))
+        assertEquals("60x15", core.size("work:0.1"))
+        // The tiles swapped: the panes move on the host, and the answer lists them at their new addresses.
+        Thread.sleep(1_100)
+        val swapped = WindowLayout.exact(stacked, sizes, ids.reversed())
+        val m = api.resize(address, swapped.cols, swapped.rows, window = true, layout = swapped.layout)
+        assertEquals(2, m.panes.size)
+        assertEquals(ids[1], m.panes.first { it.address == address }.paneId)
+        waitFor("the listing follows") { api.panes().first().paneId == ids[1] }
+        api.release(address)
+        waitFor("the window is back to its own shape") { core.layout().contains("{") }
     }
 
     @Test

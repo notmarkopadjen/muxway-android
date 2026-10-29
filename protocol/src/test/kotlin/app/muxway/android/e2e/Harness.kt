@@ -122,6 +122,11 @@ class Core(private val logs: File) {
 
     fun zoomed(): Boolean = tmux("display-message", "-p", "-t", "work:0.0", "#{window_zoomed_flag}").trim() == "1"
 
+    /** tmux's layout string for the first window, and a pane's size as `WxH`. */
+    fun layout(): String = tmux("display-message", "-p", "-t", "work:0", "#{window_layout}").trim()
+
+    fun size(target: String): String = tmux("display-message", "-p", "-t", target, "#{pane_width}x#{pane_height}").trim()
+
     fun notify(kind: String, text: String) = cli("notify", "--dir", agentDir.path, "--pane", paneId(), "--kind", kind, "--text", text)
 
     fun close() {
