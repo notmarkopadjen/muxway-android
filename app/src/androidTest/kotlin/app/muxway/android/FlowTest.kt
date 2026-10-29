@@ -217,6 +217,12 @@ class FlowTest {
         Thread.sleep(2_000)
         rule.onAllNodes(hasText("held", substring = true)).assertCountEquals(0)
         shot("one-window")
+        // ⊡ shows the focused pane alone, and once more brings both tiles back.
+        rule.onNodeWithTag("zoom").performClick()
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 1 }
+        shot("zoomed")
+        rule.onNodeWithTag("zoom").performClick()
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 2 }
         rule.onAllNodesWithTag("minimise")[1].performClick()
         rule.onNodeWithTag("minimised").assertExists()
         rule.onAllNodesWithTag("minimise").assertCountEquals(1)

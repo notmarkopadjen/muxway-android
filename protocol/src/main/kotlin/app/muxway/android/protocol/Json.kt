@@ -86,6 +86,9 @@ object Json {
 
     fun fitAuto(): String = JSONObject().put("fit", "auto").toString()
 
+    /** The window laid out as [layout] at the size it has. */
+    fun arrange(layout: String): String = JSONObject().put("scope", "window").put("layout", layout).toString()
+
     fun direction(d: String): String = JSONObject().put("direction", d).toString()
 
     fun name(n: String): String = JSONObject().put("name", n).toString()
@@ -114,6 +117,7 @@ object Json {
             mouse = if (o.has("mouse")) o.optBoolean("mouse") else null,
             cursorX = o.optInt("cursor_x").coerceAtLeast(0),
             cursorY = o.optInt("cursor_y").coerceAtLeast(0),
+            windowLayout = o.optString("window_layout").take(WindowLayout.MAX_BYTES),
         )
     }
 

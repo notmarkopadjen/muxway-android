@@ -652,6 +652,28 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     /** Gives the pane back to tmux, if this app ever sized it. */
     /**
+     * With fit off the tiles' arrangement still goes to the host, as the window's layout without
+     * a size; [mates] are the tiles' keys, re-read after. Once more after the host's second.
+     */
+    fun arrange(key: String, layout: String, mates: List<String>, retry: Boolean = true) {
+        viewModelScope.launch {
+            try {
+                val r = withContext(Dispatchers.IO) { api(key).arrange(Keys.address(key), layout) }
+                val at = System.currentTimeMillis() / 1000
+                for (m in mates) views[m]?.let { it.ownAt = at; it.etag = null }
+                val moved = if (r.panes.isNotEmpty()) follow(key, r.panes) else emptyMap()
+                for (m in mates) launch { pollOnce(moved[m] ?: m) }
+            } catch (e: ApiException) {
+                if (e.code == "rate_limited" && retry) { delay(1100); arrange(key, layout, mates, retry = false) }
+                else if (e.code == "unauthorized") tokenRefused(conn(key))
+                else sendError = e.message
+            } catch (e: IllegalArgumentException) {
+                // A layout the client itself refuses never leaves the phone.
+            }
+        }
+    }
+
+    /**
      * The host moved the window's panes into the layout's order, so their addresses changed: the
      * listing takes the answer, and the open tiles follow their panes by id, each tile's state
      * carried to its new key. The old keys to the new ones.

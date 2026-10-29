@@ -216,6 +216,119 @@ gains the tab held, the hubs row says every hub is in use.
 dotted links, the PDF, the reading cadence. 7. Docs, the guideline, the
 end-to-end tests, the run.
 
+## Part 2: the rows first left out (same day, on the owner's ask)
+
+The owner asked for the rest of the review as well: the tiles following
+the host's layout, split-on-drop, laying a tile across, equal shares,
+zoom, the changes window, code colours in Markdown, and direct typing
+with a hardware keyboard. The guideline's Android columns for these
+rows are updated in the core with this part.
+
+### Design
+
+**A tile tree** (`protocol/Tiles.kt`, the browser's `tiles.ts`): the
+arrangement is a tree of splits with a key per split and a share per
+child, not only a preset. The presets build trees; a header dropped on
+another tile's middle swaps, on its upper, lower, left or right part
+splits that tile's place that way (`dropOn`), on a divider lays the
+pane across that split (`across`); a closed tile is pruned; `▦` goes
+back to the presets, `▦` held gives every split equal shares. The
+Compose tree draws any shape with draggable dividers. The exact window
+layout of part 1 is built from the same tree.
+
+**Following the host.** The listing's `window_layout` is parsed
+(`WindowLayout.parse`, tmux's grammar) and, when the open tiles are
+every pane of one window, turned into the tree and shares
+(`Tiles.fromHost`); the view adopts it when the host's shape differs
+from the tiles', unless the tiles were changed here in the last three
+seconds or the host's layout is the one this view sent. Moving panes
+needs every pane writable: otherwise `▦`, drops and drags are off and
+the tiles only follow. With fit off a change here still goes to the
+host as the window's layout without a size (`Api.arrange`).
+
+**Zoom.** `⊡` in the top row (or a double tap on a header) shows the
+focused pane alone and remembers the tiles it came from; from a pane
+alone it goes back to them, in their places and arrangement, or, opened
+alone, to the window's panes side by side in the window's order.
+
+**Changes.** `Api.git` and `Api.gitDiff` (`GET …/git`, `GET
+…/git/diff?path=`). A writable tile on a host with preview roots asks
+for its repository's state every ten seconds (every five while the
+sheet is open), shows `⎇` with the counts at the right of its header,
+`⎇ ✓` when clean, nothing when the pane is in no repository the host
+shows (asked again every minute). A tap opens the **changes sheet**:
+the bar with the repository, branch, ahead and behind, the counts; the
+tree with directories first, folded by a tap, a mark and a colour per
+file, `●` for staged. A file opens the file sheet with a `diff` /
+`file` switch: the diff as rows, `+` in the ok colour, `−` dim and
+struck, headers dim; a deleted file has its diff only, an untracked one
+the file only.
+
+**Code colours** (`protocol/Code.kt`, the browser's `code.ts`): a small
+scanner per language tells comments, strings, numbers, keywords and
+names apart; a fenced block's language in Markdown and a file's
+extension in the sheet pick it; an unknown language is plain.
+
+**Direct typing.** With the *hardware keyboard* setting on and the text
+line not focused, every key of a hardware keyboard goes to the focused
+writable pane as pressed: printable characters as text, Ctrl and Alt
+chords as `C-x` and `M-x` where the grammar allows, named keys by name;
+the status line says `direct`. A tap on the line takes the keys back.
+
+```mermaid
+sequenceDiagram
+    participant H as Host
+    participant M as Listing (window_layout)
+    participant V as ViewScreen
+    participant T as Tiles
+    H-->>M: layout b25d,… (every 15 s, on events)
+    M->>V: every pane of one window open?
+    V->>V: Tiles.fromHost → tree, shares; differs, not ours, settled → adopt
+    V->>T: draw the tree
+    T->>V: a header dropped on an edge / a divider, a divider dragged
+    V->>H: resize {scope: window, layout: exact} (fit on) or {scope: window, layout} (fit off)
+```
+
+### Protocol and API
+
+None new; the client uses `GET /v1/panes/{address}/git` and
+`…/git/diff?path=` and the resize's `layout` without a size, all in
+`docs/protocol/v1.md`.
+
+### Security
+
+- Git runs only on the host, read-only, under the roots the owner named,
+  for a writer; the client asks only for writable panes on hosts with
+  `preview`, one status a second at most per pane, and draws names and
+  diffs as text. A diff path is one the status listed; the client sends
+  it percent-encoded and refuses control characters before asking.
+- A layout from the host is parsed with a strict grammar and refused
+  whole when it does not name exactly the open tiles' panes.
+- Direct typing sends only what `Input.typed` and the key grammar
+  allow, to a writable pane, and only from a hardware keyboard while
+  the setting is on; nothing is sent while the line has the focus.
+- Audit, rate limits and grants are the hub's, unchanged; nothing new
+  is logged on the phone.
+
+### Test plan (added rows)
+
+| # | Test | Kind | Expected |
+|---|------|------|----------|
+| 12 | A read-only token, a read-only pane and a host without roots get nothing from `git`; a diff path with a control character is refused before sending; a path the status did not list is `404` | e2e-security | `403` / `404` / `IllegalArgumentException` / `404` |
+| 13 | The repository's changes are listed with their kinds and a diff comes back as text | e2e | `modified`, `added` staged, `renamed` with `from`, `deleted`, `untracked`; `+func A() {}` in the diff |
+| 14 | `Tiles`: zones, drop splits and closes up, prune renumbers, across, fromHost round trip, equal and drag | unit | as the browser's tests |
+| 15 | `WindowLayout.parse` on tmux's strings and the refusals | unit | tree; null on junk |
+| 16 | `Code`: comments, strings, numbers, keywords per language; an unknown language is plain | unit | runs |
+| 17 | `Changes`: the tree by directory, the counts and the summary | unit | `+2 ~1 −1` |
+| 18 | On a device: a header dropped on an edge splits, `⊡` zooms and back, `⎇` opens the sheet | UI | screenshots `split-drop`, `zoomed`, `changes`; needs a device |
+
+### Docs
+
+`pane-view.md` (tiles, zoom, changes, direct typing), `look.md` (code
+colours), `ARCHITECTURE.md` (git rows); in the core the guideline's
+Android columns for zoom, split, across, equal shares, the changes
+window and direct typing.
+
 ---
 
 ## Review (after implementation)

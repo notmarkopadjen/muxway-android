@@ -23,7 +23,8 @@ object TileFit {
 
     /**
      * The panes' ids in tile order when [open] (two or more) are exactly the panes of one window
-     * in [panes] and every one may be written to, so a layout may move them; null otherwise.
+     * in [panes]; null otherwise. Sizing such a window needs one writable pane, moving its panes
+     * every one ([movable]).
      */
     fun oneWindow(open: List<String>, panes: List<Pane>, windowOf: (String) -> String): List<String>? {
         if (open.size < 2) return null
@@ -31,7 +32,9 @@ object TileFit {
         val mates = panes.filter { windowOf(it.key) == window }
         if (mates.size != open.size) return null
         val ids = open.map { k -> mates.firstOrNull { it.key == k } ?: return null }
-        if (ids.any { !it.writable || !WindowLayout.PANE_ID.matches(it.paneId) }) return null
+        if (ids.any { !WindowLayout.PANE_ID.matches(it.paneId) }) return null
         return ids.map { it.paneId }
     }
+
+    fun movable(open: List<String>, panes: List<Pane>): Boolean = open.all { k -> panes.firstOrNull { it.key == k }?.writable == true }
 }

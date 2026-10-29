@@ -71,7 +71,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -86,6 +86,9 @@ import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -142,6 +145,7 @@ import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Links
 import app.muxway.android.protocol.Blocks
 import app.muxway.android.protocol.Pane
+import app.muxway.android.protocol.Tiles
 import app.muxway.android.protocol.WindowLayout
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -174,9 +178,62 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val keyboard = LocalSoftwareKeyboardController.current
     val fieldFocus = remember { FieldFocus() }
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
-    // Several panes: the arrangement cycles through the ones that make sense for the count, the
-    // splits drag, and a pane's header dragged onto another tile swaps the two.
-    var layout by rememberSaveable(addresses.size) { mutableStateOf(if (landscape) Layout.ROW else Layout.COLUMN) }
+    // Several panes: the arrangement is a preset that cycles with ▦, or a tree made here by a
+    // header dropped on a tile's edge or a divider, or taken from the host when the tiles are
+    // every pane of one window; every split's shares drag. A new count resets it, unless a zoom
+    // out or a closed tile brings the tiles back as they were.
+    val preset = if (landscape) Layout.ROW else Layout.COLUMN
+    var layout by rememberSaveable { mutableStateOf(preset) }
+    var custom by remember { mutableStateOf<WindowLayout.Node?>(null) }
+    val weights = remember { mutableStateMapOf<String, List<Float>>() }
+    val kept = remember { Remembered() }
+    val shape = if (layout == Layout.CUSTOM) custom ?: preset.tree(tiles.size) else layout.tree(tiles.size)
+    LaunchedEffect(addresses, tiles.size) {
+        val back = listOf(kept.carried, kept.unzoomed).firstOrNull { it != null && it.panes == addresses }
+        if (back != null) {
+            kept.carried = null
+            layout = back.layout
+            custom = back.custom
+            weights.clear()
+            weights.putAll(back.weights)
+        } else if (tiles.size != kept.count) {
+            if (layout == Layout.CUSTOM || layout !in Layout.options(tiles.size)) layout = preset
+            custom = null
+            weights.clear()
+        }
+        kept.count = tiles.size
+        kept.focusNext?.let { f -> tiles.indexOf(f).takeIf { it >= 0 }?.let { focusedIndex = it }; kept.focusNext = null }
+    }
+    fun touch() { kept.touched = System.currentTimeMillis() }
+    // Tiles that are every pane of one window fit it as one, laid out as the tiles are, and
+    // follow the host's layout; moving its panes needs every one writable. Tiles that are only
+    // some of a window's panes share one fit and the others are held.
+    val windowOf = { a: String -> model.panes.firstOrNull { it.key == a }?.let { "${it.hub}/${it.host}/${it.session}/${it.windowIndex}" } ?: a }
+    val ids = TileFit.oneWindow(tiles, model.panes, windowOf)
+    val movable = ids != null && TileFit.movable(tiles, model.panes)
+    val rearrangeable = tiles.size > 1 && (ids == null || movable)
+    fun refusedMove() { model.told = "moving these panes needs every pane of the window writable" }
+    // A header dropped on a tile: its middle swaps the two, an edge splits that tile's place.
+    fun drop(from: String, to: Int, zone: Tiles.Zone) {
+        val at = tiles.indexOf(from)
+        if (at < 0 || at == to) return
+        if (!rearrangeable) { refusedMove(); return }
+        touch()
+        if (zone == Tiles.Zone.SWAP) { model.swapTiles(addresses, from, tiles[to]); return }
+        custom = Tiles.dropOn(shape, at, to, zone)
+        layout = Layout.CUSTOM
+        weights.clear()
+    }
+    // A header dropped on a divider: the pane across that split, first or last.
+    fun lay(from: String, key: String, horizontal: Boolean, first: Boolean) {
+        val at = tiles.indexOf(from)
+        if (at < 0) return
+        if (!rearrangeable) { refusedMove(); return }
+        touch()
+        custom = Tiles.across(shape, at, key, horizontal, first)
+        layout = Layout.CUSTOM
+        weights.clear()
+    }
     val writable = state.pane?.writable == true
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
@@ -223,11 +280,34 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     }
 
     // `_`: the tile leaves for the row above the keys and gives its size back; the last tile stays.
+    // A made tree closes up around the tile that left.
     fun minimise(key: String) {
         if (tiles.size < 2) return
+        if (layout == Layout.CUSTOM) kept.carried = Saved(addresses, layout, Tiles.prune(shape, tiles.indexOf(key)), emptyMap())
         model.release(key)
         parked = minimised + key
         if (key == focused) focusedIndex = 0
+    }
+
+    fun closeTile(key: String) {
+        if (tiles.size > 2 && layout == Layout.CUSTOM) kept.carried = Saved(addresses - key, layout, Tiles.prune(shape, tiles.indexOf(key)), emptyMap())
+        model.closeTile(key)
+    }
+
+    // Zoom: the focused pane alone, and back to the tiles it came from, in their places and
+    // arrangement; from a pane opened alone, the window's panes side by side in its order.
+    fun zoom() {
+        if (tiles.size > 1) {
+            kept.unzoomed = Saved(addresses, layout, custom, weights.toMap())
+            kept.focusNext = focused
+            model.open(Screen.View(listOf(focused)))
+            return
+        }
+        kept.unzoomed?.takeIf { focused in it.panes }?.let { kept.focusNext = focused; model.open(Screen.View(it.panes)); return }
+        val mates = model.panes.filter { it.key != focused && windowOf(it.key) == windowOf(focused) }.map { it.key }.take(AddMenu.MAX_TILES - 1)
+        if (mates.isEmpty()) return
+        kept.focusNext = focused
+        model.open(Screen.View(model.panes.map { it.key }.filter { it == focused || it in mates }))
     }
 
     // With several tiles the focus moves to the next one; with one, the strip's neighbour takes
@@ -261,7 +341,9 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
                 Btn("+", { adding = true }, selected = adding, modifier = Modifier.testTag("add"))
                 if (adding) AddMenuPopup(model, addresses, tiles, minimised, focused, now, onClose = { adding = false }) { add(it) }
             }
-            if (tiles.size > 1) Btn("▦", { layout = layout.next(tiles.size) })
+            // ▦: the next preset; held, every split's shares equal. ⊡: the focused pane alone, and back.
+            if (tiles.size > 1) Btn("▦", { touch(); layout = layout.next(tiles.size) }, enabled = rearrangeable, onLongClick = { touch(); weights.clear() })
+            if (tiles.size > 1 || model.panes.any { it.key != focused && windowOf(it.key) == windowOf(focused) }) Btn("⊡", ::zoom, modifier = Modifier.testTag("zoom"))
             // Tap: fit on, or send this size once more when it is on already; hold: fit off.
             Btn("⤢", { if (fit) fitAgain++ else fit = true }, selected = fit, enabled = writable, onLongClick = { fit = false })
             if (hardware) Btn("abc", { ime = !ime; if (ime) { fieldFocus.request(); keyboard?.show() } else keyboard?.hide() }, selected = ime)
@@ -269,29 +351,55 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         }
         Rule()
         Box(Modifier.weight(1f)) {
-            // Tiles that are every pane of one window fit it as one, laid out as the tiles are;
-            // tiles that are only some of a window's panes share one fit and the others are held.
-            val windowOf = { a: String -> model.panes.firstOrNull { it.key == a }?.let { "${it.hub}/${it.host}/${it.session}/${it.windowIndex}" } ?: a }
-            val ids = TileFit.oneWindow(tiles, model.panes, windowOf)
             val held = if (ids != null) emptySet() else TileFit.held(tiles, focused, windowOf)
             // A pane alone in the view sizes its window, zoomed over its siblings when it has any.
             val siblings = { a: String -> model.panes.any { it.key != a && windowOf(it.key) == windowOf(a) } }
+            // The tiles and their window are kept the same both ways: the tiles take the host's
+            // layout when it changes there (not over a change made here in the last three
+            // seconds, nor the layout this view sent, which comes back with the headers' rows
+            // off), and what is changed here goes to the host.
+            val hostLayout = if (ids != null) model.panes.firstOrNull { it.key == tiles[0] }?.windowLayout ?: "" else ""
+            var synced by remember { mutableStateOf(false) }
+            LaunchedEffect(ids, hostLayout) {
+                if (ids == null) { synced = false; return@LaunchedEffect }
+                val h = Tiles.fromHost(hostLayout, ids) ?: return@LaunchedEffect
+                val settled = System.currentTimeMillis() - kept.touched > 3000
+                val mine = kept.sent.takeIf { it.isNotEmpty() }?.let { Tiles.fromHost(it, ids) }
+                val ours = mine != null && Tiles.sameTree(h.node, mine.node) && Tiles.nearWeights(h.node, h.weights, mine.weights, 0.03f)
+                if (!synced || (settled && !ours && (!Tiles.sameTree(h.node, shape) || !Tiles.nearWeights(h.node, h.weights, weights, 0.03f)))) {
+                    custom = h.node
+                    layout = Layout.CUSTOM
+                    weights.clear()
+                    weights.putAll(h.weights)
+                }
+                synced = true
+            }
             // Each tile reports its cells; the window's layout is exact to them, the input line's
-            // growth counted on the tiles along the bottom only.
-            val tree = layout.tree(tiles.size)
-            val bottom = WindowLayout.bottomLeaves(tree).toSet()
+            // growth counted on the tiles along the bottom only. A writable pane carries the fit.
+            val bottom = WindowLayout.bottomLeaves(shape).toSet()
             val sizes = remember { mutableStateMapOf<String, WindowLayout.Size>() }
             LaunchedEffect(tiles) { sizes.keys.retainAll(tiles.toSet()) }
-            val exact = if (ids != null && tiles.all { it in sizes }) WindowLayout.exact(tree, tiles.map { sizes.getValue(it) }, ids) else null
-            val lead = tiles[0]
+            val exact = if (ids != null && synced && tiles.all { it in sizes }) WindowLayout.exact(shape, tiles.map { sizes.getValue(it) }, ids) else null
+            val lead = tiles.firstOrNull { model.panes.any { p -> p.key == it && p.writable } } ?: tiles[0]
             val imeUp = WindowInsets.isImeVisible
             var sentAgain by remember { mutableIntStateOf(fitAgain) }
             LaunchedEffect(ids, exact?.layout, fit, imeUp, fitAgain) {
                 if (ids == null) return@LaunchedEffect
                 if (!fit) { for (t in tiles) model.release(t); return@LaunchedEffect }
                 if (exact == null || imeUp) return@LaunchedEffect
+                kept.sent = exact.layout
                 model.fit(lead, exact.cols.coerceIn(20, 500), exact.rows.coerceIn(5, 300), again = fitAgain != sentAgain, window = true, layout = exact.layout, mates = tiles)
                 sentAgain = fitAgain
+            }
+            // With fit off the arrangement still goes to the host, without a size.
+            val proportional = if (ids != null && movable && synced && !fit) Tiles.layoutFor(shape, weights, ids) else ""
+            LaunchedEffect(proportional, hostLayout) {
+                if (proportional.isEmpty()) return@LaunchedEffect
+                val h = Tiles.fromHost(hostLayout, ids!!)
+                if (h != null && Tiles.sameTree(h.node, shape) && Tiles.nearWeights(shape, h.weights, weights, 0.01f)) return@LaunchedEffect
+                delay(300)
+                kept.sent = proportional
+                model.arrange(lead, proportional, tiles)
             }
             val sent = ids != null && model.view(lead).fitted
             val tile: @Composable (Int, Modifier) -> Unit = { i, m ->
@@ -300,9 +408,10 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
                         model, tiles[i], i == index, tiles.size > 1, fit, tiles[i] in held, siblings(tiles[i]), ids != null, exact?.sizes?.get(i)?.takeIf { sent },
                         fitAgain, now, if (i in bottom) slackPx else 0, m,
                         onMeasured = { sizes[tiles[i]] = it },
-                        onDrop = { from -> model.swapTiles(addresses, from, tiles[i]) },
+                        onDrop = { from, zone -> drop(from, i, zone) },
+                        onZoom = ::zoom,
                         onClose = { model.closePane(tiles[i]) },
-                        onCloseTile = { model.closeTile(tiles[i]) },
+                        onCloseTile = { closeTile(tiles[i]) },
                         onMinimise = if (tiles.size > 1) ({ minimise(tiles[i]) }) else null,
                         onFile = { shown = it },
                         onPrompt = { focusedIndex = i; fieldFocus.request() },
@@ -312,7 +421,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
                     }
                 }
             }
-            Tiles(tiles.size, layout, tile)
+            Tree(shape, weights, Modifier.fillMaxSize(), dropping = tiles.size > 1, onAcross = ::lay, tile)
         }
         Rule()
         if (minimised.isNotEmpty()) MinimisedRow(model, minimised, now) { show(it) }
@@ -335,9 +444,22 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     }
 }
 
-/** How several panes share the screen. Which ones apply depends on how many there are. */
+/** An arrangement the view came from, to go back to: after a zoom out, or a tile closed. */
+private class Saved(val panes: List<String>, val layout: Layout, val custom: WindowLayout.Node?, val weights: Map<String, List<Float>>)
+
+/** What the view keeps across its own changes of panes: the arrangement to go back to, who is focused next, when it was last changed here, the layout last sent. */
+private class Remembered {
+    var unzoomed: Saved? = null
+    var carried: Saved? = null
+    var focusNext: String? = null
+    var touched = 0L
+    var sent = ""
+    var count = 0
+}
+
+/** How several panes share the screen: a preset by count, or a tree made here ([CUSTOM]). */
 enum class Layout {
-    ROW, COLUMN, GRID, MAIN_LEFT, MAIN_TOP;
+    ROW, COLUMN, GRID, MAIN_LEFT, MAIN_TOP, CUSTOM;
 
     companion object {
         /** Two panes split one way or the other; three and four add a main pane and, for four, a grid. */
@@ -348,91 +470,83 @@ enum class Layout {
         }
     }
 
+    /** The next preset; from a made tree, the first. */
     fun next(n: Int): Layout {
         val all = options(n)
         return all[(all.indexOf(this) + 1) % all.size]
     }
 
-    /** The arrangement as the tree of splits [Tiles] draws, its leaves the tile indexes. */
+    /** The arrangement as the tree of splits [Tree] draws, its leaves the tile indexes, every split keyed. */
     fun tree(n: Int): WindowLayout.Node {
         val all: List<WindowLayout.Node> = (0 until n).map { WindowLayout.Node.Leaf(it) }
         fun split(horizontal: Boolean, kids: List<WindowLayout.Node>) = if (kids.size == 1) kids[0] else WindowLayout.Node.Split(horizontal, kids)
         if (n <= 1) return all.firstOrNull() ?: WindowLayout.Node.Leaf(0)
-        return when (this) {
-            ROW -> split(true, all)
+        return Tiles.relabel(when (this) {
+            ROW, CUSTOM -> split(true, all)
             COLUMN -> split(false, all)
             MAIN_LEFT -> split(true, listOf(all[0], split(false, all.drop(1))))
             MAIN_TOP -> split(false, listOf(all[0], split(true, all.drop(1))))
             GRID -> split(false, listOf(split(true, all.take((n + 1) / 2)), split(true, all.drop((n + 1) / 2))))
-        }
-    }
-}
-
-/** The tiles in the chosen arrangement, every split draggable. */
-@Composable
-private fun Tiles(n: Int, layout: Layout, tile: @Composable (Int, Modifier) -> Unit) {
-    val all = (0 until n).toList()
-    val weights = remember(n, layout) { Array(3) { SnapshotStateList<Float>().apply { repeat(n) { add(1f) } } } }
-    when (layout) {
-        Layout.ROW -> Split(false, all, weights[0], Modifier.fillMaxSize(), tile)
-        Layout.COLUMN -> Split(true, all, weights[0], Modifier.fillMaxSize(), tile)
-        Layout.MAIN_LEFT -> Split(false, listOf(0, 1), weights[0], Modifier.fillMaxSize()) { part, m ->
-            if (part == 0) tile(0, m) else Split(true, all.drop(1), weights[1], m, tile)
-        }
-        Layout.MAIN_TOP -> Split(true, listOf(0, 1), weights[0], Modifier.fillMaxSize()) { part, m ->
-            if (part == 0) tile(0, m) else Split(false, all.drop(1), weights[1], m, tile)
-        }
-        Layout.GRID -> {
-            val top = all.take((n + 1) / 2)
-            val bottom = all.drop((n + 1) / 2)
-            Split(true, listOf(0, 1), weights[0], Modifier.fillMaxSize()) { part, m ->
-                if (part == 0) Split(false, top, weights[1], m, tile) else Split(false, bottom, weights[2], m, tile)
-            }
-        }
+        })
     }
 }
 
 /**
- * [items] side by side ([vertical] false) or stacked, sharing the space by [weights] (indexed like
- * [items]), with a bar between neighbours that drags the split. One item takes it all, no bar.
+ * The tree of splits: a leaf is a tile, a split a row or a column sharing the space by its
+ * shares, with a bar between neighbours that drags the split and, while a header is dragged,
+ * takes it to lay the pane across the split, first or last by which half it lands on.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Split(vertical: Boolean, items: List<Int>, weights: SnapshotStateList<Float>, modifier: Modifier, content: @Composable (Int, Modifier) -> Unit) {
+private fun Tree(
+    node: WindowLayout.Node, weights: SnapshotStateMap<String, List<Float>>, modifier: Modifier, dropping: Boolean,
+    onAcross: (from: String, key: String, horizontal: Boolean, first: Boolean) -> Unit, tile: @Composable (Int, Modifier) -> Unit,
+) {
     val p = LocalPalette.current
-    if (items.size == 1) { content(items[0], modifier); return }
-    BoxWithConstraints(modifier) {
-        val total = (if (vertical) constraints.maxHeight else constraints.maxWidth).toFloat().coerceAtLeast(1f)
-        val sum = items.sumOf { weights[it].toDouble() }.toFloat()
-        val least = 0.15f * sum
-        fun drag(k: Int, px: Float) {
-            val a = items[k]
-            val b = items[k + 1]
-            val d = (px / total * sum).coerceIn(-(weights[a] - least), weights[b] - least)
-            weights[a] += d
-            weights[b] -= d
-        }
-        val bar: @Composable (Int) -> Unit = { k ->
-            Box(
-                Modifier.then(if (vertical) Modifier.fillMaxWidth().height(10.dp) else Modifier.fillMaxHeight().width(10.dp))
-                    .background(p.bg)
-                    .pointerInput(k, vertical) { detectDragGestures { change, delta -> change.consume(); drag(k, if (vertical) delta.y else delta.x) } },
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(Modifier.then(if (vertical) Modifier.fillMaxWidth(0.3f).height(2.dp) else Modifier.fillMaxHeight(0.3f).width(2.dp)).background(p.dim))
-            }
-        }
-        if (vertical) {
-            Column(Modifier.fillMaxSize()) {
-                for ((k, i) in items.withIndex()) {
-                    content(i, Modifier.fillMaxWidth().weight(weights[i]))
-                    if (k < items.lastIndex) bar(k)
+    when (node) {
+        is WindowLayout.Node.Leaf -> tile(node.index, modifier)
+        is WindowLayout.Node.Split -> BoxWithConstraints(modifier) {
+            val n = node.children.size
+            val total = (if (node.horizontal) constraints.maxWidth else constraints.maxHeight).toFloat().coerceAtLeast(1f)
+            val w = weights[node.key]?.takeIf { it.size == n } ?: Tiles.equal(n)
+            fun drag(k: Int, px: Float) { weights[node.key] = Tiles.drag(weights[node.key]?.takeIf { it.size == n } ?: Tiles.equal(n), k, px / total) }
+            val bar: @Composable (Int) -> Unit = { k ->
+                var bounds by remember { mutableStateOf<Rect?>(null) }
+                val target = remember(node.key, k) {
+                    object : DragAndDropTarget {
+                        override fun onDrop(event: DragAndDropEvent): Boolean {
+                            val e = event.toAndroidDragEvent()
+                            val from = e.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString() ?: return false
+                            val b = bounds ?: return false
+                            onAcross(from, node.key, !node.horizontal, if (node.horizontal) e.y < b.center.y else e.x < b.center.x)
+                            return true
+                        }
+                    }
+                }
+                Box(
+                    Modifier.then(if (node.horizontal) Modifier.fillMaxHeight().width(10.dp) else Modifier.fillMaxWidth().height(10.dp))
+                        .background(p.bg)
+                        .onGloballyPositioned { bounds = it.boundsInRoot() }
+                        .then(if (dropping) Modifier.dragAndDropTarget(shouldStartDragAndDrop = { it.mimeTypes().contains(MIME) }, target = target) else Modifier)
+                        .pointerInput(node.key, k) { detectDragGestures { change, delta -> change.consume(); drag(k, if (node.horizontal) delta.x else delta.y) } },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(Modifier.then(if (node.horizontal) Modifier.fillMaxHeight(0.3f).width(2.dp) else Modifier.fillMaxWidth(0.3f).height(2.dp)).background(p.dim))
                 }
             }
-        } else {
-            Row(Modifier.fillMaxSize()) {
-                for ((k, i) in items.withIndex()) {
-                    content(i, Modifier.fillMaxHeight().weight(weights[i]))
-                    if (k < items.lastIndex) bar(k)
+            if (node.horizontal) {
+                Row(Modifier.fillMaxSize()) {
+                    node.children.forEachIndexed { k, c ->
+                        Tree(c, weights, Modifier.fillMaxHeight().weight(w[k].coerceAtLeast(0.01f)), dropping, onAcross, tile)
+                        if (k < n - 1) bar(k)
+                    }
+                }
+            } else {
+                Column(Modifier.fillMaxSize()) {
+                    node.children.forEachIndexed { k, c ->
+                        Tree(c, weights, Modifier.fillMaxWidth().weight(w[k].coerceAtLeast(0.01f)), dropping, onAcross, tile)
+                        if (k < n - 1) bar(k)
+                    }
                 }
             }
         }
@@ -799,7 +913,8 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
 private fun PaneTile(
     model: AppModel, address: String, focused: Boolean, several: Boolean, fitAsked: Boolean, shared: Boolean, siblings: Boolean,
     windowFit: Boolean, expected: WindowLayout.Size?, fitAgain: Int, now: Long, slackPx: Int, modifier: Modifier,
-    onMeasured: (WindowLayout.Size) -> Unit, onDrop: (String) -> Unit, onClose: () -> Unit, onCloseTile: () -> Unit, onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onPrompt: () -> Unit, onFocus: () -> Unit,
+    onMeasured: (WindowLayout.Size) -> Unit, onDrop: (String, Tiles.Zone) -> Unit, onZoom: () -> Unit, onClose: () -> Unit, onCloseTile: () -> Unit,
+    onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onPrompt: () -> Unit, onFocus: () -> Unit,
 ) {
     // Another tile of this window carries the fit: this one is held. With the window fitted as
     // one ([windowFit]) the view sends the size and this tile is [expected] to be its share.
@@ -823,12 +938,17 @@ private fun PaneTile(
     val status = pane?.let { model.status(it, now) }
     val (back, ink) = stateColours(status)
     val edge: Dp = if (several && focused) 3.dp else 1.dp
-    // Another tile's header dropped here swaps the two panes.
+    // Another tile's header dropped here: on the middle it swaps the two panes, on an edge it
+    // splits this tile's place that way.
+    var bounds by remember { mutableStateOf<Rect?>(null) }
     val target = remember(address) {
         object : DragAndDropTarget {
             override fun onDrop(event: DragAndDropEvent): Boolean {
-                val from = event.toAndroidDragEvent().clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString() ?: return false
-                onDrop(from)
+                val e = event.toAndroidDragEvent()
+                val from = e.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString() ?: return false
+                val b = bounds
+                val zone = if (b == null || b.width <= 0f || b.height <= 0f) Tiles.Zone.SWAP else Tiles.zoneAt((e.x - b.left) / b.width, (e.y - b.top) / b.height)
+                onDrop(from, zone)
                 return true
             }
         }
@@ -838,9 +958,12 @@ private fun PaneTile(
     val glow = if (waiting) Modifier.glow(p.ink, pulse()) else Modifier
     Column(
         modifier.padding(2.dp).then(glow).border(edge, if (several && focused) p.ink else p.faint).clickable(onClick = onFocus)
+            .onGloballyPositioned { bounds = it.boundsInRoot() }
             .then(if (several) Modifier.dragAndDropTarget(shouldStartDragAndDrop = { it.mimeTypes().contains(MIME) }, target = target) else Modifier),
     ) {
+        // The header drags by a long press; a double tap zooms the pane.
         val header = Modifier.fillMaxWidth().background(back).padding(horizontal = 4.dp, vertical = 2.dp)
+            .pointerInput(address) { detectTapGestures(onDoubleTap = { onZoom() }, onTap = { onFocus() }) }
             .then(if (several) Modifier.dragAndDropSource {
                 detectDragGesturesAfterLongPress { _, _ -> startTransfer(DragAndDropTransferData(ClipData.newPlainText(MIME, address))) }
             } else Modifier)

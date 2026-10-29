@@ -25,9 +25,11 @@ class TileFitTest {
     }
 
     @Test
-    fun aPaneMissingReadOnlyOrOfAnotherWindowKeepsTheHeldPath() {
+    fun aPaneMissingOrOfAnotherWindowKeepsTheHeldPathAndAReadOnlyOneOnlyFollows() {
         assertNull(one(listOf("a/w/0.0", "a/w/0.1")))
-        assertNull(one(listOf("a/w/0.0", "a/w/0.1", "a/w/0.2")))
+        assertEquals(listOf("%1", "%2", "%3"), one(listOf("a/w/0.0", "a/w/0.1", "a/w/0.2")))
+        assertEquals(false, TileFit.movable(listOf("a/w/0.0", "a/w/0.1", "a/w/0.2"), listed))
+        assertEquals(true, TileFit.movable(listOf("a/w/0.0", "a/w/0.1"), listed))
         assertNull(one(listOf("a/w/0.0", "b/w/0.0")))
         assertNull(one(listOf("a/w/0.0")))
         assertNull(one(listOf("a/w/0.0", "a/w/0.1"), listOf(pane("a/w/0.0", "1"), pane("a/w/0.1", "%2"))))

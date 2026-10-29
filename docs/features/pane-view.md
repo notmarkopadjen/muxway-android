@@ -67,10 +67,30 @@ focused pane.
   a row and a column; three add a main pane on the left with the others
   stacked beside it, and a main pane on top with the others in a row
   below; four add a two-by-two grid. The bar between two panes drags to
-  resize them; no pane goes under fifteen percent. Long-press a pane's
-  header and drop it on another tile to swap the two. The arrangement is
-  the phone's own and never reaches the host, except when the tiles are
-  every pane of one window (see *Fit*). Each header is painted like its
+  resize them; no pane goes under fifteen percent; `▦` held gives every
+  split equal shares again. The arrangement is a **tree of splits**, the
+  browser's (`protocol/Tiles.kt`): long-press a pane's header and drop
+  it on another tile's middle to swap the two, on its upper, lower, left
+  or right part to split that tile's place that way with the dragged
+  pane on that side, its old place closing up and every share equal
+  again; drop it on the bar between two tiles to lay the pane across
+  that split, over or under a row, left or right of a stack, by the half
+  of the bar it lands on; `▦` goes back to the presets. A tile closed or
+  minimised leaves a made tree closed up around it. **Zoom**: `⊡`, or
+  a double tap on a header, shows the focused pane alone and remembers
+  the tiles it came from; `⊡` from that pane goes back to them, in
+  their places and arrangement; from a pane opened alone, it opens the
+  window's panes side by side in the window's order (four at most).
+  The arrangement is the phone's own and never reaches the host, except
+  when the tiles are every pane of one window: then they **follow the
+  host** (the listing's `window_layout` becomes the tree and its shares,
+  taken whenever the host's shape differs from the tiles', not over a
+  change made here in the last three seconds nor the layout this view
+  sent) and what is changed here moves the panes on the host (see
+  *Fit*; with fit off the arrangement still goes as the window's layout
+  without a size). Moving them needs every pane of the window writable:
+  otherwise `▦`, the bars and the drops are off and the tiles only
+  follow, a drop saying so. Each header is painted like its
   tab, with the pane's name (its status in italics, dimmer) and mode, the
   lens's word (`! permission`, `⟳ working`) and, with fit on, the size;
   the focused one has the thick border and bold name; a waiting tile

@@ -7,10 +7,60 @@ package app.muxway.android.protocol
  * tile holds, so no pane is given rows its tile cannot show. The browser builds the same.
  */
 object WindowLayout {
-    /** A tile by index, or a split of tiles side by side ([horizontal]) or stacked. */
+    /** A tile by index, or a split of tiles side by side ([horizontal]) or stacked; a split's [key] names its shares. */
     sealed class Node {
         data class Leaf(val index: Int) : Node()
-        data class Split(val horizontal: Boolean, val children: List<Node>) : Node()
+        data class Split(val horizontal: Boolean, val children: List<Node>, val key: String = "") : Node()
+    }
+
+    /** A host's layout as tmux wrote it: cells with their sizes and places, panes by id. */
+    sealed class Host {
+        abstract val w: Int
+        abstract val h: Int
+        data class Pane(val id: String, override val w: Int, override val h: Int, val x: Int, val y: Int) : Host()
+        data class Split(val horizontal: Boolean, override val w: Int, override val h: Int, val x: Int, val y: Int, val children: List<Host>) : Host()
+    }
+
+    /** tmux's layout string as a tree, or null when it is not one. */
+    fun parse(layout: String): Host? {
+        val comma = layout.indexOf(',')
+        if (comma < 0 || layout.length > MAX_BYTES) return null
+        val s = layout.substring(comma + 1)
+        var i = 0
+        fun number(): Int? {
+            val start = i
+            while (i < s.length && s[i].isDigit()) i++
+            return if (i == start || i - start > 9) null else s.substring(start, i).toInt()
+        }
+        fun take(c: Char): Boolean = if (i < s.length && s[i] == c) { i++; true } else false
+        fun cell(): Host? {
+            val w = number() ?: return null
+            if (!take('x')) return null
+            val h = number() ?: return null
+            if (!take(',')) return null
+            val x = number() ?: return null
+            if (!take(',')) return null
+            val y = number() ?: return null
+            val open = s.getOrNull(i)
+            if (open == '{' || open == '[') {
+                i++
+                val kids = ArrayList<Host>()
+                kids.add(cell() ?: return null)
+                while (take(',')) kids.add(cell() ?: return null)
+                if (!take(if (open == '{') '}' else ']')) return null
+                return Host.Split(open == '{', w, h, x, y, kids)
+            }
+            if (!take(',')) return null
+            val id = number() ?: return null
+            return Host.Pane("%$id", w, h, x, y)
+        }
+        val root = cell() ?: return null
+        return if (i == s.length) root else null
+    }
+
+    fun panes(h: Host): List<Host.Pane> = when (h) {
+        is Host.Pane -> listOf(h)
+        is Host.Split -> h.children.flatMap { panes(it) }
     }
 
     data class Size(val cols: Int, val rows: Int)

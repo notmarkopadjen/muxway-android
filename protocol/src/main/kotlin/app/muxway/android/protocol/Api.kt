@@ -75,6 +75,12 @@ class Api(private val baseUrl: String, private val token: String, private val us
         return Json.resized(post("panes/${encode(address)}/resize", Json.size(cols, rows, window, zoom, layout)).body)
     }
 
+    /** Lays the pane's window out as [layout] at the size it has, with fit off; the window's panes when they moved. */
+    fun arrange(address: String, layout: String): Resized {
+        require(layout.length <= WindowLayout.MAX_BYTES && LAYOUT.matches(layout)) { "layout" }
+        return Json.resized(post("panes/${encode(address)}/resize", Json.arrange(layout)).body)
+    }
+
     /** One more pane in a window, beside ("h") or below ("v") a pane there you may type into; the new pane. */
     fun split(host: String, session: String, window: Int, direction: String): Pane {
         require(direction == "h" || direction == "v") { "direction" }

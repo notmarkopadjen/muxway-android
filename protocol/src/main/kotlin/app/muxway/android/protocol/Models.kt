@@ -31,6 +31,8 @@ data class Pane(
     val cursorY: Int = 0,
     /** The app's id for the hub that listed the pane; "" before the app set it. */
     val hub: String = "",
+    /** tmux's layout string for the pane's window, as the listing carries it; "" from an older hub. */
+    val windowLayout: String = "",
 ) {
     val writable get() = mode == "write"
 
