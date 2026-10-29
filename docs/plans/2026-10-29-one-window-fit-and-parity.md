@@ -345,6 +345,13 @@ window and direct typing.
   commits, no leak, no deny-list hit), diff read.
 - [x] Docs updated: the plan, `pane-view.md`, `panes.md`, `lenses.md`,
   `look.md`, `ARCHITECTURE.md`.
+- [x] Part 2 reviewed the same way. Deviations: the guideline's rows for
+  the tiles, zoom, equal shares, the changes window and direct typing
+  are committed in the core (2369b22, 755eff5, 19e873c) from HEAD-based
+  patches, the working tree there carrying another session's edits; the
+  Android `⊞` is `▦` held and zoom is `⊡` or a double tap, as the rows
+  now say. The tiles adopt the host's layout whole (a custom tree), the
+  presets stay for `▦`.
 
 ## Test run
 
@@ -354,3 +361,10 @@ Local run `test-runs/20261029-134644-3e73b52`, recorded as
 the core at `e62a976`. Test 1 and 2 are `s04e`, test 6 `f25`, the units
 `WindowLayoutTest`, `TileFitTest`, `LensTest`, `AddMenuTest`,
 `CommandsTest`; the UI test (11) waits for a device.
+
+Part 2: local run `test-runs/20261029-144944-0789a8f`, recorded as
+[muxway-android#37](https://github.com/notmarkopadjen/muxway-android/issues/37):
+**passed**, 232 tests, 0 failed, 0 skipped, against the core at
+`e62a976`. Test 12 is `s15`, test 13 `f26`, tests 14 to 17 `TilesTest`,
+`WindowLayoutTest`, `CodeTest` and `ChangesTest`; the UI tests (18)
+wait for a device.
