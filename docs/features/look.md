@@ -29,7 +29,11 @@ Effects, on by default and off with the **effects** setting:
   they cost nothing to lay out);
 - the picture powers on like a tube when the app starts;
 - a mark that waits for you pulses;
-- a selected button is inverted and its border lit.
+- a selected button is inverted and its border lit;
+- the key row's groups and the command row's tones carry a discreet
+  tint on the border and the ground, never the ink: editing, direction,
+  control and function keys; danger, start, info and act commands. The
+  values are the web's tint tokens, per theme, in `ui/Theme.kt`.
 
 ```
 ┌─ muxway ─┐ panes ─────────────────── [refresh] [settings]

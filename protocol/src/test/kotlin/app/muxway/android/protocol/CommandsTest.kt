@@ -23,6 +23,27 @@ class CommandsTest {
         }
         assertFalse(row.first { it.label == "/rename" }.send)
         assertEquals(Commands.Kind.CLAUDE, Commands.forPane(pane("claude", "claude"), emptyList())!!.first)
+        // The browser's row: nine named in the guideline and sixteen more, each with a tone.
+        assertEquals(24, row.size)
+        assertEquals(listOf("/clear", "/exit", "/compact", "/rename", "/model", "/resume", "/usage", "/context", "/help"), row.take(9).map { it.text.trim() })
+        assertEquals(Commands.Tone.DANGER, row.first { it.text == "/clear" }.tone)
+        assertEquals(Commands.Tone.START, row.first { it.text == "/resume" }.tone)
+        assertEquals(Commands.Tone.INFO, row.first { it.text == "/help" }.tone)
+        assertEquals(Commands.Tone.ACT, row.first { it.text == "/compact" }.tone)
+    }
+
+    @Test
+    fun theShellsStartersAreTheBrowsersWithTheirTones() {
+        assertEquals(28, Commands.SHELL.size)
+        assertEquals(Commands.Tone.DANGER, Commands.SHELL.first { it.text == "exit" }.tone)
+        assertEquals(Commands.Tone.START, Commands.SHELL.first { it.text == "claude -c" }.tone)
+        assertEquals(Commands.Tone.INFO, Commands.SHELL.first { it.text == "git status" }.tone)
+        assertEquals(Commands.Tone.ACT, Commands.SHELL.first { it.text == "make test" }.tone)
+        for (c in listOf("git pull", "make", "npm test", "docker ps", "tmux ls")) assertTrue(c, Commands.SHELL.any { it.text == c })
+        assertEquals(Input.Group.CTRL, Input.group("C-c"))
+        assertEquals(Input.Group.NAV, Input.group("PageUp"))
+        assertEquals(Input.Group.FN, Input.group("F12"))
+        assertEquals(Input.Group.EDIT, Input.group("BTab"))
     }
 
     @Test
@@ -42,8 +63,10 @@ class CommandsTest {
         var recent = emptyList<String>()
         for (l in listOf("make test", "  ls  ", "git status", "make test", "", "x".repeat(201))) recent = Commands.remembered(recent, l)
         assertEquals(listOf("make test", "git status", "ls"), recent)
-        val row = Commands.forPane(pane("bash", "bash"), recent)!!.second
-        assertEquals(listOf("make test"), row.drop(Commands.SHELL.size).map { it.text })
+        // Lines that are starters already are not listed twice; the others follow the starters.
+        assertEquals(emptyList<String>(), Commands.forPane(pane("bash", "bash"), recent)!!.second.drop(Commands.SHELL.size).map { it.text })
+        val row = Commands.forPane(pane("bash", "bash"), Commands.remembered(recent, "make check"))!!.second
+        assertEquals(listOf("make check"), row.drop(Commands.SHELL.size).map { it.text })
         val long = "y".repeat(40)
         val last = Commands.forPane(pane("sh", ""), listOf(long))!!.second.last()
         assertEquals(long, last.text)

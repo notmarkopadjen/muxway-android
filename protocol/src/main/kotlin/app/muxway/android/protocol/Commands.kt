@@ -9,17 +9,28 @@ package app.muxway.android.protocol
 object Commands {
     enum class Kind { CLAUDE, SHELL }
 
-    data class Command(val label: String, val text: String, val send: Boolean)
+    /** A command's tone tints its button: danger throws work away, start begins something, info only tells, act is the rest. */
+    enum class Tone { DANGER, START, INFO, ACT }
 
-    private fun at(text: String) = Command(text, text, true)
-    private fun fill(text: String) = Command(text, "$text ", false)
+    data class Command(val label: String, val text: String, val send: Boolean, val tone: Tone = Tone.ACT)
+
+    private fun at(text: String, tone: Tone = Tone.ACT) = Command(text, text, true, tone)
+    private fun fill(text: String, tone: Tone = Tone.ACT) = Command(text, "$text ", false, tone)
 
     val CLAUDE: List<Command> = listOf(
-        at("/clear"), at("/compact"), fill("/rename"), at("/model"), at("/resume"), at("/usage"), at("/context"), at("/help"),
+        at("/clear", Tone.DANGER), at("/exit", Tone.DANGER), at("/compact"), fill("/rename"), at("/model", Tone.INFO), at("/resume", Tone.START),
+        at("/usage", Tone.INFO), at("/context", Tone.INFO), at("/help", Tone.INFO), at("/status", Tone.INFO), at("/cost", Tone.INFO),
+        at("/todos", Tone.INFO), at("/plan", Tone.START), at("/review"), at("/memory", Tone.INFO), at("/init", Tone.START), at("/config", Tone.INFO),
+        at("/permissions", Tone.INFO), at("/mcp", Tone.INFO), at("/agents", Tone.INFO), at("/hooks", Tone.INFO), at("/doctor", Tone.INFO),
+        at("/fast"), at("/export"),
     )
 
     val SHELL: List<Command> = listOf(
-        at("exit"), at("htop"), at("claude"), at("claude -c"), at("codex"), at("gemini"), at("git status"), at("ls"), at("clear"),
+        at("exit", Tone.DANGER), at("htop", Tone.INFO), at("claude", Tone.START), at("claude -c", Tone.START), at("claude --resume", Tone.START),
+        at("codex", Tone.START), at("gemini", Tone.START), at("git status", Tone.INFO), at("git diff", Tone.INFO), at("git log --oneline -20", Tone.INFO),
+        at("git pull"), at("git push"), at("git stash"), at("git stash pop"), at("make"), at("make test"), at("npm test"), at("npm run build"),
+        at("docker ps", Tone.INFO), at("tmux ls", Tone.INFO), at("ls", Tone.INFO), at("ls -la", Tone.INFO), at("pwd", Tone.INFO), at("cd .."),
+        at("clear"), at("history", Tone.INFO), at("df -h", Tone.INFO), at("free -h", Tone.INFO),
     )
 
     private val shells = setOf("bash", "zsh", "fish", "sh", "dash", "ash", "ksh", "tcsh", "csh")

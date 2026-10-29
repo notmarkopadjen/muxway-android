@@ -903,6 +903,12 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Takes a pane out of the view it is open in; the last tile leaves the view for the list. */
+    /** Closes the tile, not the pane: its fit is given back and the view goes on without it, or back to the list. */
+    fun closeTile(key: String) {
+        release(key)
+        drop(key)
+    }
+
     private fun drop(key: String) {
         val view = screen as? Screen.View ?: return
         if (key !in view.addresses) return

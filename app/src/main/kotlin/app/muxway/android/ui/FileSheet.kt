@@ -2,7 +2,10 @@ package app.muxway.android.ui
 
 import android.content.ContentValues
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.pdf.PdfRenderer
+import android.os.ParcelFileDescriptor
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -22,11 +25,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,6 +56,8 @@ import app.muxway.android.AppModel
 import app.muxway.android.protocol.Api
 import app.muxway.android.protocol.Files
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** A file of the host to show: one of the inbox, by name, or a printed path the host previews. */
 data class Shown(val address: String, val name: String? = null, val path: String? = null) {
@@ -60,9 +67,10 @@ data class Shown(val address: String, val name: String? = null, val path: String
 
 /**
  * The file over the pane, the browser's window on a phone: an image as itself, a text as it is,
- * Markdown rendered (with a `plain` switch), anything else as its download only, with the name,
- * the size, `⤓` to save it under Downloads, `open` to hand it to the system for the types it
- * shows, and `×`. A path in a rendered file opens through [onOpen], from the same pane.
+ * Markdown rendered (with a `plain` switch), a PDF framed page by page, anything else as its
+ * download only, with the name, the size, `⤓` to save it under Downloads, `open` to hand it to
+ * the system for the types it shows, and `×`. A path in a rendered file opens through [onOpen],
+ * from the same pane.
  */
 @Composable
 fun FileSheet(model: AppModel, shown: Shown, onOpen: (Shown) -> Unit = {}, onClose: () -> Unit) {
@@ -77,6 +85,10 @@ fun FileSheet(model: AppModel, shown: Shown, onOpen: (Shown) -> Unit = {}, onClo
     val text = f != null && f.type.startsWith("text/")
     val image = f != null && f.type.startsWith("image/")
     val bitmap = remember(f) { if (image && f != null) BitmapFactory.decodeByteArray(f.bytes, 0, f.bytes.size) else null }
+    val pdf = f != null && f.type == "application/pdf"
+    val pages by produceState<List<ImageBitmap>?>(null, f) {
+        value = if (pdf && f != null) withContext(Dispatchers.IO) { renderPdf(context, shown.fileName, f) } else null
+    }
     Dialog(onDismissRequest = onClose) {
         Column(Modifier.fillMaxWidth().background(p.bg).border(1.dp, p.ink).padding(4.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -85,7 +97,7 @@ fun FileSheet(model: AppModel, shown: Shown, onOpen: (Shown) -> Unit = {}, onClo
                 if (f != null) Text(" ${Files.size(f.bytes.size.toLong())} ", color = p.dim, maxLines = 1)
                 if (f != null && text && markdown) Btn("plain", { rendered = !rendered }, selected = !rendered)
                 if (f != null) Btn("⤓", { model.told = save(context, shown.fileName, f) })
-                if (f != null && !text && !image) Btn("open", { open(context, shown.fileName, f) })
+                if (f != null && !text && !image && !pdf) Btn("open", { open(context, shown.fileName, f) })
                 Btn("×", onClose)
             }
             Rule()
@@ -97,6 +109,16 @@ fun FileSheet(model: AppModel, shown: Shown, onOpen: (Shown) -> Unit = {}, onClo
                     )
                     f == null -> Text("loading…", color = p.dim, modifier = Modifier.padding(8.dp))
                     bitmap != null -> Image(bitmap.asImageBitmap(), contentDescription = shown.label, modifier = Modifier.fillMaxWidth())
+                    pdf -> when {
+                        pages == null -> Text("drawing…", color = p.dim, modifier = Modifier.padding(8.dp))
+                        pages!!.isEmpty() -> Text("could not draw this PDF; ⤓ saves it", color = p.dim, modifier = Modifier.padding(8.dp))
+                        else -> LazyColumn(Modifier.fillMaxWidth().testTag("pdf")) {
+                            items(pages!!.size) { i ->
+                                Image(pages!![i], contentDescription = "page ${i + 1}", modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).border(1.dp, p.dim))
+                            }
+                            if (pages!!.size == PDF_PAGES) item { Text("the first $PDF_PAGES pages; ⤓ saves the whole file", color = p.dim, modifier = Modifier.padding(4.dp)) }
+                        }
+                    }
                     text && markdown && rendered -> {
                         val blocks = remember(f) { Markdown.parse(String(f.bytes, Charsets.UTF_8)) }
                         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("rendered")) {
@@ -204,6 +226,33 @@ private fun save(context: android.content.Context, name: String, f: Api.Fetched)
     "saved to Downloads: $name"
 } catch (e: Exception) {
     "could not save: ${e.message ?: "refused"}"
+}
+
+/** How many pages of a PDF are drawn, and how wide; the rest is the download's. */
+private const val PDF_PAGES = 20
+private const val PDF_WIDTH = 800
+
+/** The PDF's pages as pictures, framed by the sheet; none when the platform cannot read it. */
+private fun renderPdf(context: android.content.Context, name: String, f: Api.Fetched): List<ImageBitmap> = try {
+    val dir = File(context.cacheDir, "shown").also { it.mkdirs() }
+    val file = File(dir, name)
+    file.writeBytes(f.bytes)
+    val out = ArrayList<ImageBitmap>()
+    ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
+        PdfRenderer(fd).use { r ->
+            for (i in 0 until minOf(r.pageCount, PDF_PAGES)) r.openPage(i).use { page ->
+                val height = (PDF_WIDTH.toLong() * page.height / page.width.coerceAtLeast(1)).toInt().coerceIn(1, PDF_WIDTH * 4)
+                val b = Bitmap.createBitmap(PDF_WIDTH, height, Bitmap.Config.ARGB_8888)
+                b.eraseColor(android.graphics.Color.WHITE)
+                page.render(b, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                out.add(b.asImageBitmap())
+            }
+        }
+    }
+    file.delete()
+    out
+} catch (e: Exception) {
+    emptyList()
 }
 
 /** The bytes into the app's cache and off to whatever the system opens the type with, read-only. */

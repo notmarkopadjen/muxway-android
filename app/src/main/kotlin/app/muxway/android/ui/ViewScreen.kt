@@ -3,6 +3,7 @@ package app.muxway.android.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.draganddrop.dragAndDropSource
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.focusable
@@ -83,9 +84,12 @@ import androidx.compose.ui.draganddrop.DragAndDropTransferData
 import androidx.compose.ui.draganddrop.mimeTypes
 import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -100,6 +104,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -225,8 +230,14 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         if (key == focused) focusedIndex = 0
     }
 
-    // The strip comes round at either end, as ] and [ do in the browser.
+    // With several tiles the focus moves to the next one; with one, the strip's neighbour takes
+    // the tile. Either comes round at the end, as ] and [ do in the browser.
     fun neighbour(step: Int) {
+        if (tiles.size > 1) {
+            focusedIndex = (index + step + tiles.size) % tiles.size
+            focus.requestFocus()
+            return
+        }
         val at = order.indexOf(focused)
         if (at < 0 || order.size < 2) return
         show(order[(at + step + order.size) % order.size])
@@ -245,7 +256,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Btn("‹", { model.open(Screen.Panes) })
-            Tabs(model, tiles, minimised, focused, now, Modifier.weight(1f), ::show)
+            Tabs(model, tiles, minimised, focused, now, Modifier.weight(1f), ::show, ::add)
             Box {
                 Btn("+", { adding = true }, selected = adding, modifier = Modifier.testTag("add"))
                 if (adding) AddMenuPopup(model, addresses, tiles, minimised, focused, now, onClose = { adding = false }) { add(it) }
@@ -291,6 +302,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
                         onMeasured = { sizes[tiles[i]] = it },
                         onDrop = { from -> model.swapTiles(addresses, from, tiles[i]) },
                         onClose = { model.closePane(tiles[i]) },
+                        onCloseTile = { model.closeTile(tiles[i]) },
                         onMinimise = if (tiles.size > 1) ({ minimise(tiles[i]) }) else null,
                         onFile = { shown = it },
                         onPrompt = { focusedIndex = i; fieldFocus.request() },
@@ -304,9 +316,11 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         }
         Rule()
         if (minimised.isNotEmpty()) MinimisedRow(model, minimised, now) { show(it) }
+        // Refusals and notices pass, as the browser's toasts do.
         model.sendError?.let { Text(" ! $it", color = p.alert, modifier = Modifier.padding(horizontal = 4.dp)) }
         model.told?.let { Text(" $it", color = p.dim, modifier = Modifier.padding(horizontal = 4.dp)) }
         LaunchedEffect(model.told) { if (model.told != null) { delay(4000); model.told = null } }
+        LaunchedEffect(model.sendError) { if (model.sendError != null) { delay(4000); model.sendError = null } }
         val pane = state.pane
         when {
             pane == null -> Text(" …", color = p.dim, modifier = Modifier.padding(4.dp))
@@ -443,10 +457,12 @@ private fun dimOf(status: Lens.Status?, ink: Color): Color = if (status == null 
 /**
  * Every pane the token may read, each painted with its state: attention colour when it waits for
  * you, dim when it works, plain when quiet. Open panes have a thick border, the focused one the
- * thickest and its name in bold. Tapping a closed one swaps it into the focused tile.
+ * thickest and its name in bold. Tapping a closed one swaps it into the focused tile; holding it
+ * opens it beside, as the browser's Shift+click does.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Tabs(model: AppModel, open: List<String>, minimised: List<String>, focused: String, now: Long, modifier: Modifier, onTap: (String) -> Unit) {
+private fun Tabs(model: AppModel, open: List<String>, minimised: List<String>, focused: String, now: Long, modifier: Modifier, onTap: (String) -> Unit, onHold: (String) -> Unit) {
     val p = LocalPalette.current
     val panes = ArrayList<Pair<String, Pane?>>()
     for (pane in model.panes) if (pane.key !in minimised) panes.add(pane.key to pane)
@@ -463,7 +479,8 @@ private fun Tabs(model: AppModel, open: List<String>, minimised: List<String>, f
             val border: Dp = if (isFocused) 3.dp else if (isOpen) 2.dp else 1.dp
             Row(
                 Modifier.padding(2.dp).border(border, if (isOpen) p.ink else p.faint).background(back)
-                    .clickable { onTap(address) }.padding(horizontal = 8.dp, vertical = 5.dp),
+                    .combinedClickable(onClick = { onTap(address) }, onLongClick = { onHold(address) }).padding(horizontal = 8.dp, vertical = 5.dp)
+                    .testTag("tab:${Keys.address(address)}"),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (status != null && status != Lens.Status.QUIET) { Mark(status, pane?.attention?.kind, ink); Text(" ", maxLines = 1) }
@@ -482,7 +499,7 @@ private fun Tabs(model: AppModel, open: List<String>, minimised: List<String>, f
 private fun MinimisedRow(model: AppModel, keys: List<String>, now: Long, onTap: (String) -> Unit) {
     val p = LocalPalette.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val every = model.settings.refreshSeconds
+    val every = model.settings.refreshSeconds * 2
     Row(Modifier.fillMaxWidth().background(p.bg).horizontalScroll(rememberScrollState()).testTag("minimised"), verticalAlignment = Alignment.CenterVertically) {
         Text(" _ ", color = p.faint, maxLines = 1)
         for (k in keys) key(k) {
@@ -672,14 +689,15 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
     BackHandler(enabled = recorder != null) { dropClip() }
     DisposableEffect(state.address) { onDispose { dropClip() } }
     if (board && writable) state.pane?.let { KeyboardPanel(model, state.key, it.host) { board = false } }
+    // The keys tinted by group, the commands by tone: border and ground, never the ink.
     Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Btn("Esc", { model.key(state.key, "Escape") }, enabled = !busy)
+        Btn("Esc", { model.key(state.key, "Escape") }, enabled = !busy, tint = p.tint(Input.group("Escape")))
         LazyRow(Modifier.weight(1f)) {
             items(Input.KEYS.filter { it.first != "Escape" && it.first != "Enter" }, key = { it.first }) { (name, label) ->
-                Btn(label, { model.key(state.key, name) }, enabled = !busy)
+                Btn(label, { model.key(state.key, name) }, enabled = !busy, tint = p.tint(Input.group(name)))
             }
         }
-        Btn("Enter", { model.key(state.key, "Enter") }, enabled = !busy)
+        Btn("Enter", { model.key(state.key, "Enter") }, enabled = !busy, tint = p.tint(Input.group("Enter")))
     }
     state.pane?.let { Commands.forPane(it, model.recent) }?.let { (kind, commands) ->
         val claude = kind == Commands.Kind.CLAUDE
@@ -693,7 +711,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
                         Btn(c.label, {
                             if (c.send) model.type(state.key, c.text, enter = true)
                             else { line.setTextAndPlaceCursorAtEnd(c.text); fieldFocus.request() }
-                        }, enabled = !busy)
+                        }, enabled = !busy, tint = p.tint(c.tone))
                     }
                 }
             }
@@ -781,7 +799,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
 private fun PaneTile(
     model: AppModel, address: String, focused: Boolean, several: Boolean, fitAsked: Boolean, shared: Boolean, siblings: Boolean,
     windowFit: Boolean, expected: WindowLayout.Size?, fitAgain: Int, now: Long, slackPx: Int, modifier: Modifier,
-    onMeasured: (WindowLayout.Size) -> Unit, onDrop: (String) -> Unit, onClose: () -> Unit, onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onPrompt: () -> Unit, onFocus: () -> Unit,
+    onMeasured: (WindowLayout.Size) -> Unit, onDrop: (String) -> Unit, onClose: () -> Unit, onCloseTile: () -> Unit, onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onPrompt: () -> Unit, onFocus: () -> Unit,
 ) {
     // Another tile of this window carries the fit: this one is held. With the window fitted as
     // one ([windowFit]) the view sends the size and this tile is [expected] to be its share.
@@ -790,7 +808,8 @@ private fun PaneTile(
     val p = LocalPalette.current
     val state = model.view(address)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val every = model.settings.refreshSeconds
+    // The focused tile reads at the setting, the others at half the pace.
+    val every = model.settings.refreshSeconds * (if (focused) 1 else 2)
     LaunchedEffect(address, every) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) {
@@ -849,15 +868,18 @@ private fun PaneTile(
             }
             // Minimising keeps the pane open in the row above the keys; off on the last tile.
             Text(" _ ", color = if (onMinimise != null) ink else p.faint, maxLines = 1, modifier = Modifier.clickable(enabled = onMinimise != null) { onMinimise?.invoke() }.testTag("minimise"))
-            // Closing ends what runs in the pane on the host: the header asks first.
+            // Closing ends what runs in the pane on the host, where the agent allows it and the
+            // pane is writable: the header asks first. Elsewhere × closes the tile.
             if (pane?.writable == true && model.hostCloses(address)) {
                 if (asking) {
                     Text(" close the pane on ${pane.host}? ", color = ink, maxLines = 1, fontWeight = FontWeight.Bold)
                     Text(" y ", color = ink, maxLines = 1, modifier = Modifier.border(1.dp, ink).clickable { asking = false; onClose() })
                     Text(" n ", color = ink, maxLines = 1, modifier = Modifier.padding(start = 4.dp).border(1.dp, ink).clickable { asking = false })
                 } else {
-                    Text(" × ", color = ink, maxLines = 1, modifier = Modifier.clickable { asking = true })
+                    Text(" × ", color = ink, maxLines = 1, modifier = Modifier.clickable { asking = true }.testTag("close"))
                 }
+            } else {
+                Text(" × ", color = ink, maxLines = 1, modifier = Modifier.clickable(onClick = onCloseTile).testTag("close"))
             }
         }
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).background(p.panel)) {
@@ -905,18 +927,20 @@ private fun PaneTile(
             val clickable = pane?.writable == true
             val previews = clickable && model.hostPreviews(address)
             val lines = remember(rows, p, previews) { rows.map { styled(it, p, previews) }.asReversed() }
+            val dash = with(density) { 2.dp.toPx() }
             val style = base.copy(fontSize = sizeSp.sp, lineHeight = lineSp.sp)
             val sideways = !fitting && !reflow
             val horizontal = rememberScrollState()
             val body = Modifier.fillMaxHeight().then(if (sideways) Modifier.width(with(density) { (cols * colPx).toDp() } + 4.dp) else Modifier.fillMaxWidth())
-            // A full-screen program (alternate screen) leaves nothing to scroll locally, so a
-            // vertical drag scrolls it instead: a wheel notch per row when the program has the
-            // mouse, the rows since the last request counted into one, else a third of the tile
-            // per PageUp or PageDown. The list then takes no drags at all, and never its stretch
-            // effect, so the gesture reaches us and sideways swipes reach the page.
-            val scrolls = rows.size > visibleRows
-            val paging = !scrolls && pane?.writable == true
+            // A program that has the mouse gets the wheel on a vertical drag: a notch per row,
+            // the rows since the last request counted into one. A full-screen program without
+            // it (alternate screen) leaves nothing to scroll locally, so a drag pages it instead,
+            // a third of the tile per PageUp or PageDown; anything else scrolls here, through the
+            // history the hub sent. The list takes no drags that are the program's, and never
+            // its stretch effect, so the gesture reaches us and sideways swipes reach the page.
             val wheel = pane?.mouse == true
+            val scrolls = rows.size > visibleRows && !wheel
+            val paging = pane?.writable == true && (wheel || !scrolls)
             val page = if (wheel) rowPx else heightPx / 3f
             // A tap is a click at the cell under the finger; the rows sit at the bottom, and the
             // screen is the content's last rows less the blank ones the host left out. A tap on
@@ -953,9 +977,10 @@ private fun PaneTile(
                         Links.fileAt(row, x - 1)?.let { onFile(Shown(address, name = it.name)); return@detectTapGestures }
                         if (previews) Links.pathAt(row, x - 1)?.let { onFile(Shown(address, path = it.path)); return@detectTapGestures }
                         if (!clickable) return@detectTapGestures
+                        // A click only where the program asked for the mouse; elsewhere a tap focuses.
                         val w = pane?.width ?: 0
                         val h = pane?.height ?: 0
-                        if (x in 1..w && y in 1..h) model.click(address, x, y)
+                        if (wheel && x in 1..w && y in 1..h) model.click(address, x, y)
                         if (y == cursorRow) onPrompt()
                     }
                 }
@@ -989,7 +1014,23 @@ private fun PaneTile(
                 CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
                     LazyColumn(body, reverseLayout = true, userScrollEnabled = scrolls) {
                         items(lines.size, key = { lines.size - it }) { i ->
-                            Text(lines[i], color = p.ink, style = style, softWrap = false, maxLines = 1, modifier = Modifier.padding(horizontal = 2.dp))
+                            val l = lines[i]
+                            // Links are underlined dotted, drawn under the row from its layout.
+                            var laid by remember { mutableStateOf<TextLayoutResult?>(null) }
+                            Text(
+                                l.text, color = p.ink, style = style, softWrap = false, maxLines = 1,
+                                onTextLayout = { laid = it },
+                                modifier = Modifier.padding(horizontal = 2.dp).drawBehind {
+                                    val t = laid ?: return@drawBehind
+                                    if (t.lineCount == 0) return@drawBehind
+                                    val y = t.getLineBottom(0) - dash / 2
+                                    for (u in l.links) {
+                                        val end = minOf(u.end, t.layoutInput.text.length)
+                                        if (u.start >= end) continue
+                                        drawLine(u.color, Offset(t.getHorizontalPosition(u.start, true), y), Offset(t.getHorizontalPosition(end, true), y), strokeWidth = dash / 2, pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash, dash)))
+                                    }
+                                },
+                            )
                         }
                     }
                 }
@@ -1015,24 +1056,39 @@ private suspend fun PointerInputScope.pinch(onZoom: (Float) -> Unit) {
     }
 }
 
-private val linkStyles = TextLinkStyles(SpanStyle(textDecoration = TextDecoration.Underline))
+private val linkStyles = TextLinkStyles(SpanStyle())
+
+/** A row as drawn: its styled text and the ranges underlined as links, each in the colour the pane gave it. */
+private class StyledRow(val text: AnnotatedString, val links: List<Underline>)
+
+private class Underline(val start: Int, val end: Int, val color: Color)
 
 // Colours as the pane gave them; a web address in the row opens through the system, and an
-// inbox file or, where the host previews, a printed path is underlined the same way.
-private fun styled(row: List<Ansi.Span>, p: Palette, paths: Boolean): AnnotatedString = buildAnnotatedString {
-    for (s in row) {
-        val st = spanStyle(s.style, p)
-        if (st == null) append(s.text) else withStyle(st) { append(s.text) }
-    }
+// inbox file or, where the host previews, a printed path is underlined the same way, dotted.
+private fun styled(row: List<Ansi.Span>, p: Palette, paths: Boolean): StyledRow {
+    val links = ArrayList<Underline>()
     // The builder's own toString is not its text.
     val text = row.joinToString("") { it.text }
-    for (l in Links.find(text)) addLink(LinkAnnotation.Url(l.href, linkStyles), l.start, l.end)
-    for (f in Links.findFiles(text)) if (Links.at(text, f.start) == null) addStyle(underlined, f.start, f.end)
-    if (paths) for (l in Links.findPaths(text)) if (Links.at(text, l.start) == null && Links.fileAt(text, l.start) == null) addStyle(underlined, l.start, l.end)
-    if (length == 0) append(" ")
+    fun colourAt(at: Int): Color {
+        var off = 0
+        for (s in row) {
+            if (at < off + s.text.length) return (Colours.resolve(s.style.fg, p) ?: p.ink).let { if (s.style.dim) it.copy(alpha = 0.6f) else it }
+            off += s.text.length
+        }
+        return p.ink
+    }
+    val built = buildAnnotatedString {
+        for (s in row) {
+            val st = spanStyle(s.style, p)
+            if (st == null) append(s.text) else withStyle(st) { append(s.text) }
+        }
+        for (l in Links.find(text)) { addLink(LinkAnnotation.Url(l.href, linkStyles), l.start, l.end); links.add(Underline(l.start, l.end, colourAt(l.start))) }
+        for (f in Links.findFiles(text)) if (Links.at(text, f.start) == null) links.add(Underline(f.start, f.end, colourAt(f.start)))
+        if (paths) for (l in Links.findPaths(text)) if (Links.at(text, l.start) == null && Links.fileAt(text, l.start) == null) links.add(Underline(l.start, l.end, colourAt(l.start)))
+        if (length == 0) append(" ")
+    }
+    return StyledRow(built, links)
 }
-
-private val underlined = SpanStyle(textDecoration = TextDecoration.Underline)
 
 private fun spanStyle(s: Ansi.Style, p: Palette): SpanStyle? {
     if (s == Ansi.Style.PLAIN) return null

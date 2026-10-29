@@ -212,6 +212,11 @@ class FlowTest {
         // Two tiles: two headers with the mode, two `_`.
         rule.waitUntil(15_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 2 }
         shot("added")
+        // Every pane of the window is open: the window fits as one, and no tile is held.
+        await("write")
+        Thread.sleep(2_000)
+        rule.onAllNodes(hasText("held", substring = true)).assertCountEquals(0)
+        shot("one-window")
         rule.onAllNodesWithTag("minimise")[1].performClick()
         rule.onNodeWithTag("minimised").assertExists()
         rule.onAllNodesWithTag("minimise").assertCountEquals(1)
@@ -224,6 +229,25 @@ class FlowTest {
         rule.waitUntil(5_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 2 }
         rule.onAllNodesWithTag("minimised").assertCountEquals(0)
         shot("restored")
+    }
+
+    @Test
+    fun aCrossClosesTheTileAndATabHeldOpensItsPaneBeside() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        rule.onNodeWithTag("add").performClick()
+        await("+ pane").performClick()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 2 }
+        // The agent does not close panes here, so × closes the tile alone; the pane stays on the host.
+        rule.onAllNodesWithTag("close")[1].performClick()
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 1 }
+        rule.onNodeWithTag("tab:alice-laptop/work/0.1").assertExists()
+        shot("tile-closed")
+        // The second pane's tab, held, opens it beside the first.
+        rule.onNodeWithTag("tab:alice-laptop/work/0.1").performTouchInput { longClick() }
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 2 }
+        shot("beside")
     }
 
     @Test

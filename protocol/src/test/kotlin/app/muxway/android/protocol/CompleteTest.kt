@@ -30,10 +30,10 @@ class CompleteTest {
     @Test
     fun claudeOffersItsSlashCommandsAndAShellItsStarters() {
         // The command row's own commands come first, then the rest of Claude's.
-        assertEquals(listOf("/compact", "/context", "/config", "/cost"), Complete.forPane(claude, "/co", 3, emptyList()))
-        assertEquals(listOf("/rename", "/resume", "/release-notes", "/review"), Complete.forPane(claude, "/re", 3, emptyList()))
-        assertEquals(listOf("claude", "claude -c", "clear"), Complete.forPane(shell, "cl", 2, emptyList()))
-        assertEquals(listOf("git status", "git push"), Complete.forPane(shell, "git", 3, listOf("git push", "ls -l")))
+        assertEquals(listOf("/compact", "/context", "/cost", "/config"), Complete.forPane(claude, "/co", 3, emptyList()))
+        assertEquals(listOf("/rename", "/resume", "/review", "/release-notes"), Complete.forPane(claude, "/re", 3, emptyList()))
+        assertEquals(listOf("claude", "claude -c", "claude --resume", "clear"), Complete.forPane(shell, "cl", 2, emptyList()))
+        assertEquals(listOf("git status", "git diff", "git log --oneline -20", "git pull", "git push", "git stash", "git stash pop", "git fetch"), Complete.forPane(shell, "git", 3, listOf("git push", "git fetch", "ls -l")))
         assertTrue(Complete.forPane(pane("vim"), "cl", 2, emptyList()).isEmpty())
         assertTrue(Complete.forPane(shell, "zzz", 3, emptyList()).isEmpty())
     }
@@ -45,7 +45,7 @@ class CompleteTest {
         val offered = Complete.forPane(hostile, "m", 1, emptyList()) + Complete.forPane(hostile, "r", 1, emptyList())
         assertTrue(offered.none { it.contains("mxt_") || it.contains("rm -rf") })
         // A shell's recent lines are this client's own sends, and they are offered.
-        assertEquals(listOf("make test"), Complete.forPane(shell, "make", 4, listOf("make test")))
+        assertEquals(listOf("make", "make test", "make check"), Complete.forPane(shell, "make", 4, listOf("make check")))
     }
 
     @Test
@@ -66,7 +66,7 @@ class CompleteTest {
         assertEquals(listOf("Marko", "there", "quoted", "docs/plans/a.md"), words.take(4))
         assertTrue("ls" !in words && "│" !in words)
         assertEquals(listOf(Complete.Offer("docs/plans/a.md", true)), Complete.offers(shell, "cat do", 6, emptyList(), words))
-        assertTrue(Complete.offers(shell, "d", 1, emptyList(), words).isEmpty())
+        assertTrue(Complete.offers(shell, "d", 1, emptyList(), words).none { it.word })
         val first = Complete.offers(claude, "/co", 3, emptyList(), listOf("/compact-notes.md"))
         assertEquals(false, first[0].word)
         assertTrue(first.any { it.text == "/compact-notes.md" && it.word })

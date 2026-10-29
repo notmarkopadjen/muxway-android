@@ -56,6 +56,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
@@ -126,7 +128,10 @@ fun Rule(modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().height(1.dp).background(LocalPalette.current.faint))
 }
 
-/** `[label]`: a bordered button; selected is inverted and glows. A long press may do something else. */
+/**
+ * `[label]`: a bordered button; selected is inverted and glows. A long press may do something
+ * else. A [tint] touches the border and the ground, as the key and command rows are grouped.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun Btn(
@@ -138,10 +143,13 @@ fun Btn(
     onLongClick: (() -> Unit)? = null,
     onDown: (() -> Unit)? = null,
     onUp: ((held: Boolean) -> Unit)? = null,
+    tint: Color? = null,
 ) {
     val p = LocalPalette.current
     val fg = if (selected) p.bg else if (enabled) p.ink else p.faint
-    val bg = if (selected) p.ink else p.bg
+    val tinted = tint != null && enabled && !selected
+    val bg = if (selected) p.ink else if (tinted) tint!!.copy(alpha = 0.09f).compositeOver(p.bg) else p.bg
+    val edge = if (selected) p.ink else if (tinted) lerp(p.faint, tint!!, 0.45f) else if (enabled) p.dim else p.faint
     val down by rememberUpdatedState(onDown)
     val up by rememberUpdatedState(onUp)
     Text(
@@ -151,7 +159,7 @@ fun Btn(
         style = LocalTextStyle.current.copy(shadow = if (selected) null else textGlow()),
         modifier = modifier
             .padding(2.dp)
-            .border(1.dp, if (selected) p.ink else if (enabled) p.dim else p.faint)
+            .border(1.dp, edge)
             .background(bg)
             .then(
                 when {

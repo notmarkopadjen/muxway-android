@@ -12,6 +12,19 @@ object Input {
         "PageUp" to "PgUp", "PageDown" to "PgDn", "Home" to "Home", "End" to "End",
     )
 
+    /** The key row's groups, each tinted on its own: editing, direction, control, function. */
+    enum class Group { EDIT, NAV, CTRL, FN }
+
+    private val NAV_KEYS = setOf("Up", "Down", "Left", "Right", "PageUp", "PageDown", "Home", "End")
+    private val FN_KEY = Regex("^F\\d+$")
+
+    fun group(name: String): Group = when {
+        name.startsWith("C-") -> Group.CTRL
+        FN_KEY.matches(name) -> Group.FN
+        name in NAV_KEYS -> Group.NAV
+        else -> Group.EDIT
+    }
+
     /** Mouse buttons the protocol names; the wheel ones take a count. */
     val BUTTONS = setOf("left", "middle", "right", "wheelup", "wheeldown")
     val WHEEL = setOf("wheelup", "wheeldown")

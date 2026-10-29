@@ -56,9 +56,11 @@ focused pane.
 - The **controls** sit at the right end of the same row: `▦` (with
   several panes) the next arrangement, `⤢` fit on or off, `abc` the on-screen keyboard (only with the hardware keyboard
   setting), `⚙` settings.
-- A **swipe** left or right across the page moves to the next or previous
-  pane in the strip, coming round at either end as `]` and `[` do in the
-  browser.
+- A **swipe** left or right across the page moves the focus to the next
+  or previous tile, or with one tile open swaps the strip's next or
+  previous pane into it, coming round at either end as `]` and `[` do
+  in the browser. A tab **held** opens its pane beside the focused one,
+  as the browser's Shift+click does.
 - One pane fills the screen. Several panes start **side by side in
   landscape** and **stacked in portrait**, each with an equal share; `▦`
   cycles the arrangements that make sense for the count: two panes have
@@ -156,12 +158,11 @@ flowchart LR
   fonts; wide characters and emoji may push a row out of line.
 - **Tap.** A tap on the content is a left click at that cell on the
   host, for a program that asked its terminal for the mouse (Claude
-  Code's menus, for one). The hub needs the mouse addition to the
-  protocol (`docs/plans/2026-10-24-mouse-input.md`); an older hub
-  answers "This hub has no mouse support yet", a pane whose program has
-  no mouse mode "No mouse in this pane" (from the listing's `mouse` flag
-  when the hub sends one, so nothing is sent at all), and nothing is
-  typed either way. The cell is found from the screen as the host
+  Code's menus, for one), which the listing's `mouse` flag says; on any
+  other pane a tap only focuses the tile and nothing is sent. The hub
+  needs the mouse addition to the protocol
+  (`docs/plans/2026-10-24-mouse-input.md`); a hub without the flag never
+  gets a click. The cell is found from the screen as the host
   describes it: the content's last rows are the screen, less the blank
   rows at its bottom the hub counts in `trimmed`, so a tap lands on the
   row it shows whatever the screen holds. A tap on the row the program
@@ -175,7 +176,8 @@ flowchart LR
   rows; without the bar, the marker and the indent, and the status line
   says how many rows. Nothing goes to the host.
 - **Links.** A web address in a row, `http` or `https` and nothing else,
-  is underlined and opens with a tap through the system's handler, in
+  is underlined dotted, in the colour the pane gave it (drawn under the
+  row from its layout), and opens with a tap through the system's handler, in
   the browser; the punctuation after it stays text, a bracket it opened
   stays in, and an address wrapped onto a second row opens up to the
   row's end. A tap on a link is not a tap on the pane: nothing goes to
@@ -188,7 +190,8 @@ flowchart LR
   the pane, an image as itself, a text as it is, a Markdown file
   rendered as the terminal would draw it (headings, lists, quotes, code,
   tables, rules; *plain* shows the source; a path in it is a link too,
-  opened from the same pane), anything else as its
+  opened from the same pane), a PDF framed page by page (the platform's
+  renderer, the first twenty pages), anything else as its
   download only, with the name, the size, `⤓` (saved under Downloads
   under the file's own name), *open* for the types the phone shows
   (handed to the system read-only from the app's cache) and `×`. What
@@ -196,12 +199,13 @@ flowchart LR
 - **Scrolling.** The body is a list of rows, newest at the bottom; a
   one-finger drag or a wheel scrolls back through the `lines` the hub
   sent (the pane's scrollback), and new output keeps the bottom in view
-  until you scroll up. A full-screen program on the alternate screen
-  (Claude Code is one) has no scrollback to fetch, so when the rows fit
-  the tile a vertical drag **scrolls the program instead**: a wheel
-  notch per row of movement when the program has the mouse (the hub's
-  mouse addition and the listing's `mouse` flag), else a `PageUp` or
-  `PageDown` per third of the tile's height; one request at a time.
+  until you scroll up. A program that has the mouse (the listing's
+  `mouse` flag) gets a vertical drag as its **wheel** instead, a notch
+  per row of movement, whatever the rows; a full-screen program on the
+  alternate screen without it (Claude Code before its mouse mode, a
+  pager) has no scrollback to fetch, so when the rows fit the tile a
+  drag sends a `PageUp` or `PageDown` per third of the tile's height;
+  one request at a time.
   Claude Code scrolls its transcript on both. The notches of a drag go
   counted (`docs/plans/2026-10-26-wheel-count.md`): the rows since the
   last request gather behind the one in flight and go as the next
@@ -217,8 +221,10 @@ flowchart LR
 ## Reading
 
 Every open pane is read on its own loop while the screen is resumed:
-`GET /v1/panes/{address}?lines=N&ansi=1` with `If-None-Match`, every
-`every` seconds (Settings). An unchanged pane answers `304` and costs a few
+`GET /v1/panes/{address}?lines=N&ansi=1` with `If-None-Match`, the
+focused tile every `every` seconds (Settings), the other tiles and the
+minimised panes every twice that, as the guideline's one and two
+seconds. An unchanged pane answers `304` and costs a few
 bytes. Leaving the screen or the app stops the loops. The event long poll
 and a re-list every 15 s run on every screen once connected, so tabs and
 the list stay current.
@@ -231,7 +237,9 @@ it is writable:
 - the key row sends one named key at once: `Esc` pinned at the left,
   `Enter` pinned at the right, and between them, scrolling: `Tab`,
   `S-Tab`, `^C`, arrows, `BS`, `^D`, `^Z`, `^L`, `PgUp`, `PgDn`, `Home`,
-  `End`;
+  `End`; the keys are tinted by group, discreetly on the border and the
+  ground, never the ink: editing, direction, control, function (the
+  web's tint tokens, mirrored in `ui/Theme.kt`);
 - with **assume a hardware keyboard** on, the text line takes focus
   without raising the on-screen keyboard, so a physical keyboard or a
   dictation keyboard types straight in; `abc` in the top row raises it when
@@ -280,7 +288,8 @@ it is writable:
   on the line, after a space when something was typed, with the line
   focused: nothing is sent until *send*. *cancel* or back drops the clip.
   A hub without a transcriber shows no button. Refusals show in the
-  status line like a refused send: `Microphone refused`, `No microphone`,
+  status line like a refused send, and pass after four seconds as the
+  browser's toasts do: `Microphone refused`, `No microphone`,
   `Too short`, `One clip every five seconds`, `Transcriber unavailable`;
 - **files**: where the host's agent has an inbox (`GET
   /v1/panes/{address}/files` is `204`, asked when the pane opens and
@@ -304,11 +313,18 @@ it is writable:
   rules);
 - the **command row**, between the key row and the text line, is for the
   program in the pane and scrolls sideways. Claude Code's pane (the lens
-  decides) gets `/clear`, `/compact`, `/rename`, `/model`, `/resume`,
-  `/usage`, `/context`, `/help` behind Claude's mark; a shell gets
-  `exit`, `htop`, `claude`, `claude -c`, `codex`, `gemini`, `git status`,
-  `ls`, `clear` behind `$`, then after a bar the last eight lines sent
-  to a shell from this phone, newest first. A tap sends the command and
+  decides) gets `/clear`, `/exit`, `/compact`, `/rename`, `/model`,
+  `/resume`, `/usage`, `/context`, `/help` and the browser's fifteen
+  more of its slash commands behind Claude's mark; a shell gets `exit`,
+  `htop`, `claude`, `claude -c`, `claude --resume`, `codex`, `gemini`,
+  `git status`, `git diff`, `git log`, `git pull`, `git push`, `git
+  stash`, `git stash pop`, `make`, `make test`, `npm test`, `npm run
+  build`, `docker ps`, `tmux ls`, `ls`, `ls -la`, `pwd`, `cd ..`,
+  `clear`, `history`, `df -h`, `free -h` behind `$`, then after a bar
+  the last eight lines sent to a shell from this phone, newest first.
+  Each button is tinted by its tone like the keys by their group: danger
+  red (`/clear`, `exit`), start green (`/resume`, `claude`), info blue
+  (`/help`, `git status`), the rest amber. A tap sends the command and
   `Enter` as *send* does; `/rename` puts `/rename ` on the text line and
   focuses it. Any other program has no row.
 
@@ -325,12 +341,14 @@ left the pane list shows.
 
 ## Closing a pane
 
-Where the host's agent runs with `--allow-close` and the pane is
-writable, a tile's header has `×`. Tapping it asks on the header,
+Every tile's header has `×`. Where the host's agent runs with
+`--allow-close` and the pane is writable, tapping it asks on the header,
 `close the pane on alice-laptop? y n`; `y` closes the pane on the host,
 ending what runs in it, and the tile leaves (the list shows when it was
-the last); `n` keeps it. Elsewhere there is no `×`. See the core's
-`docs/features/new-panes.md` (Closing a pane).
+the last); `n` keeps it. Elsewhere `×` closes the tile alone: its fit is
+given back and the view goes on without it, or back to the list when it
+was the last. See the core's `docs/features/new-panes.md` (Closing a
+pane).
 
 ## Security considerations
 
