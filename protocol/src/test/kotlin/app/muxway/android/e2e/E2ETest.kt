@@ -6,6 +6,7 @@ import app.muxway.android.protocol.Wheel
 import app.muxway.android.protocol.WheelQueue
 import app.muxway.android.protocol.ApiException
 import app.muxway.android.protocol.Board
+import app.muxway.android.protocol.Changes
 import app.muxway.android.protocol.Clip
 import app.muxway.android.protocol.Files
 import app.muxway.android.protocol.Keyboard
@@ -52,9 +53,9 @@ class E2ETest {
         cleanups.reversed().forEach { runCatching(it) }
     }
 
-    private fun setup(expose: String? = "--write", write: String? = "$HOST/*", revoke: Boolean = false, allowSessions: Boolean = false, sttUrl: String? = null, allowClose: Boolean = false, inbox: Boolean = false): Pair<Api, String> {
+    private fun setup(expose: String? = "--write", write: String? = "$HOST/*", revoke: Boolean = false, allowSessions: Boolean = false, sttUrl: String? = null, allowClose: Boolean = false, inbox: Boolean = false, preview: File? = null): Pair<Api, String> {
         val logs = Env.logs(name.methodName)
-        core = Core(logs).start(expose, allowSessions, sttUrl, allowClose, inbox)
+        core = Core(logs).start(expose, allowSessions, sttUrl, allowClose, inbox, preview)
         cleanups.add(core::close)
         val tok = core.token(write = write)
         if (revoke) core.revokeAll()
@@ -633,6 +634,74 @@ class E2ETest {
         api.release(address)
         waitFor("the window is back to automatic sizing") { !core.manual() }
         assertTrue(core.layout(), core.layout().contains("["))
+    }
+
+    /** A preview root with a repository under it, and one outside; the pane's shell in the repository's `src`. */
+    private fun repoUnderRoot(): Pair<File, File> {
+        val base = java.nio.file.Files.createTempDirectory("mxw-git-").toFile()
+        val root = File(base, "work").also { it.mkdirs() }
+        val repo = File(root, "repo").also { it.mkdirs() }
+        gitRepo(repo)
+        val outside = File(base, "elsewhere/repo").also { it.mkdirs() }
+        gitRepo(outside)
+        cleanups.add { base.deleteRecursively() }
+        return root to repo
+    }
+
+    @Test
+    fun s15_theRepositoryIsForWritersOnHostsWithRootsAndOnlyUnderThem() {
+        val (root, repo) = repoUnderRoot()
+        val (api, _) = setup(preview = root)
+        val address = "$HOST/work/0.0"
+        core.cdTo("work:0.0", File(repo, "src"))
+        // A reader gets nothing, nor does a writer of a read-only pane.
+        val reader = Api(relay.url, core.token(write = null), "muxway-android-e2e")
+        assertEquals("read_only", assertThrows(ApiException::class.java) { reader.git(address) }.code)
+        core.tmux("split-window", "-t", "work:0", "-v")
+        core.cli("expose", "--tmux-name", core.tmux, "-t", "work:0.1")
+        waitFor("two panes listed") { api.panes().size == 2 }
+        assertEquals("read_only", assertThrows(ApiException::class.java) { api.git("$HOST/work/0.1") }.code)
+        // Outside the roots, one refusal for everything; a path the status did not list is nothing too.
+        core.cdTo("work:0.0", File(root.parentFile, "elsewhere/repo"))
+        assertEquals("not_found", assertThrows(ApiException::class.java) { api.git(address) }.code)
+        core.cdTo("work:0.0", File(repo, "src"))
+        waitFor("the repository again") { runCatching { api.git(address) }.isSuccess }
+        assertEquals("not_found", assertThrows(ApiException::class.java) { api.gitDiff(address, "src/same.go") }.code)
+        assertEquals("not_found", assertThrows(ApiException::class.java) { api.gitDiff(address, "../elsewhere/repo/src/a.go") }.code)
+        assertThrows(IllegalArgumentException::class.java) { api.gitDiff(address, "src/a.go\u0007") }
+        // No roots: the host answers as a host without git.
+        core.stop("agent")
+        core.startAgent()
+        waitFor("no roots listed") { !api.hosts().single().preview }
+        assertEquals("not_found", assertThrows(ApiException::class.java) { api.git(address) }.code)
+    }
+
+    @Test
+    fun f26_theRepositorysChangesAreListedAndADiffComesBackAsText() {
+        val (root, repo) = repoUnderRoot()
+        val (api, _) = setup(preview = root)
+        val address = "$HOST/work/0.0"
+        assertTrue(api.hosts().single().preview)
+        core.cdTo("work:0.0", File(repo, "src"))
+        val c = api.git(address)
+        assertEquals("repo", c.repo)
+        assertEquals("main", c.branch)
+        val byPath = c.entries.associateBy { it.path }
+        assertEquals("modified", byPath.getValue("src/a.go").kind)
+        assertEquals("added", byPath.getValue("src/new.go").kind)
+        assertTrue(byPath.getValue("src/new.go").staged)
+        assertEquals("renamed", byPath.getValue("src/moved.go").kind)
+        assertEquals("src/old.go", byPath.getValue("src/moved.go").from)
+        assertEquals("deleted", byPath.getValue("src/gone.go").kind)
+        assertEquals("untracked", byPath.getValue("notes.txt").kind)
+        assertEquals("untracked", byPath.getValue("with space.txt").kind)
+        assertEquals("+3 ~2 −1", Changes.summary(Changes.counts(c.entries)))
+        val tree = Changes.tree(c.entries)
+        assertEquals(listOf("src"), tree.dirs.map { it.name })
+        val d = api.gitDiff(address, "src/a.go")
+        assertFalse(d.binary)
+        assertTrue(d.diff, d.diff.lines().contains("+func A() {}"))
+        assertEquals("not_found", assertThrows(ApiException::class.java) { api.gitDiff(address, "notes.txt") }.code)
     }
 
     @Test

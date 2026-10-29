@@ -57,6 +57,29 @@ object Json {
         Sent(path, o.optLong("bytes"))
     }
 
+    /** The repository's changes: names cleaned as everything shown is, a kind the client knows or `modified`. */
+    fun changes(body: String): ChangeSet = parse(body) { o ->
+        ChangeSet(
+            root = Input.printable(o.optString("root")).take(1024),
+            branch = Input.printable(o.optString("branch")).take(256),
+            ahead = o.optInt("ahead").coerceAtLeast(0),
+            behind = o.optInt("behind").coerceAtLeast(0),
+            truncated = o.optBoolean("truncated"),
+            entries = list(o.optJSONArray("entries")) {
+                val path = Input.printable(it.optString("path")).take(1024)
+                if (path.isEmpty()) throw JSONException("path")
+                val kind = it.optString("kind")
+                Change(path, if (kind in Changes.KINDS) kind else "modified", it.optBoolean("staged"), Input.printable(it.optString("from")).take(1024))
+            }.take(2000),
+        )
+    }
+
+    /** A diff as text, control characters but tabs and newlines dropped. */
+    fun diff(body: String): Diff = parse(body) { o ->
+        val text = o.optString("diff").take(2 shl 20).filter { it == '\n' || it == '\t' || (it.code >= 0x20 && it.code != 0x7f) }
+        Diff(text, o.optBoolean("binary"), o.optBoolean("cut"))
+    }
+
     /** The transcriber's text, cleaned as typed text is. */
     fun transcript(body: String): String = parse(body) { o -> Input.typed(o.optString("text")) }
 

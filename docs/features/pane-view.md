@@ -190,6 +190,27 @@ flowchart LR
   when the cursor is on a blank one below), also gives the text line
   the focus: tapping Claude Code's `❯` box or a shell's prompt means
   *type here*.
+- **Changes.** A writable pane on a host whose owner named preview
+  roots is asked for git's view of its repository every ten seconds
+  (`GET …/git`): the header shows `⎇` with the counts at its right,
+  `⎇ +3 ~5 −1`, `⎇ ✓` when nothing has changed, and nothing when the
+  pane's directory is in no repository the host shows (asked again
+  every minute). A tap on the count opens the **changes sheet**, the
+  browser's window: its bar names the repository, its branch and how
+  far it is ahead of or behind its upstream, then the counts; the body
+  is the changed paths as a tree, directories first, folded or unfolded
+  by a tap, with a mark and a colour per file: `+` added or untracked
+  (the ok colour), `~` modified, `−` deleted (dim, struck), `→` renamed
+  (the old path after it), `!` conflict (the alert colour, bold); `●`
+  after the mark says the change is staged. The sheet asks again every
+  five seconds. A tap on a file opens the file sheet with a `diff` /
+  `file` switch: the diff (`GET …/git/diff?path=`) as rows, `+` in the
+  ok colour, `−` dim and struck, hunk and file headers dim; `file` as
+  the preview shows it. A deleted file has its diff only, an untracked
+  one the file only; a binary file's diff says so. Code, in a file or a
+  Markdown fence, comes with its colours (see [look](look.md)). See the
+  core's `docs/features/changes.md` for what the host runs and why it
+  is safe.
 - **Copy a block.** A long press on a row copies the block it is in,
   the browser's rule: the rows down one bar (`│`, `┃`, `|`, `>`), a `●`
   or `❯` row with the rows indented under it, a `⎿` result with its
@@ -280,6 +301,17 @@ it is writable:
 - right of the line, in this order: `⌨` the keyboard, `⇪` files
   (where the host has an inbox), `◉` the microphone (where the hub has
   a transcriber), **type**, and `⏎`;
+- **direct typing**: with the *hardware keyboard* setting on and the
+  text line not focused, every key of a hardware keyboard goes to the
+  focused writable pane as pressed, the browser's direct typing: a
+  printable character as text, Ctrl or Alt with a character of the
+  grammar as `C-x` or `M-x`, the named keys (arrows, `Tab`, `Shift+Tab`
+  as `BTab`, `Enter`, `Esc`, `Backspace`, `Insert`, `Delete`, `Home`,
+  `End`, the pages, `F1` to `F12`) by name with their modifiers; the
+  status line says `direct`. A tap on the line takes the keys back, and
+  back from the line gives them to the pane again; nothing goes from a
+  read-only pane. Without the setting the named keys still go by name;
+  letters wait for the line;
 - **type** sends the text as typed, without `Enter`;
 - **`⏎`** (send), the keyboard's send action, or a hardware `Enter` sends the
   text and then `Enter`;

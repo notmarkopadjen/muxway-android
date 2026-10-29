@@ -27,6 +27,8 @@ import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.Keys
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.LogLine
+import app.muxway.android.protocol.ChangeSet
+import app.muxway.android.protocol.Diff
 import app.muxway.android.protocol.Pane
 import app.muxway.android.protocol.Setup
 import app.muxway.android.protocol.Wheel
@@ -91,6 +93,11 @@ class PaneState(val key: String) {
         changedAt = o.changedAt; read = o.read; ownAt = o.ownAt
         fitKey = o.fitKey; fitAt = o.fitAt; fitRetried = o.fitRetried; fitted = o.fitted
     }
+
+    /** Git's view of the pane's repository, when the host shows one; when it said there is none, until when not to ask again. */
+    var changes by mutableStateOf<ChangeSet?>(null)
+    var changesError by mutableStateOf<String?>(null)
+    var noRepoUntil = 0L
 
     /** Files on their way to the host's inbox: the one going, the ones waiting, the paths that landed. */
     var sending by mutableStateOf<String?>(null)
@@ -887,6 +894,41 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     /** A word for the person in the pane view that is not an error: what was copied, what was saved. */
     var told by mutableStateOf<String?>(null)
+
+    /**
+     * The repository's changes for a writable pane on a host with preview roots; a pane in no
+     * repository the host shows is asked again after a minute, unless [force].
+     */
+    suspend fun fetchChanges(key: String, force: Boolean = false) {
+        val v = view(key)
+        if (!force && System.currentTimeMillis() < v.noRepoUntil) return
+        try {
+            v.changes = withContext(Dispatchers.IO) { api(key).git(v.address) }
+            v.changesError = null
+            v.noRepoUntil = 0L
+        } catch (e: ApiException) {
+            if (e.code == "unauthorized") tokenRefused(conn(key))
+            if (e.code == "not_found") {
+                v.changes = null
+                v.changesError = null
+                v.noRepoUntil = System.currentTimeMillis() + 60_000
+            } else if (e.code != "rate_limited") v.changesError = e.message
+        }
+    }
+
+    /** One change's diff, for the sheet; null when refused. */
+    fun fetchDiff(key: String, path: String, done: (Diff?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                done(withContext(Dispatchers.IO) { api(key).gitDiff(Keys.address(key), path) })
+            } catch (e: ApiException) {
+                if (e.code == "unauthorized") tokenRefused(conn(key))
+                done(null)
+            } catch (e: IllegalArgumentException) {
+                done(null)
+            }
+        }
+    }
 
     /** A file of the host, by inbox name or by a printed path, for the sheet; null when refused. */
     fun fetchFile(key: String, name: String?, path: String?, done: (Api.Fetched?) -> Unit) {

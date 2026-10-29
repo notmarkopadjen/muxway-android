@@ -69,7 +69,7 @@ class Core(private val logs: File) {
         return out.trim()
     }
 
-    fun start(expose: String? = "--write", allowSessions: Boolean = false, sttUrl: String? = null, allowClose: Boolean = false, inbox: Boolean = false): Core {
+    fun start(expose: String? = "--write", allowSessions: Boolean = false, sttUrl: String? = null, allowClose: Boolean = false, inbox: Boolean = false, preview: File? = null): Core {
         val shell = "env -i PATH=/usr/bin:/bin TERM=xterm LANG=C.UTF-8 PS1='$ ' bash --norc --noprofile"
         tmux("-f", "/dev/null", "new-session", "-d", "-s", "work", "-n", "shell", "-x", "80", "-y", "24", shell)
         // Panes and sessions made later get the same clean shell.
@@ -81,18 +81,19 @@ class Core(private val logs: File) {
         waitFor("hub") { File(hubDir, "admin.sock").exists() }
         val code = cli("hub", "pair-code", "--dir", hubDir.path, "--host", HOST)
         cli("agent", "pair", "--dir", agentDir.path, code)
-        startAgent(allowSessions, allowClose, inbox)
+        startAgent(allowSessions, allowClose, inbox, preview)
         val args = arrayListOf("expose", "--tmux-name", tmux, "-t", "work:0.0")
         if (expose != null) args.add(expose)
         cli(*args.toTypedArray())
         return this
     }
 
-    fun startAgent(allowSessions: Boolean = false, allowClose: Boolean = false, inbox: Boolean = false) {
+    fun startAgent(allowSessions: Boolean = false, allowClose: Boolean = false, inbox: Boolean = false, preview: File? = null) {
         val args = arrayListOf("agent", "run", "--dir", agentDir.path, "--tmux-name", tmux)
         if (allowSessions) args.add("--allow-sessions")
         if (allowClose) args.add("--allow-close")
         if (inbox) { args.add("--inbox"); args.add("default") }
+        if (preview != null) { args.add("--preview"); args.add(preview.path) }
         spawn("agent", *args.toTypedArray())
         waitFor("agent online") { cli("hub", "agents", "--dir", hubDir.path).contains("$HOST\tonline") }
     }
@@ -107,6 +108,12 @@ class Core(private val logs: File) {
         for (line in cli("hub", "token", "list", "--dir", hubDir.path).lines().drop(1)) {
             if (line.isNotBlank()) cli("hub", "token", "revoke", "--dir", hubDir.path, line.split(Regex("\\s+"))[0])
         }
+    }
+
+    /** The shell of a pane into [dir], waited for. */
+    fun cdTo(target: String, dir: File) {
+        tmux("send-keys", "-t", target, "cd ${dir.path}", "Enter")
+        waitFor("the shell in ${dir.name}") { tmux("display-message", "-p", "-t", target, "#{pane_current_path}").trim() == dir.path }
     }
 
     /** Where the agent writes files when it runs with `--inbox default`. */
@@ -141,6 +148,35 @@ class Core(private val logs: File) {
         }
         dir.deleteRecursively()
     }
+}
+
+/** A repository with a trail of changes, as the core's own test makes it: one of each kind, odd names included. */
+fun gitRepo(dir: File) {
+    fun write(p: String, s: String) { File(dir, p).also { it.parentFile?.mkdirs() }.writeText(s) }
+    fun git(vararg args: String) {
+        val pb = ProcessBuilder("git", "-C", dir.path, *args).redirectErrorStream(true)
+        pb.environment().putAll(mapOf(
+            "GIT_AUTHOR_NAME" to "alice", "GIT_AUTHOR_EMAIL" to "alice@example.com", "GIT_COMMITTER_NAME" to "alice", "GIT_COMMITTER_EMAIL" to "alice@example.com",
+            "GIT_CONFIG_GLOBAL" to "/dev/null", "GIT_CONFIG_NOSYSTEM" to "1",
+        ))
+        val p = pb.start()
+        val out = p.inputStream.bufferedReader().readText()
+        if (!p.waitFor(30, TimeUnit.SECONDS) || p.exitValue() != 0) throw IllegalStateException("git ${args.joinToString(" ")}: $out")
+    }
+    write("src/a.go", "package a\n")
+    write("src/gone.go", "package gone\n")
+    write("src/old.go", "package old\n")
+    write("src/same.go", "package same\n")
+    git("init", "-q", "-b", "main")
+    git("add", ".")
+    git("commit", "-q", "-m", "first")
+    write("src/a.go", "package a\n\nfunc A() {}\n")
+    File(dir, "src/gone.go").delete()
+    write("src/new.go", "package new\n")
+    write("notes.txt", "loose\n")
+    write("with space.txt", "space\n")
+    File(dir, "src/old.go").renameTo(File(dir, "src/moved.go"))
+    git("add", "src/new.go", "src/old.go", "src/moved.go")
 }
 
 class Seen(val method: String, val path: String, val headers: Map<String, String>)

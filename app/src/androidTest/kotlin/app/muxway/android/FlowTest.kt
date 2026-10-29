@@ -238,6 +238,29 @@ class FlowTest {
     }
 
     @Test
+    fun theChangesSheetListsTheRepositoryAndOpensADiff() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        // The pane's shell is in a repository under the host's root: the header counts its changes.
+        await("⎇ +1 ~1")
+        shot("changes-count")
+        rule.onNodeWithTag("changes-count").performClick()
+        rule.onNodeWithTag("changes").assertExists()
+        await("repo · main")
+        await("notes.txt")
+        shot("changes")
+        rule.onNodeWithTag("change:src/a.go").performClick()
+        await("+func A() {}")
+        shot("diff")
+        rule.onNodeWithTag("side:file").performClick()
+        await("package a")
+        Espresso.pressBack()
+        Espresso.pressBack()
+        rule.onAllNodesWithTag("changes").assertCountEquals(0)
+    }
+
+    @Test
     fun aCrossClosesTheTileAndATabHeldOpensItsPaneBeside() {
         scenario = ActivityScenario.launch(MainActivity::class.java)
         await("work/0.0").performClick()

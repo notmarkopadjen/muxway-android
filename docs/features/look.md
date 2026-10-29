@@ -30,6 +30,11 @@ Effects, on by default and off with the **effects** setting:
 - the picture powers on like a tube when the app starts;
 - a mark that waits for you pulses;
 - a selected button is inverted and its border lit;
+- code is coloured as the browser colours it (`protocol/Code.kt`): a
+  fenced block's language in Markdown and a file's extension in the
+  sheet pick a small scanner that tells comments (dim, italic), strings
+  and numbers (the accent), keywords (bold), names and punctuation (dim)
+  apart; an unknown language is plain;
 - the key row's groups and the command row's tones carry a discreet
   tint on the border and the ground, never the ink: editing, direction,
   control and function keys; danger, start, info and act commands. The

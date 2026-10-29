@@ -135,6 +135,15 @@ class Api(private val baseUrl: String, private val token: String, private val us
     /** A file a pane printed the path of, from under the host's preview roots; a writer's call. */
     fun previewFile(address: String, path: String): Fetched = fetch("panes/${encode(address)}/preview?path=${query(path)}")
 
+    /** Git's view of the repository the pane works in, on a host with preview roots; a writer's call. */
+    fun git(address: String): ChangeSet = Json.changes(get("panes/${encode(address)}/git").body)
+
+    /** One change's diff against the last commit, for a path the status listed. */
+    fun gitDiff(address: String, path: String): Diff {
+        require(Changes.askable(path)) { "path" }
+        return Json.diff(get("panes/${encode(address)}/git/diff?path=${query(path)}").body)
+    }
+
     private fun fetch(path: String): Fetched {
         val c = try {
             URL("$baseUrl/v1/$path").openConnection() as HttpURLConnection

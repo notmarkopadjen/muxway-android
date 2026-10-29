@@ -50,6 +50,10 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
+import app.muxway.android.protocol.Change
+import app.muxway.android.protocol.Changes
+import app.muxway.android.protocol.Code
+import app.muxway.android.protocol.Diff
 import app.muxway.android.protocol.Links
 import app.muxway.android.protocol.Markdown
 import app.muxway.android.AppModel
@@ -59,8 +63,11 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** A file of the host to show: one of the inbox, by name, or a printed path the host previews. */
-data class Shown(val address: String, val name: String? = null, val path: String? = null) {
+/**
+ * A file of the host to show: one of the inbox, by name, or a printed path the host previews;
+ * with a [change], one of the repository's, which opens as its diff or as it is.
+ */
+data class Shown(val address: String, val name: String? = null, val path: String? = null, val change: Change? = null) {
     val label get() = name ?: path ?: ""
     val fileName get() = name ?: path?.substringAfterLast('/')?.ifEmpty { null } ?: "file"
 }
@@ -80,8 +87,20 @@ fun FileSheet(model: AppModel, shown: Shown, onOpen: (Shown) -> Unit = {}, onClo
     var failed by remember(shown) { mutableStateOf(false) }
     val markdown = shown.fileName.endsWith(".md", true) || shown.fileName.endsWith(".markdown", true)
     var rendered by remember(shown) { mutableStateOf(true) }
-    LaunchedEffect(shown) { model.fetchFile(shown.address, shown.name, shown.path) { got = it; failed = it == null } }
-    val f = got
+    // A change opens on its diff when it has one; the file is a tap away. Each is asked for once.
+    val views = shown.change?.let { Changes.views(it.kind) } ?: listOf("file")
+    var side by remember(shown) { mutableStateOf(views[0]) }
+    var diff by remember(shown) { mutableStateOf<Diff?>(null) }
+    var diffFailed by remember(shown) { mutableStateOf(false) }
+    var asked by remember(shown) { mutableStateOf(setOf<String>()) }
+    LaunchedEffect(shown, side) {
+        if (side in asked) return@LaunchedEffect
+        asked = asked + side
+        if (side == "file") model.fetchFile(shown.address, shown.name, shown.path) { got = it; failed = it == null }
+        else model.fetchDiff(shown.address, shown.change!!.path) { diff = it; diffFailed = it == null }
+    }
+    val f = if (side == "file") got else null
+    val lang = remember(shown) { Code.languageOf(shown.fileName) }
     val text = f != null && f.type.startsWith("text/")
     val image = f != null && f.type.startsWith("image/")
     val bitmap = remember(f) { if (image && f != null) BitmapFactory.decodeByteArray(f.bytes, 0, f.bytes.size) else null }
@@ -95,6 +114,7 @@ fun FileSheet(model: AppModel, shown: Shown, onOpen: (Shown) -> Unit = {}, onClo
                 Text("┌─ file ─ ", color = p.dim, maxLines = 1)
                 Text(shown.label, color = p.accent, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (f != null) Text(" ${Files.size(f.bytes.size.toLong())} ", color = p.dim, maxLines = 1)
+                if (views.size > 1) for (v in views) Btn(v, { side = v }, selected = side == v, modifier = Modifier.testTag("side:$v"))
                 if (f != null && text && markdown) Btn("plain", { rendered = !rendered }, selected = !rendered)
                 if (f != null) Btn("⤓", { model.told = save(context, shown.fileName, f) })
                 if (f != null && !text && !image && !pdf) Btn("open", { open(context, shown.fileName, f) })
@@ -103,6 +123,11 @@ fun FileSheet(model: AppModel, shown: Shown, onOpen: (Shown) -> Unit = {}, onClo
             Rule()
             Box(Modifier.fillMaxWidth().heightIn(min = 80.dp, max = 480.dp).padding(top = 4.dp)) {
                 when {
+                    side == "diff" -> when {
+                        diffFailed -> Text("the host has no diff for this path", color = p.alert, modifier = Modifier.padding(8.dp))
+                        diff == null -> Text("loading…", color = p.dim, modifier = Modifier.padding(8.dp))
+                        else -> DiffView(diff!!, p)
+                    }
                     failed -> Text(
                         if (shown.name != null) "gone from the host" else "the host does not preview this file",
                         color = p.alert, modifier = Modifier.padding(8.dp),
@@ -126,7 +151,8 @@ fun FileSheet(model: AppModel, shown: Shown, onOpen: (Shown) -> Unit = {}, onClo
                         }
                     }
                     text -> {
-                        val lines = remember(f) { String(f.bytes, Charsets.UTF_8).split('\n') }
+                        // Code in its colours, by the file's extension; anything else as it is.
+                        val lines = remember(f) { String(f.bytes, Charsets.UTF_8).let { s -> if (lang != null) Code.lines(Code.tokenize(lang, s)).map { coloured(it, p) } else s.split('\n').map { AnnotatedString(it) } } }
                         val sideways = rememberScrollState()
                         LazyColumn(Modifier.fillMaxWidth().horizontalScroll(sideways)) {
                             items(lines.size) { i -> Text(lines[i], color = p.ink, maxLines = 1, softWrap = false) }
@@ -149,9 +175,12 @@ private fun Blocks(blocks: List<Markdown.Block>, p: Palette, onPath: (String) ->
         }
         is Markdown.Block.Para -> Text(inline(b.text.replace('\n', ' '), p, onPath), color = p.ink, modifier = Modifier.padding(vertical = 2.dp))
         is Markdown.Block.Code -> {
+            // The fence's language picks the colours.
             val sideways = rememberScrollState()
+            val lang = Code.languageOf(b.lang)
+            val lines = if (lang != null) Code.lines(Code.tokenize(lang, b.text)).map { coloured(it, p) } else b.text.split('\n').map { AnnotatedString(it) }
             Column(Modifier.fillMaxWidth().padding(vertical = 2.dp).background(p.panel).padding(4.dp).horizontalScroll(sideways)) {
-                for (line in b.text.split('\n')) Text(line.ifEmpty { " " }, color = p.ink, maxLines = 1, softWrap = false)
+                for (line in lines) Text(if (line.isEmpty()) AnnotatedString(" ") else line, color = p.ink, maxLines = 1, softWrap = false)
             }
         }
         is Markdown.Block.Quote -> Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
@@ -173,6 +202,41 @@ private fun Blocks(blocks: List<Markdown.Block>, p: Palette, onPath: (String) ->
             }
         }
         is Markdown.Block.Rule -> Rule(Modifier.padding(vertical = 4.dp))
+    }
+}
+
+/** A diff as rows of text: added rows in the ok colour, removed rows dim and struck, hunk and file headers dim. */
+@Composable
+private fun DiffView(d: Diff, p: Palette) {
+    if (d.binary) { Text("a binary file: no text to show", color = p.dim, modifier = Modifier.padding(8.dp)); return }
+    val lines = remember(d) { d.diff.split('\n').let { if (it.isNotEmpty() && it.last().isEmpty()) it.dropLast(1) else it } }
+    val sideways = rememberScrollState()
+    LazyColumn(Modifier.fillMaxWidth().horizontalScroll(sideways).testTag("diff")) {
+        items(lines.size) { i ->
+            val l = lines[i]
+            when (Changes.rowKind(l)) {
+                '+' -> Text(l, color = p.ok, maxLines = 1, softWrap = false)
+                '-' -> Text(l, color = p.dim, maxLines = 1, softWrap = false, textDecoration = TextDecoration.LineThrough)
+                '@', 'h' -> Text(l, color = p.dim, maxLines = 1, softWrap = false)
+                else -> Text(l.ifEmpty { " " }, color = p.ink, maxLines = 1, softWrap = false)
+            }
+        }
+        if (d.cut) item { Text("… cut at 1 MiB", color = p.dim, maxLines = 1) }
+        if (lines.isEmpty()) item { Text("no difference", color = p.dim, maxLines = 1) }
+    }
+}
+
+/** One line of code in its colours: comments dim and italic, strings and numbers in the accent, keywords bold, punctuation dim. */
+private fun coloured(runs: List<Code.Run>, p: Palette): AnnotatedString = buildAnnotatedString {
+    for (r in runs) {
+        val style = when (r.kind) {
+            Code.Kind.COMMENT -> SpanStyle(color = p.dim, fontStyle = FontStyle.Italic)
+            Code.Kind.STRING, Code.Kind.NUMBER -> SpanStyle(color = p.accent)
+            Code.Kind.KEYWORD -> SpanStyle(fontWeight = FontWeight.Bold)
+            Code.Kind.PUNCT -> SpanStyle(color = p.dim)
+            Code.Kind.NAME, Code.Kind.TEXT -> null
+        }
+        if (style == null) append(r.text) else withStyle(style) { append(r.text) }
     }
 }
 

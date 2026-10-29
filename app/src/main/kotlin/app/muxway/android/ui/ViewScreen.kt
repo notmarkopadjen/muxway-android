@@ -144,6 +144,7 @@ import app.muxway.android.protocol.Keys
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Links
 import app.muxway.android.protocol.Blocks
+import app.muxway.android.protocol.Changes
 import app.muxway.android.protocol.Pane
 import app.muxway.android.protocol.Tiles
 import app.muxway.android.protocol.WindowLayout
@@ -248,11 +249,23 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     var shown by remember { mutableStateOf<Shown?>(null) }
     var slackPx by remember { mutableIntStateOf(0) }
     shown?.let { FileSheet(model, it, onOpen = { next -> shown = next }) { shown = null } }
+    // The changes sheet, for one tile's repository; a file picked there opens over it.
+    var changesOf by remember { mutableStateOf<String?>(null) }
+    changesOf?.let { ChangesSheet(model, it, onOpen = { next -> shown = next }) { changesOf = null } }
 
+    // Direct typing: with the hardware keyboard setting on and the text line not focused, every
+    // key of a hardware keyboard goes to the focused writable pane as pressed; a named key goes by
+    // its name either way.
+    var lineFocused by remember { mutableStateOf(false) }
+    val direct = hardware && !lineFocused && writable
     fun hardKey(e: KeyEvent): Boolean {
         if (e.type != KeyEventType.KeyDown || !writable) return false
-        val name = HardKeys.name(e.key) ?: return false
-        model.key(focused, name)
+        HardKeys.name(e)?.let { model.key(focused, it); return true }
+        if (!direct) return false
+        when (val d = HardKeys.direct(e) ?: return false) {
+            is HardKeys.Direct.Chord -> model.key(focused, d.name)
+            is HardKeys.Direct.Text -> model.type(focused, d.text, enter = false)
+        }
         return true
     }
 
@@ -414,6 +427,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
                         onCloseTile = { closeTile(tiles[i]) },
                         onMinimise = if (tiles.size > 1) ({ minimise(tiles[i]) }) else null,
                         onFile = { shown = it },
+                        onChanges = { changesOf = tiles[i] },
                         onPrompt = { focusedIndex = i; fieldFocus.request() },
                     ) {
                         focusedIndex = i
@@ -434,10 +448,10 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         when {
             pane == null -> Text(" …", color = p.dim, modifier = Modifier.padding(4.dp))
             !pane.writable -> Text(" read-only · ${pane.address}", color = p.dim, modifier = Modifier.padding(4.dp))
-            else -> InputBar(model, state, fieldFocus, onGrow = { slackPx = it }) { gained -> if (gained && hardware && !ime) keyboard?.hide() }
+            else -> InputBar(model, state, fieldFocus, onGrow = { slackPx = it }) { gained -> lineFocused = gained; if (gained && hardware && !ime) keyboard?.hide() }
         }
         Text(
-            state.error?.let { "! $it" } ?: state.updated.ifEmpty { "connecting" },
+            (if (direct) "direct · " else "") + (state.error?.let { "! $it" } ?: state.updated.ifEmpty { "connecting" }),
             color = if (state.error != null) p.alert else p.faint, maxLines = 1,
             style = LocalTextStyle.current.copy(fontSize = 10.sp), modifier = Modifier.padding(horizontal = 6.dp),
         )
@@ -914,7 +928,7 @@ private fun PaneTile(
     model: AppModel, address: String, focused: Boolean, several: Boolean, fitAsked: Boolean, shared: Boolean, siblings: Boolean,
     windowFit: Boolean, expected: WindowLayout.Size?, fitAgain: Int, now: Long, slackPx: Int, modifier: Modifier,
     onMeasured: (WindowLayout.Size) -> Unit, onDrop: (String, Tiles.Zone) -> Unit, onZoom: () -> Unit, onClose: () -> Unit, onCloseTile: () -> Unit,
-    onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onPrompt: () -> Unit, onFocus: () -> Unit,
+    onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onChanges: () -> Unit, onPrompt: () -> Unit, onFocus: () -> Unit,
 ) {
     // Another tile of this window carries the fit: this one is held. With the window fitted as
     // one ([windowFit]) the view sends the size and this tile is [expected] to be its share.
@@ -938,6 +952,18 @@ private fun PaneTile(
     val status = pane?.let { model.status(it, now) }
     val (back, ink) = stateColours(status)
     val edge: Dp = if (several && focused) 3.dp else 1.dp
+    // A writable pane on a host with preview roots is asked for its repository's changes every
+    // ten seconds, for the count in the header.
+    val tracks = pane?.writable == true && model.hostPreviews(address)
+    LaunchedEffect(address, tracks) {
+        if (!tracks) return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                model.fetchChanges(address)
+                delay(10_000)
+            }
+        }
+    }
     // Another tile's header dropped here: on the middle it swaps the two panes, on an edge it
     // splits this tile's place that way.
     var bounds by remember { mutableStateOf<Rect?>(null) }
@@ -988,6 +1014,10 @@ private fun PaneTile(
                     else -> state.fitKey.isNotEmpty() && state.fitKey != "${pane.width}x${pane.height}"
                 }
                 Text(" ${pane.width}×${pane.height}${if (held) " held" else ""} ", color = if (held) p.alert else ink, maxLines = 1)
+            }
+            // The repository's changes, counted, where the host shows one; a tap opens the sheet.
+            state.changes?.let { c ->
+                Text(" ⎇ ${Changes.summary(Changes.counts(c.entries))} ", color = ink, maxLines = 1, modifier = Modifier.clickable(onClick = onChanges).testTag("changes-count"))
             }
             // Minimising keeps the pane open in the row above the keys; off on the last tile.
             Text(" _ ", color = if (onMinimise != null) ink else p.faint, maxLines = 1, modifier = Modifier.clickable(enabled = onMinimise != null) { onMinimise?.invoke() }.testTag("minimise"))

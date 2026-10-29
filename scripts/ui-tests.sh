@@ -26,14 +26,21 @@ cleanup() {
 }
 trap cleanup EXIT
 
-tmux -L "$tmuxname" -f /dev/null new-session -d -s work -n shell -x 80 -y 24 \
+# A repository under a preview root, the first pane's shell in it, for the changes sheet.
+mkdir -p "$tmp/work/repo/src"
+export GIT_AUTHOR_NAME=alice GIT_AUTHOR_EMAIL=alice@example.com GIT_COMMITTER_NAME=alice GIT_COMMITTER_EMAIL=alice@example.com GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+printf 'package a\n' > "$tmp/work/repo/src/a.go"
+git -C "$tmp/work/repo" init -q -b main && git -C "$tmp/work/repo" add . && git -C "$tmp/work/repo" commit -q -m first
+printf 'package a\n\nfunc A() {}\n' > "$tmp/work/repo/src/a.go"
+printf 'loose\n' > "$tmp/work/repo/notes.txt"
+tmux -L "$tmuxname" -f /dev/null new-session -d -s work -n shell -x 80 -y 24 -c "$tmp/work/repo" \
     "env -i PATH=/usr/bin:/bin TERM=xterm LANG=C.UTF-8 PS1='$ ' bash --norc --noprofile"
 "$bin" hub serve --dir "$tmp/hub" --listen "127.0.0.1:$port" --public-url "http://127.0.0.1:$port" >> "$logs/hub.log" 2>&1 &
 hub_pid=$!
 for _ in $(seq 50); do [ -S "$tmp/hub/admin.sock" ] && break; sleep 0.2; done
 code=$("$bin" hub pair-code --dir "$tmp/hub" --host alice-laptop)
 "$bin" agent pair --dir "$tmp/agent" "$code"
-"$bin" agent run --dir "$tmp/agent" --tmux-name "$tmuxname" --allow-sessions >> "$logs/agent.log" 2>&1 &
+"$bin" agent run --dir "$tmp/agent" --tmux-name "$tmuxname" --allow-sessions --preview "$tmp/work" >> "$logs/agent.log" 2>&1 &
 agent_pid=$!
 for _ in $(seq 50); do "$bin" hub agents --dir "$tmp/hub" | grep -q "alice-laptop	online" && break; sleep 0.2; done
 "$bin" expose --tmux-name "$tmuxname" -t work:0.0 --write

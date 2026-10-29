@@ -105,6 +105,23 @@ class ApiTest {
     }
 
     @Test
+    fun theRepositorysChangesAndADiffAreAskedForAndAnOddPathNeverLeaves() {
+        answer = { r ->
+            if (r.path.endsWith("/git")) json(200, """{"root":"/home/alice/work/repo","branch":"main","entries":[{"path":"src/a.go","kind":"modified"}]}""")
+            else json(200, """{"diff":"+a\n","binary":false,"cut":false}""")
+        }
+        val c = api().git("h/w/0.0")
+        assertEquals("repo", c.repo)
+        assertEquals("src/a.go", c.entries.single().path)
+        val d = api().gitDiff("h/w/0.0", "with space/-rf")
+        assertEquals("+a\n", d.diff)
+        assertEquals(listOf("/v1/panes/h/w/0.0/git", "/v1/panes/h/w/0.0/git/diff?path=with%20space%2F-rf"), seen.map { it.uri })
+        assertThrows(IllegalArgumentException::class.java) { api().gitDiff("h/w/0.0", "a\u0000b") }
+        assertThrows(IllegalArgumentException::class.java) { api().gitDiff("h/w/0.0", "") }
+        assertEquals(2, seen.size)
+    }
+
+    @Test
     fun mouseSendsButtonAndCellAndRefusesNonsenseLocally() {
         answer = { Response(204, ByteArray(0), emptyMap()) }
         api().mouse("h/w/0.0", "left", 39, 9)
