@@ -130,7 +130,7 @@ fun FileSheet(model: AppModel, shown: Shown, onOpen: (Shown) -> Unit = {}, onClo
                         else -> DiffView(diff!!, p)
                     }
                     failed -> Text(
-                        if (shown.name != null) "gone from the host" else "the host does not preview this file",
+                        if (shown.name != null) "gone from the host" else "the host does not serve this file: outside its agent's --preview directories, hidden (--preview-hidden), a secret, or gone",
                         color = p.alert, modifier = Modifier.padding(8.dp),
                     )
                     f == null -> Text("loading…", color = p.dim, modifier = Modifier.padding(8.dp))

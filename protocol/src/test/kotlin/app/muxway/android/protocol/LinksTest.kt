@@ -82,9 +82,11 @@ class LinksTest {
             Links.findPaths("1. docs/plans/2026-10-26-fit-keeps-still.md: fit ignores, see ~/notes/todo.txt and /var/log/app.log.").map { it.path },
         )
         assertEquals(listOf("./out/report.csv", "../shot.PNG"), Links.findPaths("wrote ./out/report.csv (3 rows) and ../shot.PNG").map { it.path })
-        for (s in listOf("README.md", "notes.txt in the dir", "docs/plans/x.md.bak", "bin/run.exe", "keys/agent.key", "certs/host.crt", "config/x.env", "src/Makefile.am", "a/b.mdx", "x/y.md-")) {
+        for (s in listOf("README.md", "notes.txt in the dir", "keys/agent.key", "certs/host.crt", "config/x.env", "a/.env", "infra/prod.tfstate", "x/y.md-", "/usr/local")) {
             assertEquals(s, emptyList<Links.PathLink>(), Links.findPaths(s))
         }
+        // Anything else under a root is a download: any extension links.
+        assertEquals(listOf("src/Makefile.am", "bin/a.exe", "out/x.md.bak"), Links.findPaths("see src/Makefile.am, Makefile, bin/a.exe and out/x.md.bak").map { it.path })
         // The types of a project: sources, markup, config, archives, names without an extension.
         assertEquals(
             listOf("src/tx.py", "./Views/Home/Index.cshtml", "api/v1.proto", "ops/main.tf", "scripts/run.ps1", "out/a.diff", "src/Makefile", "./Dockerfile", "/opt/x/LICENSE", "~/dl/report.xlsx", "a/b.PY"),

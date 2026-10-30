@@ -229,8 +229,8 @@ flowchart LR
   listing) any path with a slash in it or from `~` ending in a type the
   host shows (the protocol's list: sources, scripts, markup, data,
   config and templates, `Makefile`, `Dockerfile`, `LICENSE` and such
-  without an extension, images, PDF, archives and office files as a
-  download), in a writable pane: a tap opens the file in a sheet over
+  without an extension, images, PDF, anything else under a root as a
+  download, never a secret), in a writable pane: a tap opens the file in a sheet over
   the pane, an image as itself, a text as it is, a Markdown file
   rendered as the terminal would draw it (headings, lists, quotes, code,
   tables, rules; *plain* shows the source; a path in it is a link too,
