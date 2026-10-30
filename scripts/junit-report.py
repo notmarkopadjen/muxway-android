@@ -28,10 +28,15 @@ def kind(classname, name):
 
 def main():
     run = pathlib.Path(sys.argv[1])
-    files = []
+    files, missing = [], []
     for arg in sys.argv[2:]:
         p = pathlib.Path(arg)
-        files += sorted(p.glob("*.xml")) if p.is_dir() else [p]
+        if p.is_dir():
+            files += sorted(p.glob("*.xml"))
+        elif p.exists():
+            files.append(p)
+        else:
+            missing.append(arg)
     suites = ET.Element("testsuites")
     rows = []
     totals = dict(tests=0, failures=0, errors=0, skipped=0)
@@ -57,6 +62,11 @@ def main():
                 if result == "skipped":
                     totals["skipped"] += 1
                 rows.append((kind(cls, name), cls.rsplit(".", 1)[-1], name, result, float(case.get("time") or 0)))
+    # Results that were never written, because the build stopped before them, fail the run too.
+    for m in missing:
+        totals["tests"] += 1
+        totals["errors"] += 1
+        rows.append(("check", "results", m, "missing", 0.0))
     for k, v in totals.items():
         suites.set(k, str(v))
     ET.ElementTree(suites).write(run / "results.xml", encoding="unicode", xml_declaration=True)
