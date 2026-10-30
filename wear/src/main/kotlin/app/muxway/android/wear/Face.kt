@@ -29,9 +29,51 @@ object Face {
     /** Why the board cannot be trusted right now, or null. */
     fun problem(board: Board, now: Long, phone: Boolean): String? = when {
         !phone -> "no phone"
+        board.at == 0L -> "no board"
         !board.live -> "paused"
         board.stale(now) -> "stale"
         else -> null
+    }
+
+    /** The problem's cause in a few words, for the line beside its name. */
+    fun reason(problem: String, board: Board, now: Long): String = when (problem) {
+        "no phone" -> "out of reach"
+        "no board" -> "none sent yet"
+        "paused" -> "service off"
+        "stale" -> "${age(now - board.at)} ago"
+        else -> ""
+    }
+
+    /**
+     * The problem spelled out, a line per free row: what is wrong, then what to do about it.
+     * Each line fits a row of the face (some twenty-five characters in either half).
+     */
+    fun advice(problem: String, board: Board, now: Long): List<Cell> = when (problem) {
+        "no phone" -> listOf(
+            Cell("no phone", "the phone is out of reach", 0),
+            Cell("check its connection", "", 0),
+            Cell("and that muxway is on it", "", 0),
+        )
+        "no board" -> listOf(
+            Cell("no board", "the phone sent none yet", 0),
+            Cell("open muxway on the phone", "", 0),
+            Cell("and turn on", "watch and notifications", 0),
+        )
+        "paused" -> listOf(
+            Cell("paused", "the phone service is off", 0),
+            Cell("in the phone's muxway app", "", 0),
+            Cell("turn on", "watch and notifications", 0),
+        )
+        "stale" -> listOf(
+            Cell("stale", "last board ${age(now - board.at)} ago", 0),
+            Cell("the phone stopped sending", "", 0),
+            Cell("open muxway on the phone", "", 0),
+        )
+        "no panes" -> listOf(
+            Cell("no panes", "the hub lists none", 0),
+            Cell("expose one on a host", "", 0),
+        )
+        else -> emptyList()
     }
 
     /** Line [i] of a display with [n] lines. */
@@ -39,6 +81,8 @@ object Face {
         val problem = problem(board, now, phone)
         val shown = board.shown(n)
         val hidden = board.hidden(n)
+        val used = shown.size + if (hidden > 0) 1 else 0
+        val note = problem ?: "no panes".takeIf { board.rows.isEmpty() }
         return when {
             i < shown.size -> {
                 val r = shown[i]
@@ -48,16 +92,15 @@ object Face {
                 Cell(text, title, value, r.address)
             }
             i == shown.size && hidden > 0 -> Cell("+$hidden", "more", 0)
-            i == 0 && problem != null -> Cell(problem, "", 0)
-            i == 0 && board.rows.isEmpty() -> Cell("no panes", "", 0)
-            else -> Cell("·", "", 0)
+            note != null -> advice(note, board, now).getOrNull(i - used) ?: DOT
+            else -> DOT
         }
     }
 
-    /** The bottom line: what the panes are doing, strongest state first, or what is wrong. */
+    /** The bottom line: what the panes are doing, strongest state first, or what is wrong and why. */
     fun summary(board: Board, now: Long, phone: Boolean): Cell {
         val panes = panes(board.rows.size)
-        problem(board, now, phone)?.let { return Cell(it, panes, 0) }
+        problem(board, now, phone)?.let { return Cell(it, reason(it, board, now), 0) }
         val working = "${board.working} working"
         return when {
             board.rows.isEmpty() -> Cell("no panes", "", 0)
@@ -84,6 +127,15 @@ object Face {
         if (problem(board, now, phone) != null || board.rows.isEmpty()) return 0f to 1f
         return (board.waiting + board.working).toFloat() to board.rows.size.toFloat()
     }
+
+    /** A duration in the coarsest unit that is not zero. */
+    fun age(seconds: Long): String = when {
+        seconds < 3600 -> "${maxOf(seconds, 0) / 60} min"
+        seconds < 86400 -> "${seconds / 3600} h"
+        else -> "${seconds / 86400} d"
+    }
+
+    private val DOT = Cell("·", "", 0)
 
     private fun panes(n: Int) = if (n == 1) "1 pane" else "$n panes"
 }

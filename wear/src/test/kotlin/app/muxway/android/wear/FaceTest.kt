@@ -33,14 +33,56 @@ class FaceTest {
         val b = board(row(1, Board.WAITING, "done"))
         assertEquals("no phone", Face.problem(b, now, false))
         assertEquals(0, Face.row(b, 0, 4, now, false).value)
-        assertEquals(Cell("no phone", "1 pane", 0), Face.summary(b, now, false))
+        assertEquals(Cell("no phone", "out of reach", 0), Face.summary(b, now, false))
         assertEquals("--", Face.short(b, now, false))
         assertEquals("paused", Face.problem(b.copy(live = false), now, true))
         assertEquals("stale", Face.problem(b, now + 3600, true))
         assertNull(Face.problem(b, now + 5, true))
-        assertEquals(Cell("no phone", "", 0), Face.row(Board.EMPTY, 0, 4, now, false))
-        assertEquals(Cell("paused", "", 0), Face.row(Board(emptyList(), now, false), 0, 4, now, true))
-        assertEquals(Cell("no panes", "", 0), Face.row(Board(emptyList(), now, true), 0, 4, now, true))
+        assertEquals(Cell("no phone", "the phone is out of reach", 0), Face.row(Board.EMPTY, 0, 4, now, false))
+        assertEquals(Cell("paused", "the phone service is off", 0), Face.row(Board(emptyList(), now, false), 0, 4, now, true))
+        assertEquals(Cell("no panes", "the hub lists none", 0), Face.row(Board(emptyList(), now, true), 0, 4, now, true))
+    }
+
+    @Test
+    fun aWatchThatNeverGotABoardSaysSoNotPaused() {
+        // The empty board is what a fresh install holds: not the phone's doing, so not "paused".
+        assertEquals("no board", Face.problem(Board.EMPTY, now, true))
+        assertEquals(Cell("no board", "none sent yet", 0), Face.summary(Board.EMPTY, now, true))
+        assertEquals("no phone", Face.problem(Board.EMPTY, now, false))
+    }
+
+    @Test
+    fun aProblemIsSpelledOutOverTheFreeRows() {
+        val empty = Board(emptyList(), now, false)
+        assertEquals(Cell("paused", "the phone service is off", 0), Face.row(empty, 0, 4, now, true))
+        assertEquals(Cell("in the phone's muxway app", "", 0), Face.row(empty, 1, 4, now, true))
+        assertEquals(Cell("turn on", "watch and notifications", 0), Face.row(empty, 2, 4, now, true))
+        assertEquals(Cell("·", "", 0), Face.row(empty, 3, 4, now, true))
+        // With panes on the board the rows keep them, dim, and the advice takes what is left.
+        val old = board(row(1, Board.WAITING, "done"), row(2, Board.QUIET))
+        val later = now + 23 * 60
+        assertEquals(Cell("✓ done", "pane 1", 0, "alice-laptop/work/0.1"), Face.row(old, 0, 4, later, true))
+        assertEquals(Cell("stale", "last board 23 min ago", 0), Face.row(old, 2, 4, later, true))
+        assertEquals(Cell("the phone stopped sending", "", 0), Face.row(old, 3, 4, later, true))
+        assertEquals(Cell("stale", "23 min ago", 0), Face.summary(old, later, true))
+        // A full face has no free row: the summary alone carries the why.
+        val full = board(*(1..6).map { row(it, Board.QUIET) }.toTypedArray())
+        assertEquals(Cell("+3", "more", 0), Face.row(full, 3, 4, later, true))
+        assertEquals(Cell("stale", "23 min ago", 0), Face.summary(full, later, true))
+        assertEquals("no phone", Face.row(full, 6, 8, now, false).text)
+    }
+
+    @Test
+    fun everyAdviceLineFitsARowOfTheFace() {
+        for (p in listOf("no phone", "no board", "paused", "stale", "no panes")) {
+            for (c in Face.advice(p, board(), now + 7 * 86400)) {
+                assertEquals(c.text, true, c.text.length <= 26)
+                assertEquals(c.title, true, c.title.length <= 25)
+            }
+        }
+        assertEquals("3 h", Face.age(3 * 3600 + 59))
+        assertEquals("2 d", Face.age(2 * 86400 + 5))
+        assertEquals("0 min", Face.age(-30))
     }
 
     @Test

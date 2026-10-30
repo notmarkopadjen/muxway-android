@@ -16,7 +16,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 /** One row of the board as a complication: any face with a slot can show it. */
 abstract class RowComplication(private val index: Int) : SuspendingComplicationDataSourceService() {
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
-        val board = BoardStore.load(this)
+        val board = synced()
         val cell = Face.row(board, index, Face.ROWS, now(), phoneReachable())
         return build(request.complicationType, cell, cell.address.ifEmpty { null })
     }
@@ -55,7 +55,7 @@ class Row4Complication : RowComplication(3)
 /** How many panes wait, or what is wrong; taps open the list. */
 class SummaryComplication : SuspendingComplicationDataSourceService() {
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
-        val board = BoardStore.load(this)
+        val board = synced()
         val now = now()
         val phone = phoneReachable()
         return build(request.complicationType, Face.summary(board, now, phone), Face.short(board, now, phone), Face.gauge(board, now, phone))
@@ -89,3 +89,9 @@ private fun now() = System.currentTimeMillis() / 1000
 /** The stored answer, refreshed when the capability changes; a quick look at the network when asked. */
 private suspend fun SuspendingComplicationDataSourceService.phoneReachable(): Boolean =
     withTimeoutOrNull(1500) { Phone.reachable(this@phoneReachable) } ?: BoardStore.phone(this)
+
+/** The stored board, after a quick look at what the Data Layer holds. */
+private suspend fun SuspendingComplicationDataSourceService.synced(): Board {
+    withTimeoutOrNull(1500) { BoardStore.sync(this@synced) }
+    return BoardStore.load(this)
+}

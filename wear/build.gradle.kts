@@ -13,8 +13,8 @@ android {
         applicationId = "app.muxway.android"
         minSdk = 30
         targetSdk = 34
-        versionCode = 29
-        versionName = "0.10.0"
+        versionCode = 30
+        versionName = "0.11.0"
     }
 
     buildTypes {

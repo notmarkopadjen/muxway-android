@@ -19,16 +19,31 @@ import androidx.wear.tiles.RequestBuilders
 import androidx.wear.tiles.TileBuilders
 import androidx.wear.tiles.TileService
 import com.google.common.util.concurrent.ListenableFuture
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** The board as a tile: a line per pane, each a tap, the summary at the foot. */
 class BoardTileService : TileService() {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
+    }
+
     override fun onTileRequest(requestParams: RequestBuilders.TileRequest): ListenableFuture<TileBuilders.Tile> = future {
+        // A quick look at what the phone left and whether it is there, then the stored answer.
+        withTimeoutOrNull(1500) { BoardStore.sync(this@BoardTileService); Phone.reachable(this@BoardTileService) }
         val board = BoardStore.load(this)
         val now = System.currentTimeMillis() / 1000
         val phone = BoardStore.phone(this)
         TileBuilders.Tile.Builder()
             .setResourcesVersion(RESOURCES)
-            .setFreshnessIntervalMillis(0)
+            .setFreshnessIntervalMillis(FRESH_MILLIS)
             .setTileTimeline(TimelineBuilders.Timeline.fromLayoutElement(layout(board, now, phone)))
             .build()
     }
@@ -65,13 +80,16 @@ class BoardTileService : TileService() {
     private fun text(s: String, colour: Int, size: Float): LayoutElement =
         Text.Builder().setText(s).setMaxLines(1).setFontStyle(FontStyle.Builder().setSize(sp(size)).setColor(argb(colour)).build()).build()
 
-    private fun <T> future(make: () -> T): ListenableFuture<T> = CallbackToFutureAdapter.getFuture { completer ->
-        runCatching(make).onSuccess { completer.set(it) }.onFailure { completer.setException(it) }
+    private fun <T> future(make: suspend () -> T): ListenableFuture<T> = CallbackToFutureAdapter.getFuture { completer ->
+        scope.launch { runCatching { make() }.onSuccess { completer.set(it) }.onFailure { completer.setException(it) } }
         "tile"
     }
 
     companion object {
         const val RESOURCES = "1"
         const val ROWS = 6
+
+        /** Drawn again this often while shown, so a board that stopped coming turns stale on the tile too. */
+        const val FRESH_MILLIS = 5 * 60 * 1000L
     }
 }

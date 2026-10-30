@@ -101,9 +101,12 @@ sequenceDiagram
   that wait or work, out of all of them, so one working pane of two fills
   half a ring and a quiet day leaves it empty. A ring cannot say which
   state it is showing, and the rows above it already do. They update
-  when the board arrives, never on a timer. A row without a pane shows
-  `·`; the last row shows `+N` when there are more panes than rows.
-- **The tile** lists six rows and the summary; each row is a tap.
+  when the board arrives, and the system asks them again every five
+  minutes while they are shown, so a board that stops coming turns stale
+  on the face without anyone's help. A row without a pane shows `·`; the
+  last row shows `+N` when there are more panes than rows.
+- **The tile** lists six rows and the summary; each row is a tap. It is
+  drawn again every five minutes while it is shown, for the same reason.
 - **The app** lists every pane with glyph, name, kind and, when sent, the
   text; the summary is its last line. It opens from the launcher or from
   the summary complication.
@@ -118,15 +121,40 @@ says less than is true: `2 waiting` (with `1 working · 5 panes` beside
 it when some also work), else `2 working`, else `all quiet`, else `no
 panes`. The phone's ongoing notification says the same in its own words.
 
-When no phone is reachable, when the phone's service stopped (`live` is
-false) or when the board is older than ten minutes, every line turns dim
-and the summary says `no phone`, `paused` or `stale`. A board that stops
-updating must never look current.
+When no phone is reachable, when no board has ever arrived, when the
+phone's service stopped (`live` is false) or when the board is older than
+ten minutes, every line turns dim and the summary names the problem and
+its cause: `no phone · out of reach`, `no board · none sent yet`,
+`paused · service off`, `stale · 23 min ago`. The rows the panes do not
+need spell it out, what is wrong and then what to do about it:
+
+```
+          │ paused                    │   the problem, and why
+          │   the phone service is off│
+          │ in the phone's muxway app │   what to do
+          │ turn on                   │
+          │   watch and notifications │
+          │ ·                         │
+          ├───────────────────────────┤
+          │     paused · service off  │
+```
+
+A face full of panes keeps them, dim, and the summary alone carries the
+why. The watch app's list shows the same lines under its rows. A board
+that stops updating must never look current.
+
+The listener only hears a board that changes while it is there. A watch
+app just installed, or one the system had stopped, would otherwise show
+`no board` until the phone next pushed one, which on a quiet day is the
+heartbeat. So every complication request, the tile and the list first
+look at what the Data Layer already holds (`BoardStore.sync`: a read of
+the local cache, no radio) and keep a board newer than the stored one.
 
 ```mermaid
 stateDiagram-v2
     [*] --> NoPhone
-    NoPhone --> Live: capability muxway_phone appears, board arrives
+    NoPhone --> NoBoard: capability muxway_phone appears
+    NoBoard --> Live: board arrives, or one is found on the Data Layer
     Live --> Live: board or heartbeat
     Live --> Paused: board with live false (setting off, token gone)
     Live --> Stale: ten minutes without a board

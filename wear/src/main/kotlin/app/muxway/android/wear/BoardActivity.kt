@@ -57,11 +57,13 @@ private fun BoardScreen(onOpen: (String) -> Unit) {
         onDispose(stop)
     }
     LaunchedEffect(Unit) {
+        BoardStore.sync(context)
         phone = Phone.reachable(context)
         while (true) { delay(10_000); now = System.currentTimeMillis() / 1000 }
     }
     val problem = Face.problem(board, now, phone)
     val summary = Face.summary(board, now, phone)
+    val advice = Face.advice(problem ?: "no panes".takeIf { board.rows.isEmpty() } ?: "", board, now)
     // The list centres the row it is on, so a pane at either end of it comes to the middle of a
     // round watch's glass, where it is whole and can be tapped; the bezel turns it too.
     val list = rememberScalingLazyListState(initialCenterItemIndex = 1)
@@ -80,8 +82,13 @@ private fun BoardScreen(onOpen: (String) -> Unit) {
             item {
                 Text("┌─ muxway ─┐", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp)
             }
-            if (board.rows.isEmpty()) {
-                item { Text(problem ?: "no panes", color = Palette.dim, fontFamily = Palette.mono, fontSize = 14.sp, modifier = Modifier.padding(8.dp)) }
+            for (a in advice) {
+                item {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp)) {
+                        Text(a.text, color = Palette.dim, fontFamily = Palette.mono, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (a.title.isNotEmpty()) Text("  ${a.title}", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
             }
             for (r in board.rows) {
                 item(key = r.address) {
