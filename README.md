@@ -75,6 +75,21 @@ the host's own width; amber by default, phosphor green, and paper for
 daylight; a lens knows one agent's screen, and the Claude Code lens is
 the one there is today.
 
+## On the wrist
+
+<table>
+<tr>
+<td align="center"><img src="docs/images/watch-face.png" width="200" alt="The muxway watch face: the time, then four rows of panes, the ones that wait first, and the count below"><br><sub>the face</sub></td>
+<td align="center"><img src="docs/images/watch-complications.png" width="200" alt="A stock watch face with the muxway summary in one complication slot"><br><sub>or just a complication on any face</sub></td>
+<td align="center"><img src="docs/images/watch-pane.png" width="200" alt="A pane's tail on the watch in colour, reply and the microphone above it"><br><sub>a pane's tail</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/images/watch-reply.png" width="200" alt="The reply menu: Enter, y Enter, n Enter and more, one tall row each"><br><sub>reply</sub></td>
+<td align="center"><img src="docs/images/watch-record.png" width="200" alt="Recording: a level meter and the stop and drop buttons over the tail"><br><sub>speak</sub></td>
+<td align="center"><img src="docs/images/watch-heard.png" width="200" alt="The words heard, with send, type and drop above the tail"><br><sub>then send, or type it first</sub></td>
+</tr>
+</table>
+
 The features: [connect](docs/features/connect.md),
 [panes](docs/features/panes.md), [pane view](docs/features/pane-view.md),
 [lenses](docs/features/lenses.md),

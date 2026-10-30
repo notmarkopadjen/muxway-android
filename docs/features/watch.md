@@ -8,6 +8,12 @@ microphone and a *reply* menu at the top, a row of keys at the bottom,
 and *phone*, which makes the phone app open that pane behind the lock
 screen, so unlocking the phone lands on it.
 
+<p>
+<img src="../images/watch-face.png" width="180" alt="The face">
+<img src="../images/watch-pane.png" width="180" alt="A pane's tail">
+<img src="../images/watch-heard.png" width="180" alt="Spoken words, ready to send">
+</p>
+
 ```
           ┌───────────────┐
           │    14:07      │   pixel digits
