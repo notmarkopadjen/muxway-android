@@ -14,6 +14,9 @@ Wear OS watch. Security first: a tmux pane is a shell.
 > complications, a tile, and a pane's tail with a few answers and the
 > microphone on the wrist.
 
+**Get it:** the [latest APKs](https://github.com/notmarkopadjen/muxway-android/releases/latest)
+for the phone, the watch and the watch face, ready to side-load; see [Install](#install).
+
 ![The phone unfolded: three tiles, a docs shell across the top, an API log and htop below, from two hosts, and the Claude pane parked in the row above the keys](docs/images/tiles.png)
 
 ## Only here
