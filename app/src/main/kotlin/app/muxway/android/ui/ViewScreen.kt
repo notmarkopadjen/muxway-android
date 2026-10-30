@@ -189,7 +189,9 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     var custom by remember { mutableStateOf<WindowLayout.Node?>(null) }
     val weights = remember { mutableStateMapOf<String, List<Float>>() }
     val kept = remember { Remembered() }
-    val shape = if (layout == Layout.CUSTOM) custom ?: preset.tree(tiles.size) else layout.tree(tiles.size)
+    // A made tree is drawn only while it has a leaf per tile: for the frame between a tile
+    // leaving or arriving and the effect below catching up, the preset stands in.
+    val shape = if (layout == Layout.CUSTOM) custom?.takeIf { Tiles.leaves(it).size == tiles.size } ?: preset.tree(tiles.size) else layout.tree(tiles.size)
     LaunchedEffect(addresses, tiles.size) {
         val back = listOf(kept.carried, kept.unzoomed).firstOrNull { it != null && it.panes == addresses }
         if (back != null) {
