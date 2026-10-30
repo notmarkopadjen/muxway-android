@@ -89,6 +89,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -1102,19 +1103,30 @@ private fun PaneTile(
             // cursor's row (or the last row shown, when the cursor is on a blank one below) is a
             // wish to type: the line takes the focus, after the click the program gets. A long
             // press on a block copies it without its markers.
-            val top = (heightPx - rows.size * rowPx).coerceAtLeast(0f)
             val shown by rememberUpdatedState(rows)
             val screenRows = (pane?.height ?: 0) - state.trimmed
             val cursorRow = pane?.cursorY?.takeIf { it > 0 }?.coerceAtMost(screenRows) ?: screenRows
+            // The rows as the list laid them out, by their index in [rows]: the finger is matched
+            // against them, not against the font's nominal pitch, which the list does not keep to.
+            // The gesture reads the pane's facts as they are now, so a repaint does not cancel it.
+            val laid = remember(address) { HashMap<Int, LaidRow>() }
+            val facts by rememberUpdatedState(TapFacts(colPx, previews, clickable, wheel, screenRows, cursorRow, pane?.width ?: 0, pane?.height ?: 0, sideways))
             // The row under the finger, as an index into the rows shown and as a row of the pane.
             fun rowAt(py: Float): Pair<Int, Int>? {
-                val t = ((py - top) / rowPx).toInt()
-                val index = (shown.size - visibleRows).coerceAtLeast(0) + t
-                if (py < top || index !in shown.indices) return null
-                return index to screenRows - (shown.size - 1 - index)
+                val index = laid.entries.firstOrNull { (_, r) -> py >= r.top && py < r.bottom }?.key ?: return null
+                if (index !in shown.indices) return null
+                return index to facts.screenRows - (shown.size - 1 - index)
+            }
+            // The column under the finger: the character the row's layout has there, else the cell.
+            fun colAt(index: Int, px: Float): Int {
+                val r = laid[index]
+                val t = r?.layout
+                if (t == null || px < r.left || px >= r.left + t.size.width) return (px / facts.colPx).toInt()
+                val o = t.getOffsetForPosition(Offset(px - r.left, 1f))
+                return if (o > 0 && t.getHorizontalPosition(o, true) > px - r.left) o - 1 else o
             }
             Box(Modifier.fillMaxSize().pointerInput(address) { pinch { z -> zoom = (zoom * z).coerceIn(0.5f, 4f) } }
-                .pointerInput(address, top, colPx, rowPx, previews, clickable, wheel, screenRows, cursorRow) {
+                .pointerInput(address) {
                     detectTapGestures(
                         onLongPress = { at ->
                             val (index, _) = rowAt(at.y) ?: return@detectTapGestures
@@ -1123,18 +1135,19 @@ private fun PaneTile(
                             model.copyBlock(b.text, b.end - b.start + 1)
                         },
                     ) { at ->
-                        val x = (at.x / colPx).toInt() + 1
+                        val f = facts
+                        val px = at.x + if (f.sideways) horizontal.value else 0
                         val (index, y) = rowAt(at.y) ?: return@detectTapGestures
+                        val col = colAt(index, px)
                         val row = shown[index].joinToString("") { it.text }
-                        if (Links.at(row, x - 1) != null) return@detectTapGestures
-                        Links.fileAt(row, x - 1)?.let { onFile(Shown(address, name = it.name)); return@detectTapGestures }
-                        if (previews) Links.pathAt(row, x - 1)?.let { onFile(Shown(address, path = it.path)); return@detectTapGestures }
-                        if (!clickable) return@detectTapGestures
+                        if (Links.at(row, col) != null) return@detectTapGestures
+                        Links.fileAt(row, col)?.let { onFile(Shown(address, name = it.name)); return@detectTapGestures }
+                        if (f.previews) Links.pathAt(row, col)?.let { onFile(Shown(address, path = it.path)); return@detectTapGestures }
+                        if (!f.clickable) return@detectTapGestures
                         // A click only where the program asked for the mouse; elsewhere a tap focuses.
-                        val w = pane?.width ?: 0
-                        val h = pane?.height ?: 0
-                        if (wheel && x in 1..w && y in 1..h) model.click(address, x, y)
-                        if (y == cursorRow) onPrompt()
+                        val x = (px / f.colPx).toInt() + 1
+                        if (f.wheel && x in 1..f.cols && y in 1..f.rows) model.click(address, x, y)
+                        if (y == f.cursorRow) onPrompt()
                     }
                 }
                 .then(if (sideways) Modifier.horizontalScroll(horizontal) else Modifier)
@@ -1168,13 +1181,24 @@ private fun PaneTile(
                     LazyColumn(body, reverseLayout = true, userScrollEnabled = scrolls) {
                         items(lines.size, key = { lines.size - it }) { i ->
                             val l = lines[i]
+                            val at = lines.size - 1 - i
+                            val mine = remember { LaidRow() }
+                            DisposableEffect(at) {
+                                laid[at] = mine
+                                onDispose { if (laid[at] === mine) laid.remove(at) }
+                            }
                             // Links are underlined dotted, drawn under the row from its layout.
-                            var laid by remember { mutableStateOf<TextLayoutResult?>(null) }
+                            var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
                             Text(
                                 l.text, color = p.ink, style = style, softWrap = false, maxLines = 1,
-                                onTextLayout = { laid = it },
-                                modifier = Modifier.padding(horizontal = 2.dp).drawBehind {
-                                    val t = laid ?: return@drawBehind
+                                onTextLayout = { layout = it; mine.layout = it },
+                                modifier = Modifier.padding(horizontal = 2.dp).onGloballyPositioned { c ->
+                                    val o = c.positionInParent()
+                                    mine.top = o.y
+                                    mine.bottom = o.y + c.size.height
+                                    mine.left = o.x
+                                }.drawBehind {
+                                    val t = layout ?: return@drawBehind
                                     if (t.lineCount == 0) return@drawBehind
                                     val y = t.getLineBottom(0) - dash / 2
                                     for (u in l.links) {
@@ -1193,6 +1217,20 @@ private fun PaneTile(
 }
 
 private const val MIME = "text/plain"
+
+/** Where the list put a row, in its coordinates, and the row's text as laid out. */
+private class LaidRow {
+    var top = 0f
+    var bottom = 0f
+    var left = 0f
+    var layout: TextLayoutResult? = null
+}
+
+/** What a tap on the pane needs to know, as it is at the moment of the tap. */
+private data class TapFacts(
+    val colPx: Float, val previews: Boolean, val clickable: Boolean, val wheel: Boolean,
+    val screenRows: Int, val cursorRow: Int, val cols: Int, val rows: Int, val sideways: Boolean,
+)
 
 /** Two fingers zoom; one finger is left to the scroll underneath. */
 private suspend fun PointerInputScope.pinch(onZoom: (Float) -> Unit) {
