@@ -60,6 +60,12 @@ annotations on the commit (the test-reporter action reading
 `results.xml`), and its run directory is kept as a workflow artifact for 90
 days.
 
+The workflow checks out the core next to this repository and points
+`MUXWAY_CORE` at it. While the core is private the checkout uses the
+`MUXWAY_CORE_TOKEN` secret, a fine-grained token that may only read that
+repository's contents; once it is public the job's own token is enough and
+the secret can go. The runner has no device, so the UI run is skipped there.
+
 ```mermaid
 sequenceDiagram
     participant CI as CI workflow
@@ -115,7 +121,7 @@ suites cover; the rest is checked by hand on a device before a release.
 Each repository provides `scripts/e2e.sh`. It builds the throwaway test
 environment, runs the suite, writes one run directory under `test-runs/`
 with at least `summary.md` and `results.xml` (JUnit), and exits non-zero if
-any test failed. Until a repository has one, CI skips the test steps.
+any test failed.
 
 Considered and not used: an Allure report on GitHub Pages (needs a paid plan
 while private; may be added for trends once public), and committing runs to
