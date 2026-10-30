@@ -45,7 +45,11 @@ data class Palette(
     val light: Boolean,
     val ansi: List<Color>,
     val tints: Tints,
+    val syntax: Syntax,
 )
+
+/** Code's hues, the one place a second hue carries meaning: strings, numbers, keywords, names. Comments and punctuation are the dim ink. */
+data class Syntax(val string: Color, val number: Color, val keyword: Color, val name: Color)
 
 /** The discreet tints of the key row's groups and the command row's tones: a touch on border and ground, never the ink. */
 data class Tints(val edit: Color, val nav: Color, val ctrl: Color, val fn: Color, val danger: Color, val start: Color, val info: Color, val act: Color)
@@ -69,18 +73,21 @@ val Amber = Palette(
     accent = Color(0xFFFFD36B), attention = Color(0xFFFFB000), alert = Color(0xFFFF3B3B), claude = Color(0xFFD97757), ok = Color(0xFFFFB000), glow = Color(0xFFFFB000),
     scan = Color(0f, 0f, 0f, 0.22f), vignette = Color(0f, 0f, 0f, 0.55f), light = false, ansi = darkAnsi,
     tints = Tints(edit = Color(0xFFFFB000), nav = Color(0xFF3AD6FF), ctrl = Color(0xFFFF7A1A), fn = Color(0xFFC68CFF), danger = Color(0xFFFF3B3B), start = Color(0xFF39FF14), info = Color(0xFF3A9BFF), act = Color(0xFFFFB000)),
+    syntax = Syntax(string = Color(0xFFA8E6A0), number = Color(0xFF3AD6FF), keyword = Color(0xFFFF7A1A), name = Color(0xFFC68CFF)),
 )
 val Green = Palette(
     bg = Color(0xFF050806), panel = Color(0xFF0A120C), ink = Color(0xFF39FF14), dim = Color(0xFF1F8F14), faint = Color(0xFF0F4A0C),
     accent = Color(0xFFB6FF9E), attention = Color(0xFF39FF14), alert = Color(0xFFFF3B3B), claude = Color(0xFFD97757), ok = Color(0xFF39FF14), glow = Color(0xFF39FF14),
     scan = Color(0f, 0f, 0f, 0.22f), vignette = Color(0f, 0f, 0f, 0.55f), light = false, ansi = darkAnsi,
     tints = Tints(edit = Color(0xFF39FF14), nav = Color(0xFF3AD6FF), ctrl = Color(0xFFFFB000), fn = Color(0xFFC68CFF), danger = Color(0xFFFF3B3B), start = Color(0xFF39FF14), info = Color(0xFF3A9BFF), act = Color(0xFFFFB000)),
+    syntax = Syntax(string = Color(0xFFFFD36B), number = Color(0xFF3AD6FF), keyword = Color(0xFFFF7A1A), name = Color(0xFFC68CFF)),
 )
 val Paper = Palette(
     bg = Color(0xFFF1EAD8), panel = Color(0xFFE8DFC8), ink = Color(0xFF1F2A1F), dim = Color(0xFF5A6A5A), faint = Color(0xFFB9B39F),
     accent = Color(0xFF0B5D1E), attention = Color(0xFF1F2A1F), alert = Color(0xFFA3161B), claude = Color(0xFFD97757), ok = Color(0xFF0B5D1E), glow = Color(0xFF1F2A1F),
     scan = Color(0f, 0f, 0f, 0.04f), vignette = Color(0f, 0f, 0f, 0.08f), light = true, ansi = paperAnsi,
     tints = Tints(edit = Color(0xFF1F2A1F), nav = Color(0xFF0B5D8A), ctrl = Color(0xFF9A5B00), fn = Color(0xFF5B2D8A), danger = Color(0xFFA3161B), start = Color(0xFF0B5D1E), info = Color(0xFF0B4F8A), act = Color(0xFF9A5B00)),
+    syntax = Syntax(string = Color(0xFF0B5D1E), number = Color(0xFF0B4F8A), keyword = Color(0xFF9A5B00), name = Color(0xFF5B2D8A)),
 )
 
 /** The tint of a key's group, and of a command's tone. */

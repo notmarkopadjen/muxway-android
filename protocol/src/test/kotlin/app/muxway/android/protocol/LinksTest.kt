@@ -82,9 +82,14 @@ class LinksTest {
             Links.findPaths("1. docs/plans/2026-10-26-fit-keeps-still.md: fit ignores, see ~/notes/todo.txt and /var/log/app.log.").map { it.path },
         )
         assertEquals(listOf("./out/report.csv", "../shot.PNG"), Links.findPaths("wrote ./out/report.csv (3 rows) and ../shot.PNG").map { it.path })
-        for (s in listOf("README.md", "notes.txt in the dir", "docs/plans/x.md.bak", "bin/run.sh", "keys/agent.key", "a/b.mdx", "x/y.md-")) {
+        for (s in listOf("README.md", "notes.txt in the dir", "docs/plans/x.md.bak", "bin/run.exe", "keys/agent.key", "certs/host.crt", "config/x.env", "src/Makefile.am", "a/b.mdx", "x/y.md-")) {
             assertEquals(s, emptyList<Links.PathLink>(), Links.findPaths(s))
         }
+        // The types of a project: sources, markup, config, archives, names without an extension.
+        assertEquals(
+            listOf("src/tx.py", "./Views/Home/Index.cshtml", "api/v1.proto", "ops/main.tf", "scripts/run.ps1", "out/a.diff", "src/Makefile", "./Dockerfile", "/opt/x/LICENSE", "~/dl/report.xlsx", "a/b.PY"),
+            Links.findPaths("src/tx.py ./Views/Home/Index.cshtml api/v1.proto ops/main.tf scripts/run.ps1 out/a.diff src/Makefile ./Dockerfile /opt/x/LICENSE ~/dl/report.xlsx a/b.PY").map { it.path },
+        )
         assertEquals(true, Links.isImage(name))
         assertEquals(false, Links.isImage("20261025-102235-56fwge.pdf"))
     }

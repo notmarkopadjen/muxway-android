@@ -15,8 +15,11 @@ object Links {
     data class PathLink(val start: Int, val end: Int, val path: String)
 
     private val file = Regex("""/(?:\S*?/)?(\d{8}-\d{6}-[a-z0-9]{6}\.(?:png|jpg|gif|webp|pdf|txt|md|json|zip))(?!\.?[A-Za-z0-9_])""")
+    // The protocol's list of what a host previews, by extension or by name (the browser's types.ts).
+    private const val EXT = "webmanifest|properties|markdown|mustache|geojson|targets|gemspec|graphql|service|ndjson|svelte|coffee|cshtml|csproj|vbproj|fsproj|nuspec|pubxml|config|gradle|groovy|tfvars|socket|jinja2|liquid|patch|jsonl|json5|jsonc|ipynb|props|plist|xhtml|astro|razor|axaml|scala|swift|proto|cmake|timer|mount|jinja|adoc|diff|json|yaml|toml|conf|lock|xslt|html|scss|sass|less|styl|xaml|resx|rake|java|cljs|cljc|lisp|dart|bash|fish|psm1|psd1|http|rest|tmpl|mako|glsl|hlsl|vert|frag|jpeg|webp|avif|docx|xlsx|pptx|txt|rst|org|tex|bib|csv|tsv|log|yml|ini|cfg|xml|xsd|xsl|dtd|svg|htm|css|jsx|mjs|cjs|tsx|vue|csx|sln|mod|sum|pyi|pyx|pxd|pxi|erb|kts|sbt|clj|edn|scm|rkt|cpp|hpp|cxx|hxx|inl|cuh|php|lua|rmd|lhs|exs|erl|hrl|mli|fsx|fsi|pas|nim|zig|elm|zsh|ps1|bat|cmd|awk|sql|gql|hcl|nix|ics|map|tpl|hbs|ejs|njk|f90|f95|f03|for|asm|sol|wat|png|jpg|gif|bmp|ico|pdf|zip|tgz|tar|odt|ods|odp|md|js|ts|cs|go|py|rb|rs|kt|el|cc|hh|cu|mm|pl|pm|jl|hs|ex|ml|fs|vb|cr|sh|tf|mk|j2|gz|7z|c|h|m|r|d|v|f|s"
+    private const val NAME = "containerfile|contributors|gnumakefile|jenkinsfile|vagrantfile|dockerfile|codeowners|changelog|makefile|rakefile|procfile|brewfile|gemfile|license|licence|changes|authors|copying|install|version|notice|readme|todo"
     private val path = Regex(
-        """(?<![\w./~-])((?:~|\.{1,2})?(?:/[\w.@+-]+)+|(?:[\w.@+-]+/)+[\w.@+-]+)\.(?:txt|md|markdown|csv|tsv|json|log|ya?ml|toml|ini|xml|html|png|jpe?g|gif|webp|pdf)(?!\.?[\w/-])""",
+        """(?<![\w./~-])(?:(?:~|\.{1,2})?(?:/[\w.@+-]+)+\.(?:$EXT)(?!\.?[\w/-])|(?:~|\.{1,2})?(?:/[\w.@+-]+)*/(?:$NAME)(?![\w./-])|(?:[\w.@+-]+/)+[\w.@+-]+\.(?:$EXT)(?!\.?[\w/-])|(?:[\w.@+-]+/)+(?:$NAME)(?![\w./-]))""",
         RegexOption.IGNORE_CASE,
     )
     private val image = Regex("""\.(png|jpe?g|gif|webp)$""", RegexOption.IGNORE_CASE)

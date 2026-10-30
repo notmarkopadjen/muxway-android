@@ -40,6 +40,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -152,7 +153,8 @@ fun FileSheet(model: AppModel, shown: Shown, onOpen: (Shown) -> Unit = {}, onClo
                     }
                     text -> {
                         // Code in its colours, by the file's extension; anything else as it is.
-                        val lines = remember(f) { String(f.bytes, Charsets.UTF_8).let { s -> if (lang != null) Code.lines(Code.tokenize(lang, s)).map { coloured(it, p) } else s.split('\n').map { AnnotatedString(it) } } }
+                        val glow = LocalEffects.current && !p.light
+                        val lines = remember(f, glow) { String(f.bytes, Charsets.UTF_8).let { s -> if (lang != null) Code.lines(Code.tokenize(lang, s)).map { coloured(it, p, glow) } else s.split('\n').map { AnnotatedString(it) } } }
                         val sideways = rememberScrollState()
                         LazyColumn(Modifier.fillMaxWidth().horizontalScroll(sideways)) {
                             items(lines.size) { i -> Text(lines[i], color = p.ink, maxLines = 1, softWrap = false) }
@@ -178,7 +180,8 @@ private fun Blocks(blocks: List<Markdown.Block>, p: Palette, onPath: (String) ->
             // The fence's language picks the colours.
             val sideways = rememberScrollState()
             val lang = Code.languageOf(b.lang)
-            val lines = if (lang != null) Code.lines(Code.tokenize(lang, b.text)).map { coloured(it, p) } else b.text.split('\n').map { AnnotatedString(it) }
+            val glow = LocalEffects.current && !p.light
+            val lines = if (lang != null) Code.lines(Code.tokenize(lang, b.text)).map { coloured(it, p, glow) } else b.text.split('\n').map { AnnotatedString(it) }
             Column(Modifier.fillMaxWidth().padding(vertical = 2.dp).background(p.panel).padding(4.dp).horizontalScroll(sideways)) {
                 for (line in lines) Text(if (line.isEmpty()) AnnotatedString(" ") else line, color = p.ink, maxLines = 1, softWrap = false)
             }
@@ -226,15 +229,26 @@ private fun DiffView(d: Diff, p: Palette) {
     }
 }
 
-/** One line of code in its colours: comments dim and italic, strings and numbers in the accent, keywords bold, punctuation dim. */
-private fun coloured(runs: List<Code.Run>, p: Palette): AnnotatedString = buildAnnotatedString {
+/**
+ * One line of code in its colours, the browser's: comments dim and italic, strings, numbers,
+ * keywords (bold too) and names each in the palette's hue, glowing in it where text glows,
+ * punctuation dim.
+ */
+private fun coloured(runs: List<Code.Run>, p: Palette, glow: Boolean): AnnotatedString = buildAnnotatedString {
+    fun hue(c: Color, bold: Boolean = false) = SpanStyle(
+        color = c,
+        fontWeight = if (bold) FontWeight.Bold else null,
+        shadow = if (glow) Shadow(c.copy(alpha = 0.5f), blurRadius = 4f) else null,
+    )
     for (r in runs) {
         val style = when (r.kind) {
             Code.Kind.COMMENT -> SpanStyle(color = p.dim, fontStyle = FontStyle.Italic)
-            Code.Kind.STRING, Code.Kind.NUMBER -> SpanStyle(color = p.accent)
-            Code.Kind.KEYWORD -> SpanStyle(fontWeight = FontWeight.Bold)
+            Code.Kind.STRING -> hue(p.syntax.string)
+            Code.Kind.NUMBER -> hue(p.syntax.number)
+            Code.Kind.KEYWORD -> hue(p.syntax.keyword, bold = true)
+            Code.Kind.NAME -> hue(p.syntax.name)
             Code.Kind.PUNCT -> SpanStyle(color = p.dim)
-            Code.Kind.NAME, Code.Kind.TEXT -> null
+            Code.Kind.TEXT -> null
         }
         if (style == null) append(r.text) else withStyle(style) { append(r.text) }
     }

@@ -31,10 +31,15 @@ Effects, on by default and off with the **effects** setting:
 - a mark that waits for you pulses;
 - a selected button is inverted and its border lit;
 - code is coloured as the browser colours it (`protocol/Code.kt`): a
-  fenced block's language in Markdown and a file's extension in the
-  sheet pick a small scanner that tells comments (dim, italic), strings
-  and numbers (the accent), keywords (bold), names and punctuation (dim)
-  apart; an unknown language is plain;
+  fenced block's language in Markdown and a file's extension or name in
+  the sheet pick a small scanner that tells comments (dim, italic),
+  strings, numbers, keywords (bold too) and names apart, each in a hue
+  of the palette's `Syntax` set (the browser's tokens: amber strings
+  pale green, numbers cyan, keywords orange, names violet; green strings
+  yellow; paper green, blue, brown, violet), glowing in its hue where
+  text glows; punctuation is dim; an unknown language is plain. Code is
+  the one place a second hue carries meaning (the owner's decision of
+  2026-10-30);
 - the key row's groups and the command row's tones carry a discreet
   tint on the border and the ground, never the ink: editing, direction,
   control and function keys; danger, start, info and act commands. The
