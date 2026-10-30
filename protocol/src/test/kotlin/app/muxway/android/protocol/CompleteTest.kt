@@ -62,8 +62,8 @@ class CompleteTest {
 
     @Test
     fun anyWordTwoLettersInGetsTheScreensWordsAfterTheCommands() {
-        val words = Complete.screenWords("ls\ndocs/plans/a.md  notes.txt  README\n$ cat docs/plans/a.md\n│ quoted │\nhi there, Marko.")
-        assertEquals(listOf("Marko", "there", "quoted", "docs/plans/a.md"), words.take(4))
+        val words = Complete.screenWords("ls\ndocs/plans/a.md  notes.txt  README\n$ cat docs/plans/a.md\n│ quoted │\nhi there, Alice.")
+        assertEquals(listOf("Alice", "there", "quoted", "docs/plans/a.md"), words.take(4))
         assertTrue("ls" !in words && "│" !in words)
         assertEquals(listOf(Complete.Offer("docs/plans/a.md", true)), Complete.offers(shell, "cat do", 6, emptyList(), words))
         assertTrue(Complete.offers(shell, "d", 1, emptyList(), words).none { it.word })

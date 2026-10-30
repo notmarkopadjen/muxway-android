@@ -60,11 +60,9 @@ annotations on the commit (the test-reporter action reading
 `results.xml`), and its run directory is kept as a workflow artifact for 90
 days.
 
-The workflow checks out the core next to this repository and points
-`MUXWAY_CORE` at it. While the core is private the checkout uses the
-`MUXWAY_CORE_TOKEN` secret, a fine-grained token that may only read that
-repository's contents; once it is public the job's own token is enough and
-the secret can go. The runner has no device, so the UI run is skipped there.
+The workflow checks out the core next to this repository with the job's
+own token and points `MUXWAY_CORE` at it. The runner has no device, so the
+UI run is skipped there.
 
 ```mermaid
 sequenceDiagram
@@ -123,7 +121,7 @@ environment, runs the suite, writes one run directory under `test-runs/`
 with at least `summary.md` and `results.xml` (JUnit), and exits non-zero if
 any test failed.
 
-Considered and not used: an Allure report on GitHub Pages (needs a paid plan
-while private; may be added for trends once public), and committing runs to
+Considered and not used: an Allure report on GitHub Pages (may be added
+for trends), and committing runs to
 the repository (logs and screenshots would risk leaking private data into
 permanent history).
