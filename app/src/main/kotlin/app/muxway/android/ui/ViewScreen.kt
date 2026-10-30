@@ -1114,7 +1114,7 @@ private fun PaneTile(
                 return index to screenRows - (shown.size - 1 - index)
             }
             Box(Modifier.fillMaxSize().pointerInput(address) { pinch { z -> zoom = (zoom * z).coerceIn(0.5f, 4f) } }
-                .pointerInput(address, top, colPx, rowPx, previews, screenRows, cursorRow) {
+                .pointerInput(address, top, colPx, rowPx, previews, clickable, wheel, screenRows, cursorRow) {
                     detectTapGestures(
                         onLongPress = { at ->
                             val (index, _) = rowAt(at.y) ?: return@detectTapGestures
