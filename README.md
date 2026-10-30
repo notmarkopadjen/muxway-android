@@ -14,6 +14,8 @@ Wear OS watch. Security first: a tmux pane is a shell.
 > complications, a tile, and a pane's tail with a few answers and the
 > microphone on the wrist.
 
+![The phone unfolded: three tiles, a docs shell across the top, an API log and htop below, from two hosts, and the Claude pane parked in the row above the keys](docs/images/tiles.png)
+
 ## Only here
 
 What the phone and the watch add to reaching a terminal from a pocket:
@@ -74,6 +76,16 @@ keys;
 the host's own width; amber by default, phosphor green, and paper for
 daylight; a lens knows one agent's screen, and the Claude Code lens is
 the one there is today.
+
+## The screens
+
+<table>
+<tr>
+<td align="center"><img src="docs/images/panes.png" width="240" alt="The pane list: two hosts, each with its panes, a Claude pane waiting at the top and a shell marked done"><br><sub>the list, every host</sub></td>
+<td align="center"><img src="docs/images/claude.png" width="240" alt="A Claude Code pane on the phone: the diff it made, its permission box, the key bar, the slash command row and the microphone by the input line"><br><sub>Claude asks; the keys and its commands below</sub></td>
+<td align="center"><img src="docs/images/file.png" width="240" alt="The same pane with a printed path tapped: the diagram it names open in a sheet over the pane, with its size and a download"><br><sub>a printed path tapped</sub></td>
+</tr>
+</table>
 
 ## On the wrist
 
