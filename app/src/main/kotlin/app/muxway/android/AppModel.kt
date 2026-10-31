@@ -22,6 +22,7 @@ import app.muxway.android.files.Attachments
 import app.muxway.android.protocol.Commands
 import app.muxway.android.protocol.Files
 import app.muxway.android.protocol.Host
+import app.muxway.android.protocol.Inbox
 import app.muxway.android.protocol.HubUrl
 import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.Keys
@@ -228,6 +229,28 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     var sharing by mutableStateOf(listOf<Uri>())
         private set
 
+    /** Whether the inbox sheet is open, and what every hub's `/v1/inbox` answered while it was. */
+    var inboxOpen by mutableStateOf(false)
+    var inboxRows by mutableStateOf<List<Pane>?>(null)
+        private set
+
+    /** The panes that wait for you, on every hub, oldest first, from the listings held here. */
+    val waiting: List<Pane> get() = Inbox.waiting(panes)
+
+    /** Asks every hub for its inbox and keeps the union, oldest first; a hub that fails keeps its last rows. */
+    suspend fun fetchInbox() {
+        val rows = ArrayList<Pane>()
+        for (c in connections) {
+            try {
+                rows.addAll(withContext(Dispatchers.IO) { c.api().inbox() }.map { it.copy(hub = c.id) })
+            } catch (e: ApiException) {
+                if (e.code == "unauthorized") tokenRefused(c)
+                rows.addAll(inboxRows.orEmpty().filter { it.hub == c.id })
+            }
+        }
+        inboxRows = Inbox.waiting(rows)
+    }
+
     /** The host a new session is being named for, while its dialog shows. */
     var naming by mutableStateOf<Naming?>(null)
     var creating by mutableStateOf(false)
@@ -260,6 +283,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     fun hubName(id: String): String = settings.hubs.firstOrNull { it.id == id }?.name ?: ""
 
     fun open(s: Screen) {
+        inboxOpen = false
         if (s is Screen.Panes) { selected.clear(); refreshList() }
         if (s !is Screen.Share) sharing = emptyList()
         screen = s

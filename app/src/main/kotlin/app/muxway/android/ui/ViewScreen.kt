@@ -363,8 +363,10 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             // Tap: fit on, or send this size once more when it is on already; hold: fit off.
             Btn("⤢", { if (fit) fitAgain++ else fit = true }, selected = fit, enabled = writable, onLongClick = { fit = false })
             if (hardware) Btn("abc", { ime = !ime; if (ime) { fieldFocus.request(); keyboard?.show() } else keyboard?.hide() }, selected = ime)
+            InboxCount(model)
             Btn("⚙", { model.open(Screen.Connect) })
         }
+        if (model.inboxOpen) InboxSheet(model, now) { model.inboxOpen = false }
         Rule()
         Box(Modifier.weight(1f)) {
             val held = if (ids != null) emptySet() else TileFit.held(tiles, focused, windowOf)

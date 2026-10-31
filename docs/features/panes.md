@@ -4,7 +4,7 @@ Every pane every hub lists for its token, from each hub's `GET /v1/panes`,
 grouped by hub (with more than one) and by host.
 
 ```
-┌─ muxway · panes ───────────── [refresh] [settings] ─┐
+┌─ muxway · panes ─────── [⚑ 2] [refresh] [settings] ─┐
 ══ home ══════════════════════════════════════════════
 ── alice-laptop ───────────────────────── + session ──
 * build        node          ! permission
@@ -28,6 +28,9 @@ grouped by hub (with more than one) and by host.
   `host/session/window.pane` dimmed, and the lens's word. A host with
   panes says `online` on its line; a hub whose listing failed shows the
   reason on its line and nothing under it until the next refresh answers.
+- `⚑ n` in the header, while any pane waits, counts them across every hub
+  and opens the [inbox](inbox.md): the waiting panes oldest first, with a
+  question's choices.
 - A pane with a pending notification shows `! <kind>` in the attention
   colour: `question`, `permission`, `idle` or `done`, see the core's
   [notifications](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/notifications.md).

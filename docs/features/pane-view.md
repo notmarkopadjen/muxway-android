@@ -55,7 +55,7 @@ focused pane.
   released when it is minimised, as a closed tile's is.
 - The **controls** sit at the right end of the same row: `▦` (with
   several panes) the next arrangement, `⤢` fit on or off, `abc` the on-screen keyboard (only with the hardware keyboard
-  setting), `⚙` settings.
+  setting), `⚑ n` while any pane waits (the [inbox](inbox.md)), `⚙` settings.
 - A **swipe** left or right across the page moves the focus to the next
   or previous tile, or with one tile open swaps the strip's next or
   previous pane into it, coming round at either end as `]` and `[` do
