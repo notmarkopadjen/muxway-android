@@ -1009,6 +1009,8 @@ private fun PaneTile(
                 Text(" ", maxLines = 1)
                 Mark(status, pane?.attention?.kind, ink)
                 Text(" ${Lens.word(status, pane?.attention?.kind)} ", color = ink, maxLines = 1, modifier = if (waiting) Modifier.alpha(pulse()) else Modifier)
+                // A question asked with fixed answers: its choices, answered here.
+                if (pane != null && waiting) Choices(model, pane)
             }
             if (fitAsked && pane?.writable == true) {
                 // Alert colour when the host did not keep this phone's size: another terminal holds

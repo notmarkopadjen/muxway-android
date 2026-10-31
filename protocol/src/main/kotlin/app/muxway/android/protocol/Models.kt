@@ -4,9 +4,10 @@ package app.muxway.android.protocol
  * [sessions]: the host's agent lets clients start sessions; [close]: and close writable panes;
  * [preview]: it serves files under roots its owner named, to writers, when a pane prints their paths.
  */
-data class Host(val name: String, val online: Boolean, val sessions: Boolean = false, val close: Boolean = false, val keys: Int = 0, val preview: Boolean = false, val hub: String = "")
+data class Host(val name: String, val online: Boolean, val sessions: Boolean = false, val close: Boolean = false, val keys: Int = 0, val preview: Boolean = false, val hub: String = "", val ask: Boolean = false)
 
-data class Attention(val kind: String, val at: Long, val text: String)
+/** [choices]: the fixed answers of a question asked with `muxway ask`, empty for any other notification. */
+data class Attention(val kind: String, val at: Long, val text: String, val choices: List<String> = emptyList())
 
 data class Pane(
     val host: String,
@@ -70,6 +71,7 @@ data class Event(
     val alias: String,
     val kind: String,
     val text: String,
+    val choices: List<String> = emptyList(),
 )
 
 data class Events(val events: List<Event>, val next: Long)
@@ -104,6 +106,7 @@ class ApiException(val status: Int, val code: String) : Exception(messageFor(sta
             "provider_unavailable" -> "Transcriber unavailable"
             "unsupported" -> "Not a type the host takes"
             "inbox_full" -> "The host's inbox is full"
+            "no_question" -> "Nothing waits there any more"
             "bad_json", "bad_input", "bad_parameter" -> "The hub refused the request"
             "no_mouse_hub" -> "This hub has no mouse support yet"
             "no_mouse_pane" -> "No mouse in this pane"

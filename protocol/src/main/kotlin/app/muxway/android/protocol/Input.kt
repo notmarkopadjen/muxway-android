@@ -128,4 +128,15 @@ object Input {
     }
 
     fun utf8Length(s: String) = s.toByteArray(Charsets.UTF_8).size
+
+    const val MIN_CHOICES = 2
+    const val MAX_CHOICES = 8
+    const val MAX_CHOICE = 40
+
+    /** One answer of a question: 1 to 40 printable characters without `|`, as the hub validates it. */
+    fun isChoice(s: String) = s.length in 1..MAX_CHOICE && printable(s) == s && '|' !in s
+
+    /** The hub's list of choices, or nothing when it does not fit: two to eight distinct choices. */
+    fun choices(list: List<String>): List<String> =
+        if (list.size in MIN_CHOICES..MAX_CHOICES && list.all(::isChoice) && list.toSet().size == list.size) list else emptyList()
 }

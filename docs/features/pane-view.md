@@ -94,7 +94,12 @@ focused pane.
   tab, with the pane's name (its status in italics, dimmer) and mode, the
   lens's word (`! permission`, `⟳ working`) and, with fit on, the size;
   the focused one has the thick border and bold name; a waiting tile
-  glows in the ink around its box.
+  glows in the ink around its box. A question asked with fixed answers
+  (`muxway ask` on the host) shows its choices as buttons after the word:
+  a tap sends the choice to the asking process through `/answer`,
+  nothing is typed into the pane, and the attention goes with it; the
+  buttons are dim on a read-only pane and while an answer is on its way
+  (see [notifications](notifications.md#questions-with-fixed-answers)).
 - The line under the input shows the time of the last successful read, or
   the error.
 

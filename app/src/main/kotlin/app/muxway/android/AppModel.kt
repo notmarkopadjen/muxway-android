@@ -789,6 +789,12 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     fun key(key: String, name: String) = send(key) { api, address -> api.key(address, name) }
 
     /**
+     * One of the fixed answers of the question the pane asked: a write, nothing typed into the
+     * pane. The hub lists the pane without its attention afterwards, so its hub is listed again.
+     */
+    fun answer(key: String, choice: String) = send(key) { api, address -> api.answer(address, choice) }.also { if (it) refreshList(conn(key)) }
+
+    /**
      * A spoken clip to the pane's hub's transcriber; [heard] gets the words, which the bar
      * shows and never sends by itself. A refusal lands in [sendError] like a refused send.
      * False while the pane is still busy with a send.
