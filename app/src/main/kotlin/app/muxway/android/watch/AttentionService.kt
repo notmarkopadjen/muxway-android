@@ -55,8 +55,12 @@ class AttentionService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        if (intent?.action == ACTION_ANSWER) {
+            answer(intent.getStringExtra(EXTRA_PANE).orEmpty(), intent.getStringExtra(EXTRA_CHOICE).orEmpty())
+            return START_STICKY
+        }
         val vault = Vault(this)
-        val apis = LinkedHashMap<String, Api>()
+        apis.clear()
         for (h in settings.hubs) vault.token(h.id)?.let { apis[h.id] = Api(h.url, it, "muxway-android/" + BuildConfig.VERSION_NAME) }
         if (apis.isEmpty() || !settings.watch) {
             stopSelf()
@@ -72,6 +76,27 @@ class AttentionService : Service() {
         return START_STICKY
     }
 
+    /**
+     * A choice tapped on a question's notification. The pane must be in the last listing,
+     * writable, and the choice one it offers; then it goes to its hub as the app would send it.
+     */
+    private fun answer(key: String, choice: String) {
+        val pane = panes.firstOrNull { it.key == key } ?: return
+        val api = apis[pane.hub] ?: return
+        if (!pane.writable || choice !in pane.attention?.choices.orEmpty()) return
+        scope.launch {
+            val error = try {
+                api.answer(pane.address, choice)
+                null
+            } catch (e: ApiException) {
+                e.message
+            }
+            notifier.answered(key, error)
+        }
+    }
+
+    private val apis = LinkedHashMap<String, Api>()
+
     /** Each hub's panes, by hub id; the board is their union. */
     private val byHub = HashMap<String, List<Pane>>()
     private val lastKind = ConcurrentHashMap<String, String>()
@@ -81,7 +106,7 @@ class AttentionService : Service() {
         if (listed == null) byHub.remove(hub) else byHub[hub] = listed
         panes = byHub.values.flatten()
         board = Board.rank(panes, System.currentTimeMillis() / 1000, settings.notifyText) { Lens.status(it, lastKind[it.key], false) }
-        notifier.show(board)
+        notifier.show(board, panes.filter { it.writable }.map { it.key }.toSet())
         bridge.push(board)
     }
 
@@ -120,6 +145,9 @@ class AttentionService : Service() {
 
     companion object {
         const val ACTION_STOP = "app.muxway.android.watch.STOP"
+        const val ACTION_ANSWER = "app.muxway.android.watch.ANSWER"
+        const val EXTRA_PANE = "pane"
+        const val EXTRA_CHOICE = "choice"
 
         /** The gate the watch's requests go through, while the service runs. */
         @Volatile var gate: WatchGate? = null

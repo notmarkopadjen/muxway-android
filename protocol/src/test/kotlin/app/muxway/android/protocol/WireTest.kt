@@ -31,6 +31,14 @@ class WireTest {
     }
 
     @Test
+    fun anAnswerCarriesItsChoiceCleanedAndCapped() {
+        val a = Wire.request(Wire.ANSWER, Wire.answer("a1", address, "yes")) as Wire.Answer
+        assertEquals("yes", a.choice)
+        val long = Wire.request(Wire.ANSWER, Wire.answer("a2", address, "x".repeat(100) + "\u0007")) as Wire.Answer
+        assertEquals(40, long.choice.length)
+    }
+
+    @Test
     fun answersRoundTrip() {
         val tail = Wire.Tail("r1", address, "\"b2\"", listOf("$ make deploy", "Deploy to prod? (y/N)"), true, true)
         assertEquals(tail, Wire.tail(Wire.tail(tail)))

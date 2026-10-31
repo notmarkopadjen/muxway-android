@@ -5,7 +5,7 @@ import org.json.JSONException
 import org.json.JSONObject
 
 /** One pane as a glanceable client shows it: [address] is its key (see [Keys]); [state] is one of [Board.QUIET], [Board.WORKING], [Board.WAITING]. */
-data class Row(val address: String, val name: String, val state: Int, val kind: String, val at: Long, val text: String) {
+data class Row(val address: String, val name: String, val state: Int, val kind: String, val at: Long, val text: String, val choices: List<String> = emptyList()) {
     val status: Lens.Status
         get() = when (state) {
             Board.WAITING -> Lens.Status.WAITING
@@ -38,7 +38,9 @@ data class Board(val rows: List<Row>, val at: Long, val live: Boolean) {
     fun json(): String {
         val arr = JSONArray()
         for (r in rows) {
-            arr.put(JSONObject().put("address", r.address).put("name", r.name).put("state", r.state).put("kind", r.kind).put("at", r.at).put("text", r.text))
+            val o = JSONObject().put("address", r.address).put("name", r.name).put("state", r.state).put("kind", r.kind).put("at", r.at).put("text", r.text)
+            if (r.choices.isNotEmpty()) o.put("choices", JSONArray(r.choices))
+            arr.put(o)
         }
         return JSONObject().put("v", 1).put("at", at).put("live", live).put("rows", arr).toString()
     }
@@ -67,6 +69,7 @@ data class Board(val rows: List<Row>, val at: Long, val live: Boolean) {
                     kind = if (s == Lens.Status.WAITING) a?.kind.orEmpty() else "",
                     at = a?.at ?: 0L,
                     text = if (withText && s == Lens.Status.WAITING) a?.text.orEmpty() else "",
+                    choices = if (s == Lens.Status.WAITING) a?.choices.orEmpty() else emptyList(),
                 )
             }
             val sorted = rows.sortedWith(compareByDescending<Row> { it.state }.thenBy { if (it.state == WAITING) it.at else 0L }.thenBy { it.address })
@@ -84,7 +87,7 @@ data class Board(val rows: List<Row>, val at: Long, val live: Boolean) {
                     val r = arr.optJSONObject(i) ?: continue
                     val address = clean(r.optString("address"))
                     if (!Keys.valid(address)) continue
-                    rows.add(Row(address, clean(r.optString("name")), r.optInt("state").coerceIn(QUIET, WAITING), clean(r.optString("kind")), r.optLong("at"), clean(r.optString("text"))))
+                    rows.add(Row(address, clean(r.optString("name")), r.optInt("state").coerceIn(QUIET, WAITING), clean(r.optString("kind")), r.optLong("at"), clean(r.optString("text")), choices(r.optJSONArray("choices"))))
                 }
                 Board(rows, o.optLong("at"), o.optBoolean("live"))
             } catch (e: JSONException) {
@@ -93,6 +96,12 @@ data class Board(val rows: List<Row>, val at: Long, val live: Boolean) {
         }
 
         private fun clean(s: String): String = Input.printable(s).take(200)
+
+        /** A question's choices, within what the hub allows, else none. */
+        private fun choices(arr: JSONArray?): List<String> {
+            if (arr == null || arr.length() > Input.MAX_CHOICES) return emptyList()
+            return Input.choices((0 until arr.length()).map { arr.optString(it) })
+        }
     }
 }
 
