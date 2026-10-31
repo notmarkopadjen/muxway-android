@@ -21,10 +21,10 @@ focused pane.
 
 - `‹` at the top left goes back to the pane list.
 - The **tab strip** lists every pane the token may read, in listing order,
-  by name: Claude Code's codename behind Claude's mark, else the command
-  and what the program says of itself (see [lenses](lenses.md)). Each tab
-  is **painted with its state** from
-  the [Claude lens](lenses.md): the attention colour when the pane waits
+  by name: an AI agent's status behind its mark (Claude's codename behind
+  the spark), else the command and what the program says of itself (see
+  [lenses](lenses.md)). Each tab is **painted with its state** from
+  the [lens](lenses.md): the attention colour when the pane waits
   for you (`!` `?` `z` `✓`, pulsing), dim when it works (`⟳`), plain when
   quiet. Selection never changes the colour: the open pane has a thick
   border and its name in bold. Tapping another tab switches to that pane.
@@ -357,8 +357,8 @@ it is writable:
   `not a type the host takes`, `too large, 8 MiB at most`, the hub's
   code in words. See [attachments.md](attachments.md);
 - **completion**: while a word is being typed, a row above the line
-  offers, for the first word, what the program takes — Claude Code's
-  slash commands, or a shell's starters and the lines sent to a shell
+  offers, for the first word, what the program takes — Claude Code's,
+  Codex's or Antigravity's slash commands, or a shell's starters and the lines sent to a shell
   from this phone — and for any word two letters in the words on the
   pane's screen, newest first, each marked `⇥` after the commands; eight
   at most. A tap takes one onto the line with a space after it, ready
@@ -370,13 +370,17 @@ it is writable:
   program in the pane and scrolls sideways. Claude Code's pane (the lens
   decides) gets `/clear`, `/exit`, `/compact`, `/rename`, `/model`,
   `/resume`, `/usage`, `/context`, `/help` and the browser's fifteen
-  more of its slash commands behind Claude's mark; a shell gets `exit`,
-  `htop`, `claude`, `claude -c`, `claude --resume`, `codex`, `gemini`,
+  more of its slash commands behind Claude's mark; a Codex pane its
+  eleven (`/new`, `/quit`, `/compact`, `/model`, `/approvals`, …) behind
+  the hexagon, an Antigravity pane its twenty-two (`/clear`, `/exit`,
+  `/rewind`, `/resume`, `/plan`, …) behind the chevron; a shell gets `exit`,
+  `htop`, `claude`, `claude -c`, `claude --resume`, `codex`, `agy`, `gemini`,
   `git status`, `git diff`, `git log`, `git pull`, `git push`, `git
   stash`, `git stash pop`, `make`, `make test`, `npm test`, `npm run
   build`, `docker ps`, `tmux ls`, `ls`, `ls -la`, `pwd`, `cd ..`,
-  `clear`, `history`, `df -h`, `free -h` behind `$`, then after a bar
-  the last eight lines sent to a shell from this phone, newest first.
+  `clear`, `history`, `df -h`, `free -h` behind `$`, each AI starter with
+  the mark of what it starts, then after a bar the last eight lines sent
+  to a shell from this phone, newest first.
   Each button is tinted by its tone like the keys by their group: danger
   red (`/clear`, `exit`), start green (`/resume`, `claude`), info blue
   (`/help`, `git status`), the rest amber. A tap sends the command and

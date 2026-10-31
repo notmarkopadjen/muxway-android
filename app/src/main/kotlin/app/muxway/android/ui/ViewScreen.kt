@@ -672,28 +672,28 @@ private fun AddMenuPopup(model: AppModel, addresses: List<String>, tiles: List<S
             Modifier.width(300.dp).border(1.dp, p.ink).background(p.panel).padding(4.dp).testTag("add-menu")
                 .then(Modifier.heightIn(max = 420.dp)).verticalScroll(rememberScrollState()),
         ) {
-            val item: @Composable (String, String?, String?, () -> Unit) -> Unit = { label, place, reason, act ->
+            val item: @Composable (String, String?, String?, Lens.Agent?, () -> Unit) -> Unit = { label, place, reason, agent, act ->
                 Row(
                     Modifier.fillMaxWidth().clickable(enabled = reason == null, onClick = act).padding(horizontal = 4.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    if (agent != null) { AgentMark(agent); Text(" ", maxLines = 1) }
                     Text(label, color = if (reason == null) p.ink else p.faint, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     (reason ?: place)?.let { Text("  $it", color = p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)) }
                 }
             }
             for (row in rows) when (row) {
-                is AddMenu.Row.NewPane -> item("+ pane", "beside ${row.pane.tab}", row.reason) {
+                is AddMenu.Row.NewPane -> item("+ pane", "beside ${row.pane.tab}", row.reason, null) {
                     onClose(); model.splitWindow(row.pane, into = addresses)
                 }
-                is AddMenu.Row.NewSession -> item("+ session", "on ${row.host}", row.reason) {
+                is AddMenu.Row.NewSession -> item("+ session", "on ${row.host}", row.reason, null) {
                     onClose(); model.createError = null; model.naming = Naming(row.hub, row.host, into = addresses)
                 }
                 is AddMenu.Row.Rule -> Rule(Modifier.padding(vertical = 2.dp))
                 is AddMenu.Row.Heading -> Text(row.text, color = p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
                 is AddMenu.Row.Item -> {
                     val g = Lens.glyph(model.status(row.pane, now), row.pane.attention?.kind)?.let { "$it " } ?: ""
-                    val mark = if (Lens.isClaude(row.pane)) "${Lens.MARK} " else ""
-                    item("$g$mark${row.pane.tab}", row.pane.place, null) { onClose(); onPick(row.pane.key) }
+                    item("$g${row.pane.tab}", row.pane.place, null, Lens.agent(row.pane)) { onClose(); onPick(row.pane.key) }
                 }
             }
             if (rows.isEmpty()) Text("nothing to add", color = p.dim, modifier = Modifier.padding(4.dp))
@@ -831,14 +831,16 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
         Btn("Enter", { model.key(state.key, "Enter") }, enabled = !busy, tint = p.tint(Input.group("Enter")))
     }
     state.pane?.let { Commands.forPane(it, model.recent) }?.let { (kind, commands) ->
-        val claude = kind == Commands.Kind.CLAUDE
-        val fixed = if (claude) commands.size else Commands.SHELL.size
+        val shell = kind == Commands.Kind.SHELL
+        val fixed = if (shell) Commands.SHELL.size else commands.size
         Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (claude) " ${Lens.MARK} " else " $ ", color = if (claude) p.claude else p.dim, maxLines = 1)
+            if (shell) Text(" $ ", color = p.dim, maxLines = 1)
+            else { Text(" ", maxLines = 1); AgentMark(Lens.agent(state.pane!!)); Text(" ", maxLines = 1) }
             LazyRow(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 itemsIndexed(commands, key = { _, c -> c.text }) { i, c ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (i == fixed) Text(" │ ", color = p.faint, maxLines = 1)
+                        if (c.agent != null) { Text(" ", maxLines = 1); AgentMark(c.agent) }
                         Btn(c.label, {
                             if (c.send) model.type(state.key, c.text, enter = true)
                             else { line.setTextAndPlaceCursorAtEnd(c.text); fieldFocus.request() }

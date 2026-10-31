@@ -23,15 +23,15 @@ grouped by hub (with more than one) and by host.
   [connect](connect.md)), so a pick of several can span hubs.
 
 - A row is `*` for a pane this token may write, the lens's glyph, the
-  pane's name (its command and what the program says of itself, or
-  *Claude* and its codename, see [lenses](lenses.md)), its place
+  pane's name (its command and what the program says of itself, or an
+  AI agent's name with its mark and its status, see [lenses](lenses.md)), its place
   `host/session/window.pane` dimmed, and the lens's word. A host with
   panes says `online` on its line; a hub whose listing failed shows the
   reason on its line and nothing under it until the next refresh answers.
 - A pane with a pending notification shows `! <kind>` in the attention
   colour: `question`, `permission`, `idle` or `done`, see the core's
   [notifications](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/notifications.md).
-  A pane with a lens, Claude Code's for now, shows `⟳ working` while it
+  A pane running an AI agent the lens names shows `⟳ working` while it
   is busy (see [lenses](lenses.md)).
 - Hosts from `GET /v1/hosts` that are online with nothing exposed, and
   hosts that are offline, are listed after the panes.
