@@ -159,9 +159,10 @@ muxway hub token create --name phone --read 'alice-laptop/*' --write 'alice-lapt
 ```
 
 In the app: hub URL (`https://hub.example.com`), paste the token, **save and
-connect**. Or skip the typing: pipe the same command into
-`scripts/connect-qr.py https://hub.example.com`, which prints a QR code,
-and tap **scan code** in the app. The token goes into the Android Keystore
+connect**. Or skip the typing and tap **scan code** in the app: the hub's
+web admin page shows a QR code with every token it creates, and
+`scripts/connect-qr.py https://hub.example.com` prints the same code in a
+terminal when the token comes from the command above. The token goes into the Android Keystore
 and is never shown again. Plain HTTP is accepted only for `localhost`, so
 a hub without TLS is reached through `adb reverse` or an SSH tunnel.
 
