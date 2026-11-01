@@ -46,6 +46,7 @@ fun PanesScreen(model: AppModel) {
 
     Column(Modifier.fillMaxSize().padding(4.dp)) {
         Frame("muxway", crumb = "panes") {
+            InboxCount(model)
             Btn(if (model.listing) "…" else "refresh", { model.refreshList() }, enabled = !model.listing)
             Btn("settings", { model.open(Screen.Connect) })
         }
@@ -95,6 +96,7 @@ fun PanesScreen(model: AppModel) {
         Text(if (model.selected.isEmpty()) "  tap to open · hold to pick several" else "  ${model.selected.size}/4 · hold to pick more", color = p.dim, modifier = Modifier.padding(4.dp))
     }
     model.naming?.takeIf { it.into == null }?.let { SessionDialog(it, model) }
+    if (model.inboxOpen) InboxSheet(model, now) { model.inboxOpen = false }
 }
 
 /** `═══ work ═══`, a hub's line over its hosts, with its trouble when it has any. */

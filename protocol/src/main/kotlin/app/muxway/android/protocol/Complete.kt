@@ -2,7 +2,7 @@ package app.muxway.android.protocol
 
 /**
  * Completion on the input line, the browser's `term/complete.ts`: the first word gets the
- * program's own, Claude Code's slash commands, the command row's first, or for a shell its
+ * program's own, the AI CLI's slash commands, the command row's first, or for a shell its
  * starters and the lines sent before; any word, two letters in, also gets the words on the
  * pane's screen, newest first, marked so a tap takes one and send sends the line as typed.
  * Nothing the hub said is ever offered.
@@ -40,10 +40,11 @@ object Complete {
         val at = wordAt(text, caret) ?: return emptyList()
         val out = ArrayList<Offer>()
         if (at.first) {
-            val pool = when {
-                Lens.isClaude(p) -> Commands.CLAUDE.map { it.text.trim() } + SLASH
-                Commands.isShell(p.command) -> Commands.SHELL.map { it.text } + recent
-                else -> emptyList()
+            val pool = when (Lens.agent(p)) {
+                Lens.Agent.CLAUDE -> Commands.CLAUDE.map { it.text.trim() } + SLASH
+                Lens.Agent.CODEX -> Commands.CODEX.map { it.text.trim() }
+                Lens.Agent.ANTIGRAVITY -> Commands.ANTIGRAVITY.map { it.text.trim() }
+                else -> if (Commands.isShell(p.command)) Commands.SHELL.map { it.text } + recent else emptyList()
             }
             for (c in pool) if (c.startsWith(at.word) && out.none { it.text == c }) out.add(Offer(c, false))
         }

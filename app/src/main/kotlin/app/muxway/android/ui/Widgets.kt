@@ -59,6 +59,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -84,6 +87,8 @@ import android.net.Uri
 import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Pane
+import kotlin.math.cos
+import kotlin.math.sin
 
 /** `┌─ muxway ─┐ crumb ──── actions`: the header, brand in the pixel font. */
 @Composable
@@ -356,23 +361,65 @@ fun WorkingRing(color: Color, modifier: Modifier = Modifier) {
 }
 
 /**
- * The pane's name, Claude's mark before Claude, and its status after it in italics and dimmer;
- * as a [tab], Claude's codename alone.
+ * The marks of the AI CLIs, drawn with strokes so they are the same in every font, the web's
+ * geometry on a 20-unit box: a spark of twelve rays for Claude Code, a hexagon with a dot at
+ * its heart for Codex, a chevron lifted off its ground line for Antigravity. Decorative: the
+ * name beside them says who. Nothing for the rest.
+ */
+@Composable
+fun AgentMark(agent: Lens.Agent?, modifier: Modifier = Modifier) {
+    if (agent != Lens.Agent.CLAUDE && agent != Lens.Agent.CODEX && agent != Lens.Agent.ANTIGRAVITY) return
+    val color = LocalPalette.current.markOf(agent)
+    val fontSize = LocalTextStyle.current.fontSize
+    val size = with(LocalDensity.current) { if (fontSize.isSp) fontSize.toDp() else 12.dp }
+    Canvas(modifier.size(size)) {
+        val u = this.size.width / 20f
+        val c = Offset(this.size.width / 2f, this.size.height / 2f)
+        val stroke = Stroke(width = 1.6f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        fun at(x: Float, y: Float) = Offset(c.x + x * u, c.y + y * u)
+        when (agent) {
+            Lens.Agent.CLAUDE -> for (i in 0 until 12) {
+                val a = i * 30.0 * Math.PI / 180
+                val r = if (i % 2 == 1) 7f else 9f
+                drawLine(color, at((cos(a) * 3).toFloat(), (sin(a) * 3).toFloat()), at((cos(a) * r).toFloat(), (sin(a) * r).toFloat()), stroke.width, StrokeCap.Round)
+            }
+            Lens.Agent.CODEX -> {
+                val hex = Path()
+                for (i in 0 until 6) {
+                    val a = (i * 60 - 90) * Math.PI / 180
+                    val pt = at((cos(a) * 8).toFloat(), (sin(a) * 8).toFloat())
+                    if (i == 0) hex.moveTo(pt.x, pt.y) else hex.lineTo(pt.x, pt.y)
+                }
+                hex.close()
+                drawPath(hex, color, style = stroke)
+                drawCircle(color, 1.6f * u, c)
+            }
+            else -> {
+                val chevron = Path().apply { moveTo(at(-7f, 2f).x, at(-7f, 2f).y); lineTo(at(0f, -7f).x, at(0f, -7f).y); lineTo(at(7f, 2f).x, at(7f, 2f).y) }
+                drawPath(chevron, color, style = stroke)
+                drawLine(color, at(-5f, 7.5f), at(5f, 7.5f), stroke.width, StrokeCap.Round)
+            }
+        }
+    }
+}
+
+/**
+ * The pane's name, the agent's mark before it, and its status after it in italics and dimmer;
+ * as a [tab], an agent's status alone (Claude's codename).
  */
 @Composable
 fun PaneName(pane: Pane, ink: Color, dim: Color, bold: Boolean = false, tab: Boolean = false, modifier: Modifier = Modifier) {
-    val p = LocalPalette.current
     val d = Lens.describe(pane)
     val weight = if (bold) FontWeight.Bold else FontWeight.Normal
     val text = buildAnnotatedString {
-        if (tab && d.claude) withStyle(SpanStyle(fontWeight = weight)) { append(d.status.ifEmpty { d.name }) }
+        if (tab && d.agent != null) withStyle(SpanStyle(fontWeight = weight)) { append(d.status.ifEmpty { d.name }) }
         else {
             withStyle(SpanStyle(fontWeight = weight)) { append(d.name) }
             if (d.status.isNotEmpty()) withStyle(SpanStyle(color = dim, fontStyle = FontStyle.Italic)) { append(" · ${d.status}") }
         }
     }
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        if (d.claude) Text("${Lens.MARK} ", color = p.claude, maxLines = 1, style = LocalTextStyle.current.copy(shadow = null))
+        if (d.agent != null) { AgentMark(d.agent); if (d.agent == Lens.Agent.CLAUDE || d.agent == Lens.Agent.CODEX || d.agent == Lens.Agent.ANTIGRAVITY) Text(" ", maxLines = 1) }
         Text(text, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(shadow = null))
     }
 }

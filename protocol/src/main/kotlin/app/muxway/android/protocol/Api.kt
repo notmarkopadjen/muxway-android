@@ -51,6 +51,15 @@ class Api(private val baseUrl: String, private val token: String, private val us
         post("panes/${encode(address)}/input", Json.key(name))
     }
 
+    /** One of the fixed answers of the question the pane asked; a write, the choice as the listing carried it. */
+    fun answer(address: String, choice: String) {
+        require(Input.isChoice(choice)) { "choice" }
+        post("panes/${encode(address)}/answer", Json.choice(choice))
+    }
+
+    /** Every pane the token may read that waits for someone, oldest first. */
+    fun inbox(): List<Pane> = Json.inbox(get("inbox").body)
+
     /**
      * A mouse button at a cell (1-based) of the pane, the wheel turned [count] notches; a hub
      * without mouse input answers bad_json, one from before the count bad_input to a count.

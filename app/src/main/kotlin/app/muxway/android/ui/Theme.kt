@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import app.muxway.android.R
 import app.muxway.android.protocol.Commands
 import app.muxway.android.protocol.Input
+import app.muxway.android.protocol.Lens
 import app.muxway.android.store.Theme
 
 /**
@@ -36,7 +37,10 @@ data class Palette(
     val accent: Color,
     val attention: Color,
     val alert: Color,
+    /** The marks of the AI CLIs, the web's tokens: Claude's spark, Codex's hexagon, Antigravity's chevron. */
     val claude: Color,
+    val codex: Color,
+    val antigravity: Color,
     /** The ok colour: an added file, an added diff row; the warn colour is the ink. */
     val ok: Color,
     val glow: Color,
@@ -70,21 +74,21 @@ private val paperAnsi = colours(
 
 val Amber = Palette(
     bg = Color(0xFF0A0603), panel = Color(0xFF140B05), ink = Color(0xFFFFB000), dim = Color(0xFFA06C00), faint = Color(0xFF4A3200),
-    accent = Color(0xFFFFD36B), attention = Color(0xFFFFB000), alert = Color(0xFFFF3B3B), claude = Color(0xFFD97757), ok = Color(0xFFFFB000), glow = Color(0xFFFFB000),
+    accent = Color(0xFFFFD36B), attention = Color(0xFFFFB000), alert = Color(0xFFFF3B3B), claude = Color(0xFFD97757), codex = Color(0xFF2FBF9A), antigravity = Color(0xFF7AA2FF), ok = Color(0xFFFFB000), glow = Color(0xFFFFB000),
     scan = Color(0f, 0f, 0f, 0.22f), vignette = Color(0f, 0f, 0f, 0.55f), light = false, ansi = darkAnsi,
     tints = Tints(edit = Color(0xFFFFB000), nav = Color(0xFF3AD6FF), ctrl = Color(0xFFFF7A1A), fn = Color(0xFFC68CFF), danger = Color(0xFFFF3B3B), start = Color(0xFF39FF14), info = Color(0xFF3A9BFF), act = Color(0xFFFFB000)),
     syntax = Syntax(string = Color(0xFFA8E6A0), number = Color(0xFF3AD6FF), keyword = Color(0xFFFF7A1A), name = Color(0xFFC68CFF)),
 )
 val Green = Palette(
     bg = Color(0xFF050806), panel = Color(0xFF0A120C), ink = Color(0xFF39FF14), dim = Color(0xFF1F8F14), faint = Color(0xFF0F4A0C),
-    accent = Color(0xFFB6FF9E), attention = Color(0xFF39FF14), alert = Color(0xFFFF3B3B), claude = Color(0xFFD97757), ok = Color(0xFF39FF14), glow = Color(0xFF39FF14),
+    accent = Color(0xFFB6FF9E), attention = Color(0xFF39FF14), alert = Color(0xFFFF3B3B), claude = Color(0xFFD97757), codex = Color(0xFF2FBF9A), antigravity = Color(0xFF7AA2FF), ok = Color(0xFF39FF14), glow = Color(0xFF39FF14),
     scan = Color(0f, 0f, 0f, 0.22f), vignette = Color(0f, 0f, 0f, 0.55f), light = false, ansi = darkAnsi,
     tints = Tints(edit = Color(0xFF39FF14), nav = Color(0xFF3AD6FF), ctrl = Color(0xFFFFB000), fn = Color(0xFFC68CFF), danger = Color(0xFFFF3B3B), start = Color(0xFF39FF14), info = Color(0xFF3A9BFF), act = Color(0xFFFFB000)),
     syntax = Syntax(string = Color(0xFFFFD36B), number = Color(0xFF3AD6FF), keyword = Color(0xFFFF7A1A), name = Color(0xFFC68CFF)),
 )
 val Paper = Palette(
     bg = Color(0xFFF1EAD8), panel = Color(0xFFE8DFC8), ink = Color(0xFF1F2A1F), dim = Color(0xFF5A6A5A), faint = Color(0xFFB9B39F),
-    accent = Color(0xFF0B5D1E), attention = Color(0xFF1F2A1F), alert = Color(0xFFA3161B), claude = Color(0xFFD97757), ok = Color(0xFF0B5D1E), glow = Color(0xFF1F2A1F),
+    accent = Color(0xFF0B5D1E), attention = Color(0xFF1F2A1F), alert = Color(0xFFA3161B), claude = Color(0xFFD97757), codex = Color(0xFF2FBF9A), antigravity = Color(0xFF7AA2FF), ok = Color(0xFF0B5D1E), glow = Color(0xFF1F2A1F),
     scan = Color(0f, 0f, 0f, 0.04f), vignette = Color(0f, 0f, 0f, 0.08f), light = true, ansi = paperAnsi,
     tints = Tints(edit = Color(0xFF1F2A1F), nav = Color(0xFF0B5D8A), ctrl = Color(0xFF9A5B00), fn = Color(0xFF5B2D8A), danger = Color(0xFFA3161B), start = Color(0xFF0B5D1E), info = Color(0xFF0B4F8A), act = Color(0xFF9A5B00)),
     syntax = Syntax(string = Color(0xFF0B5D1E), number = Color(0xFF0B4F8A), keyword = Color(0xFF9A5B00), name = Color(0xFF5B2D8A)),
@@ -96,6 +100,14 @@ fun Palette.tint(g: Input.Group): Color = when (g) {
     Input.Group.NAV -> tints.nav
     Input.Group.CTRL -> tints.ctrl
     Input.Group.FN -> tints.fn
+}
+
+/** The colour of an agent's mark; the ink for one without a mark of its own. */
+fun Palette.markOf(agent: Lens.Agent?): Color = when (agent) {
+    Lens.Agent.CLAUDE -> claude
+    Lens.Agent.CODEX -> codex
+    Lens.Agent.ANTIGRAVITY -> antigravity
+    else -> ink
 }
 
 fun Palette.tint(t: Commands.Tone): Color = when (t) {

@@ -37,14 +37,20 @@ and <code>+ session</code> starts one, where the host's agent allows it.</td>
 <td><strong>Your AI agent calls you.</strong> When the agent in a pane asks a question,
 wants a permission, goes idle or finishes, the pane lights up in the
 list, the phone buzzes, the watch face and its complications count the
-waiting panes, and a tap lands on the pane behind the lock screen.
-Claude Code is the agent tested so far.</td>
+waiting panes, and a tap lands on the pane behind the lock screen. A
+question asked with fixed answers (<code>muxway ask</code>) is answered
+from the notification, the tile, the inbox or the wrist, nothing typed.
+<code>⚑ n</code> in the header opens the inbox: everything that waits,
+on every hub, oldest first. Claude Code, Codex, Gemini, Antigravity,
+OpenCode, Copilot and the rest are named, Codex and Antigravity with
+marks of their own.</td>
 </tr>
 <tr>
 <td valign="top"><img src="docs/images/icons/lens.png" width="54" alt=""></td>
 <td><strong>A pane on the wrist.</strong> The watch shows a pane's tail through the
-Claude Code lens, with the agent's answers as a reply menu, a row of
-keys and the microphone; <em>phone</em> opens the same pane on the phone.
+Claude Code lens, with a question's choices and the agent's answers as a
+reply menu, a row of keys and the microphone; <em>phone</em> opens the
+same pane on the phone.
 The watch may type only when the phone's owner allows it.</td>
 </tr>
 <tr>
@@ -77,8 +83,8 @@ new or existing, and `_` on a header parks a tile in a row above the
 keys;
 **fit** sizes the pane on the host to the phone, or pinch to read it at
 the host's own width; amber by default, phosphor green, and paper for
-daylight; a lens knows one agent's screen, and the Claude Code lens is
-the one there is today.
+daylight; the lens names every AI CLI and paints it with its state, and
+the Claude Code lens is the one that also reshapes a screen.
 
 ## The screens
 
@@ -109,6 +115,7 @@ The features: [connect](docs/features/connect.md),
 [panes](docs/features/panes.md), [pane view](docs/features/pane-view.md),
 [lenses](docs/features/lenses.md),
 [notifications](docs/features/notifications.md),
+[inbox](docs/features/inbox.md),
 [attachments](docs/features/attachments.md),
 [watch](docs/features/watch.md), [admin](docs/features/admin.md),
 [look](docs/features/look.md). How it is built:

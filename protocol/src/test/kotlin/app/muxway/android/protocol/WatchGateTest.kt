@@ -33,9 +33,10 @@ class WatchGateTest {
     @After
     fun stop() = server.close()
 
-    private fun pane(address: String, mode: String) = Pane(
+    private fun pane(address: String, mode: String, choices: List<String> = emptyList()) = Pane(
         host = "alice-laptop", address = address, session = "work", windowIndex = 0, window = "main", paneIndex = 1, paneId = "%5",
-        width = 80, height = 24, title = "deploy", command = "bash", mode = mode, alias = "", activity = 0, attention = null,
+        width = 80, height = 24, title = "deploy", command = "bash", mode = mode, alias = "", activity = 0,
+        attention = if (choices.isEmpty()) null else Attention("question", 1, "deploy?", choices),
     )
 
     private fun json(status: Int, body: String, headers: Map<String, String> = emptyMap()) =
@@ -69,6 +70,26 @@ class WatchGateTest {
         now += 2_000
         assertTrue(g.text(Wire.Text("t-typed", address, "echo hi\u0007\u001b[2J there", "", false)).ok)
         assertEquals(listOf("""{"text":"y"}""", """{"key":"Enter"}""", """{"text":"echo hi there"}"""), bodies())
+    }
+
+    @Test
+    fun anAnswerMustBeAChoiceTheListingCarriesForThatPane() {
+        answer = { r -> if (r.path.endsWith("/answer")) Response(204) else Response(404) }
+        panes = listOf(pane(address, "write", listOf("yes", "no")), pane("alice-laptop/work/0.2", "write"))
+        val g = gate()
+        assertEquals(WatchGate.REFUSED, g.answer(Wire.Answer("a1", address, "maybe")).error)
+        assertEquals(WatchGate.REFUSED, g.answer(Wire.Answer("a2", "alice-laptop/work/0.2", "yes")).error)
+        assertEquals(WatchGate.REFUSED, g.answer(Wire.Answer("a3", "alice-laptop/work/9.9", "yes")).error)
+        assertTrue(seen.isEmpty())
+        assertTrue(g.answer(Wire.Answer("a4", address, "yes")).ok)
+        assertEquals("/v1/panes/$address/answer", seen.single().path)
+        assertEquals("""{"choice":"yes"}""", String(seen.single().body))
+        allowed = false
+        now += 2_000
+        assertEquals(WatchGate.NOT_ALLOWED, g.answer(Wire.Answer("a5", address, "no")).error)
+        allowed = true
+        answer = { json(409, """{"error":"no_question"}""") }
+        assertEquals(WatchGate.NO_QUESTION, g.answer(Wire.Answer("a6", address, "no")).error)
     }
 
     @Test
