@@ -1,6 +1,6 @@
 # Feature: agent orchestration on the phone and the wrist
 
-> Status: draft, awaiting the owner's review. Follows the core's
+> Status: implemented on branch `agent-orchestration-parity`. Follows the core's
 > `docs/plans/2026-10-31-agent-orchestration.md` (muxway#181, merged as
 > PR #183), whose plan left the native clients to their own repositories.
 
@@ -240,11 +240,23 @@ reply menu), `docs/ARCHITECTURE.md` (protocol features used), the README
 
 ## Review (after implementation)
 
-- [ ] Diff matches the plan, deviations explained here
-- [ ] Security rules (AGENTS.md section 2) hold
-- [ ] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
-- [ ] Docs and diagrams updated
+- [x] Diff matches the plan. Deviations: the inbox sheet's badge counts
+  the listings in memory and the sheet reads `/v1/inbox` only while
+  open, as designed; test 12 (the notification's actions on a device)
+  and the UI screenshots of test 11 wait for a device run, which the
+  runner here does not have, so the actions are covered by the service's
+  unit of logic (`WatchGate`, `Notifier`) and the JVM end-to-end tests.
+- [x] Security rules (AGENTS.md section 2) hold: answers are writes under
+  the write grant and the pane's mark, choices are sent as listed, the
+  watch answers through the gate's check, the notification action
+  re-reads the choice against the service's own listing.
+- [x] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
+- [x] Docs and diagrams updated: lenses, notifications, inbox (new),
+  pane view, panes, watch, ARCHITECTURE, README, testing
 
 ## Test run
 
-Link to the recorded run: result, commit, logs, screenshots.
+Run `20261101-091402-6f16117`, **passed**, 248 tests, 0 failed, against
+the core at `50324f5`; recorded as
+[muxway-android#44](https://github.com/notmarkopadjen/muxway-android/issues/44).
+The UI suite was skipped: no device on the machine that ran it.
