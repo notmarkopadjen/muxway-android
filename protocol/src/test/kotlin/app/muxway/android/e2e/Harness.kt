@@ -137,7 +137,15 @@ class Core(private val logs: File) {
     /** Whether the first window is sized by hand (a fit holds it) rather than by its clients. */
     fun manual(): Boolean = tmux("show-options", "-wv", "-t", "work:0", "window-size").trim() == "manual"
 
-    fun notify(kind: String, text: String) = cli("notify", "--dir", agentDir.path, "--pane", paneId(), "--kind", kind, "--text", text)
+    fun notify(kind: String, text: String, pane: String = paneId()) = cli("notify", "--dir", agentDir.path, "--pane", pane, "--kind", kind, "--text", text)
+
+    /** `muxway ask` in a pane, waiting for a client's answer; [Ask.wait] gives its exit code and what it printed. */
+    fun ask(pane: String, text: String, vararg choices: String, timeout: String = "60s"): Ask {
+        val args = arrayListOf(bin, "ask", "--dir", agentDir.path, "--pane", pane, "--text", text, "--timeout", timeout)
+        for (c in choices) { args.add("--choice"); args.add(c) }
+        val p = ProcessBuilder(args).redirectError(ProcessBuilder.Redirect.appendTo(File(logs, "ask.log"))).start()
+        return Ask(p)
+    }
 
     fun close() {
         for (name in procs.keys.toList()) stop(name)
@@ -148,6 +156,18 @@ class Core(private val logs: File) {
         }
         dir.deleteRecursively()
     }
+}
+
+class Ask(private val process: Process) {
+    val alive get() = process.isAlive
+
+    /** The exit code and stdout once the ask ended; -1 when it is still waiting after [seconds]. */
+    fun wait(seconds: Long = 15): Pair<Int, String> {
+        if (!process.waitFor(seconds, TimeUnit.SECONDS)) return -1 to ""
+        return process.exitValue() to process.inputStream.bufferedReader().readText().trim()
+    }
+
+    fun kill() = process.destroyForcibly()
 }
 
 /** A repository with a trail of changes, as the core's own test makes it: one of each kind, odd names included. */
