@@ -4,7 +4,8 @@ package app.muxway.android.protocol
  * The phone's side of [Wire]: every request from the watch passes here before a hub sees
  * anything. The address is a key that must be in the current listing, and goes to its hub, a write needs the pane writable,
  * the owner's permission and room under the rate limit, and a text is cleaned as the phone
- * cleans its own; a heard clip is typed once, by its id. Nothing here logs.
+ * cleans its own; a heard clip is typed once, by its id; a question's answer must be one of
+ * the choices the listing carries for that pane. Nothing here logs.
  */
 class WatchGate(
     private val apiFor: (hub: String) -> Api?,
@@ -34,6 +35,11 @@ class WatchGate(
     }
 
     fun key(r: Wire.Key): Wire.Done = write(r, r.key.takeIf { it in Wire.KEYS }) { api, address, k -> api.key(address, k) }
+
+    fun answer(r: Wire.Answer): Wire.Done {
+        val offered = panes().firstOrNull { it.key == r.address }?.attention?.choices.orEmpty()
+        return write(r, r.choice.takeIf { it in offered }) { api, address, c -> api.answer(address, c) }
+    }
 
     fun text(r: Wire.Text): Wire.Done {
         val text = when {
@@ -107,6 +113,7 @@ class WatchGate(
     private fun reason(e: ApiException): String = when (e.code) {
         "read_only", "forbidden" -> READ_ONLY
         "bad_input", "not_found" -> REFUSED
+        "no_question" -> NO_QUESTION
         "rate_limited" -> RATE_LIMITED
         else -> NO_CONNECTION
     }
@@ -128,6 +135,8 @@ class WatchGate(
         /** The clip did not arrive whole. */
         const val NO_CLIP = "no_clip"
         const val READ_ONLY = "read_only"
+        /** The question was answered or ended before this answer arrived. */
+        const val NO_QUESTION = "no_question"
         const val TOO_SHORT = "too_short"
         const val RATE_LIMITED = "rate_limited"
         const val NO_TRANSCRIBER = "no_transcriber"

@@ -83,10 +83,10 @@ default `../muxway`) and runs four suites:
 
 | Suite | Where | What |
 |---|---|---|
-| unit | JVM | `protocol`: `Input`, `HubUrl`, `Json`, `Lens`, `Board` (ranking, hostile JSON), `Files` (the inbox's types, cap, multipart body, the path on the line), `Api` against a server that misbehaves; `wear`: `Face` (rows, overflow, the problem lines) |
+| unit | JVM | `protocol`: `Input`, `HubUrl`, `Json` (a question's choices within the hub's limits), `Lens` (every harness named), `Board` (ranking, choices, hostile JSON), `Inbox`, `WatchGate` (an answer only for an offered choice), `Files` (the inbox's types, cap, multipart body, the path on the line), `Api` against a server that misbehaves; `wear`: `Face` (rows, overflow, the problem lines) |
 | end-to-end | JVM | `E2ETest`: the protocol layer against a real hub, agent and tmux (with `--inbox default` for the file tests), through a recording relay; security tests first, a log search for secrets last |
 | check | JVM | `scripts/validate-face.sh`: the watch face against the Watch Face Format schema with Google's validator (fetched once into `tmp/`) |
-| UI | device | `FlowTest`: connect, list, open, type, back, settings, a screenshot per step |
+| UI | device | `FlowTest`: connect, list, open, type, back, settings, the inbox and a question's choices, a Codex pane's mark, a screenshot per step |
 
 The UI suite runs when `adb devices` lists a device (an emulator or a
 phone; the hub is reached through `adb reverse`) and is otherwise

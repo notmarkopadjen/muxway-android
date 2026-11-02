@@ -76,8 +76,8 @@ import kotlinx.coroutines.launch
  * tail is kept here in memory and nowhere else.
  */
 class PaneActivity : ComponentActivity() {
-    /** One row of the reply menu. */
-    private class Answer(val label: String, val text: String = "", val key: String = "", val enter: Boolean = false)
+    /** One row of the reply menu: a key, a text, or one of a question's choices, which goes to the asking process. */
+    private class Answer(val label: String, val text: String = "", val key: String = "", val enter: Boolean = false, val choice: String = "")
 
     private var address = ""
     private var lines by mutableStateOf<List<String>>(emptyList())
@@ -90,6 +90,8 @@ class PaneActivity : ComponentActivity() {
     private var draft by mutableStateOf<String?>(null)
     private var draftHeard = ""
     private var menu by mutableStateOf(false)
+    /** The pane's row of the board: its state, and a question's choices while it asks one. */
+    private var row by mutableStateOf<app.muxway.android.protocol.Row?>(null)
     private var recording by mutableStateOf(false)
     private var sending by mutableStateOf(false)
     private var meter by mutableStateOf(Clip.meter(emptyList()))
@@ -117,7 +119,7 @@ class PaneActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         address = intent.getStringExtra(ADDRESS)?.takeIf(Keys::valid) ?: run { finish(); return }
-        val row = BoardStore.load(this).rows.firstOrNull { it.address == address }
+        row = BoardStore.load(this).rows.firstOrNull { it.address == address }
         setContent { if (menu) Menu() else Screen(row) }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -151,6 +153,7 @@ class PaneActivity : ComponentActivity() {
     }
 
     private suspend fun read() {
+        row = BoardStore.load(this).rows.firstOrNull { it.address == address }
         val n = phone() ?: return
         readId = id("r")
         if (!Phone.send(this, n, Wire.READ, Wire.read(readId, address, etag))) {
@@ -207,7 +210,11 @@ class PaneActivity : ComponentActivity() {
 
     private fun answer(a: Answer) {
         menu = false
-        if (a.key.isNotEmpty()) key(a.key) else text(a.text, a.enter)
+        when {
+            a.choice.isNotEmpty() -> id("a").let { send(Wire.ANSWER, it, Wire.answer(it, address, a.choice)) }
+            a.key.isNotEmpty() -> key(a.key)
+            else -> text(a.text, a.enter)
+        }
     }
 
     /** The draft is a transcript the phone holds under its clip id, or a line typed here. */
@@ -299,6 +306,7 @@ class PaneActivity : ComponentActivity() {
         WatchGate.NOT_ALLOWED -> "not allowed: phone setting"
         WatchGate.NO_CLIP -> "clip lost on the way"
         WatchGate.READ_ONLY -> "read-only"
+        WatchGate.NO_QUESTION -> "nothing waits there now"
         WatchGate.TOO_SHORT -> "too short"
         WatchGate.RATE_LIMITED -> "one clip every five seconds"
         WatchGate.NO_TRANSCRIBER -> "transcriber unavailable"
@@ -321,9 +329,10 @@ class PaneActivity : ComponentActivity() {
         return s.body.map { lines[it] } to s.pinned.map { lines[it] }
     }
 
-    /** The reply menu: Claude's choices first, then the common answers; the keyboard is the last row. */
+    /** The reply menu: a question's own choices, then Claude's, then the common answers; the keyboard is the last row. */
     private fun answers(): List<Answer> {
         val out = ArrayList<Answer>()
+        for (c in row?.choices.orEmpty()) out.add(Answer("» $c", choice = c))
         val choices = if (ClaudeLens.runs(command)) ClaudeLens.choices(lines.map { Ansi.plain(it) }) else emptyList()
         for (c in choices) out.add(Answer("${c.digit} · ${c.label}", text = c.digit.toString()))
         out.add(Answer("Enter", key = "Enter"))
@@ -428,7 +437,7 @@ class PaneActivity : ComponentActivity() {
     @Composable
     private fun Menu() {
         BackHandler { menu = false }
-        val answers = remember(lines, command) { answers() }
+        val answers = remember(lines, command, row) { answers() }
         val config = LocalConfiguration.current
         val round = config.isScreenRound
         // Every answer must be reachable: the list centres the row it is on, so the first and the
@@ -447,7 +456,7 @@ class PaneActivity : ComponentActivity() {
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 item { Text("┌─ reply ─┐", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp) }
-                for (a in answers) item { MenuRow(a.label, if (a.label.contains('·')) Palette.attention else Palette.ink) { answer(a) } }
+                for (a in answers) item { MenuRow(a.label, if (a.choice.isNotEmpty() || a.label.contains('·')) Palette.attention else Palette.ink) { answer(a) } }
                 item { MenuRow("type…", Palette.ink) { typeOnTheWatch() } }
                 item { MenuRow("phone", Palette.dim) { openOnThePhone() } }
                 item { Text("└ back", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp, modifier = Modifier.clickable { menu = false }.padding(8.dp)) }

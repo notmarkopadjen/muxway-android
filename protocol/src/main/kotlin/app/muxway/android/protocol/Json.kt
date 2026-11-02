@@ -7,7 +7,7 @@ import org.json.JSONObject
 /** The hub's JSON, read defensively: a missing field is a default, a wrong type is an error. */
 object Json {
     fun hosts(body: String): List<Host> = parse(body) { o ->
-        list(o.optJSONArray("hosts")) { Host(it.optString("name"), it.optBoolean("online"), it.optBoolean("sessions"), it.optBoolean("close"), it.optInt("keys"), it.optBoolean("preview")) }
+        list(o.optJSONArray("hosts")) { Host(it.optString("name"), it.optBoolean("online"), it.optBoolean("sessions"), it.optBoolean("close"), it.optInt("keys"), it.optBoolean("preview"), ask = it.optBoolean("ask")) }
     }
 
     fun panes(body: String): List<Pane> = parse(body) { o -> list(o.optJSONArray("panes")) { pane(it) } }
@@ -20,9 +20,21 @@ object Json {
         Events(list(o.optJSONArray("events")) {
             Event(
                 it.optLong("seq"), it.optLong("at"), it.optString("host"), it.optString("address"),
-                it.optString("pane_id"), it.optString("alias"), it.optString("kind"), Input.printable(it.optString("text")),
+                it.optString("pane_id"), it.optString("alias"), it.optString("kind"), Input.printable(it.optString("text")), choices(it),
             )
         }, o.optLong("next"))
+    }
+
+    /** The inbox: the panes that wait, as the hub orders them, oldest first. */
+    fun inbox(body: String): List<Pane> = parse(body) { o -> list(o.optJSONArray("inbox")) { pane(it) } }
+
+    /** A question's choices, only when they fit what the hub itself allows. */
+    private fun choices(o: JSONObject): List<String> {
+        val arr = o.optJSONArray("choices") ?: return emptyList()
+        if (arr.length() > Input.MAX_CHOICES) return emptyList()
+        val out = ArrayList<String>(arr.length())
+        for (i in 0 until arr.length()) out.add(arr.optString(i))
+        return Input.choices(out)
     }
 
     /** Whether `/v1/me` names an admin. */
@@ -93,6 +105,8 @@ object Json {
 
     fun key(name: String): String = JSONObject().put("key", name).toString()
 
+    fun choice(c: String): String = JSONObject().put("choice", c).toString()
+
     /** The count only above one, so a single notch is the body an older hub knows. */
     fun mouse(button: String, x: Int, y: Int, count: Int = 1): String =
         JSONObject().put("mouse", JSONObject().put("button", button).put("x", x).put("y", y)
@@ -136,7 +150,7 @@ object Json {
             mode = o.optString("mode"),
             alias = o.optString("alias"),
             activity = o.optLong("activity"),
-            attention = a?.let { Attention(it.optString("kind"), it.optLong("at"), Input.printable(it.optString("text"))) },
+            attention = a?.let { Attention(it.optString("kind"), it.optLong("at"), Input.printable(it.optString("text")), choices(it)) },
             mouse = if (o.has("mouse")) o.optBoolean("mouse") else null,
             cursorX = o.optInt("cursor_x").coerceAtLeast(0),
             cursorY = o.optInt("cursor_y").coerceAtLeast(0),

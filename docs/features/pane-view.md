@@ -21,10 +21,10 @@ focused pane.
 
 - `‹` at the top left goes back to the pane list.
 - The **tab strip** lists every pane the token may read, in listing order,
-  by name: Claude Code's codename behind Claude's mark, else the command
-  and what the program says of itself (see [lenses](lenses.md)). Each tab
-  is **painted with its state** from
-  the [Claude lens](lenses.md): the attention colour when the pane waits
+  by name: an AI agent's status behind its mark (Claude's codename behind
+  the spark), else the command and what the program says of itself (see
+  [lenses](lenses.md)). Each tab is **painted with its state** from
+  the [lens](lenses.md): the attention colour when the pane waits
   for you (`!` `?` `z` `✓`, pulsing), dim when it works (`⟳`), plain when
   quiet. Selection never changes the colour: the open pane has a thick
   border and its name in bold. Tapping another tab switches to that pane.
@@ -55,7 +55,7 @@ focused pane.
   released when it is minimised, as a closed tile's is.
 - The **controls** sit at the right end of the same row: `▦` (with
   several panes) the next arrangement, `⤢` fit on or off, `abc` the on-screen keyboard (only with the hardware keyboard
-  setting), `⚙` settings.
+  setting), `⚑ n` while any pane waits (the [inbox](inbox.md)), `⚙` settings.
 - A **swipe** left or right across the page moves the focus to the next
   or previous tile, or with one tile open swaps the strip's next or
   previous pane into it, coming round at either end as `]` and `[` do
@@ -94,7 +94,12 @@ focused pane.
   tab, with the pane's name (its status in italics, dimmer) and mode, the
   lens's word (`! permission`, `⟳ working`) and, with fit on, the size;
   the focused one has the thick border and bold name; a waiting tile
-  glows in the ink around its box.
+  glows in the ink around its box. A question asked with fixed answers
+  (`muxway ask` on the host) shows its choices as buttons after the word:
+  a tap sends the choice to the asking process through `/answer`,
+  nothing is typed into the pane, and the attention goes with it; the
+  buttons are dim on a read-only pane and while an answer is on its way
+  (see [notifications](notifications.md#questions-with-fixed-answers)).
 - The line under the input shows the time of the last successful read, or
   the error.
 
@@ -357,8 +362,8 @@ it is writable:
   `not a type the host takes`, `too large, 8 MiB at most`, the hub's
   code in words. See [attachments.md](attachments.md);
 - **completion**: while a word is being typed, a row above the line
-  offers, for the first word, what the program takes — Claude Code's
-  slash commands, or a shell's starters and the lines sent to a shell
+  offers, for the first word, what the program takes — Claude Code's,
+  Codex's or Antigravity's slash commands, or a shell's starters and the lines sent to a shell
   from this phone — and for any word two letters in the words on the
   pane's screen, newest first, each marked `⇥` after the commands; eight
   at most. A tap takes one onto the line with a space after it, ready
@@ -370,13 +375,17 @@ it is writable:
   program in the pane and scrolls sideways. Claude Code's pane (the lens
   decides) gets `/clear`, `/exit`, `/compact`, `/rename`, `/model`,
   `/resume`, `/usage`, `/context`, `/help` and the browser's fifteen
-  more of its slash commands behind Claude's mark; a shell gets `exit`,
-  `htop`, `claude`, `claude -c`, `claude --resume`, `codex`, `gemini`,
+  more of its slash commands behind Claude's mark; a Codex pane its
+  eleven (`/new`, `/quit`, `/compact`, `/model`, `/approvals`, …) behind
+  the hexagon, an Antigravity pane its twenty-two (`/clear`, `/exit`,
+  `/rewind`, `/resume`, `/plan`, …) behind the chevron; a shell gets `exit`,
+  `htop`, `claude`, `claude -c`, `claude --resume`, `codex`, `agy`, `gemini`,
   `git status`, `git diff`, `git log`, `git pull`, `git push`, `git
   stash`, `git stash pop`, `make`, `make test`, `npm test`, `npm run
   build`, `docker ps`, `tmux ls`, `ls`, `ls -la`, `pwd`, `cd ..`,
-  `clear`, `history`, `df -h`, `free -h` behind `$`, then after a bar
-  the last eight lines sent to a shell from this phone, newest first.
+  `clear`, `history`, `df -h`, `free -h` behind `$`, each AI starter with
+  the mark of what it starts, then after a bar the last eight lines sent
+  to a shell from this phone, newest first.
   Each button is tinted by its tone like the keys by their group: danger
   red (`/clear`, `exit`), start green (`/resume`, `claude`), info blue
   (`/help`, `git status`), the rest amber. A tap sends the command and

@@ -280,6 +280,31 @@ class FlowTest {
     }
 
     @Test
+    fun aQuestionsChoicesAreAnsweredFromTheTileAndTheInboxListsWhatWaits() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0")
+        // The shell dressed as Codex is named, with its mark, and the asking pane counts in the header.
+        await("Codex")
+        shot("codex-mark")
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("inbox-count").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("inbox-count").performClick()
+        rule.onNodeWithTag("inbox").assertExists()
+        await("deploy to staging?")
+        rule.onNodeWithTag("choice:yes").assertExists()
+        shot("inbox")
+        rule.onNodeWithTag("inbox-row:alice-laptop/ask/0.0").performClick()
+        await("⏎")
+        await("question")
+        rule.onNodeWithTag("choice:yes").assertExists()
+        shot("choices")
+        // The answer goes to the asking process: the attention leaves, nothing is typed.
+        rule.onNodeWithTag("choice:yes").performClick()
+        rule.waitUntil(10_000) { rule.onAllNodesWithTag("choice:yes").fetchSemanticsNodes().isEmpty() }
+        shot("answered")
+        rule.onAllNodes(hasText("yes", substring = false)).assertCountEquals(0)
+    }
+
+    @Test
     fun everyHubIsListedAndOpensSideBySide() {
         seedSecondHub()
         scenario = ActivityScenario.launch(MainActivity::class.java)

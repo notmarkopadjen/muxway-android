@@ -54,8 +54,11 @@ class Notifier(private val context: Context) {
             .build()
     }
 
-    /** Posts for new or changed waits, clears what no longer waits, refreshes the summary. */
-    fun show(board: Board) {
+    /**
+     * Posts for new or changed waits, clears what no longer waits, refreshes the summary.
+     * [writable] names the panes this phone may write to: only those get a question's choices.
+     */
+    fun show(board: Board, writable: Set<String> = emptySet()) {
         val waiting = board.rows.filter { it.state == Board.WAITING }.associateBy { it.address }
         for (gone in posted.keys - waiting.keys) {
             manager.cancel(gone, ATTENTION_ID)
@@ -65,9 +68,27 @@ class Notifier(private val context: Context) {
             val key = row.kind to row.at
             if (posted[address] == key) continue
             posted[address] = key
-            manager.notify(address, ATTENTION_ID, attention(row))
+            manager.notify(address, ATTENTION_ID, attention(row, address in writable))
         }
         manager.notify(SUMMARY_ID, summary(board, ""))
+    }
+
+    /** The question's notification goes once the answer is in; a refusal takes its place, briefly. */
+    fun answered(address: String, error: String?) {
+        if (error == null) {
+            manager.cancel(address, ATTENTION_ID)
+            posted.remove(address)
+            return
+        }
+        manager.notify(address, ATTENTION_ID, Notification.Builder(context, ATTENTION)
+            .setSmallIcon(R.drawable.ic_stat)
+            .setContentTitle("! not answered")
+            .setContentText(error)
+            .setAutoCancel(true)
+            .setTimeoutAfter(8_000)
+            .setGroup(ATTENTION)
+            .setCategory(Notification.CATEGORY_STATUS)
+            .build())
     }
 
     /** The summary with a state line in place of counts. */
@@ -78,10 +99,10 @@ class Notifier(private val context: Context) {
         posted.clear()
     }
 
-    private fun attention(row: Row): Notification {
+    private fun attention(row: Row, writable: Boolean): Notification {
         val link = Intent(Intent.ACTION_VIEW, openUri(row.address)).setPackage(context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val tap = PendingIntent.getActivity(context, row.address.hashCode(), link, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        return Notification.Builder(context, ATTENTION)
+        val b = Notification.Builder(context, ATTENTION)
             .setSmallIcon(R.drawable.ic_stat)
             .setContentTitle("${row.glyph} ${row.word}")
             .setContentText(if (row.text.isEmpty()) row.name else "${row.name} · ${row.text}")
@@ -91,7 +112,16 @@ class Notifier(private val context: Context) {
             .setGroup(ATTENTION)
             .setCategory(Notification.CATEGORY_STATUS)
             .setContentIntent(tap)
-            .build()
+        // The shade shows three actions at most: the first three choices, else the inbox has them all.
+        if (writable && row.choices.size <= MAX_ACTIONS) {
+            for ((i, c) in row.choices.withIndex()) {
+                val answer = Intent(context, AttentionService::class.java).setAction(AttentionService.ACTION_ANSWER)
+                    .putExtra(AttentionService.EXTRA_PANE, row.address).putExtra(AttentionService.EXTRA_CHOICE, c)
+                val pi = PendingIntent.getService(context, row.address.hashCode() * 8 + i + 2, answer, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+                b.addAction(Notification.Action.Builder(null, c, pi).build())
+            }
+        }
+        return b.build()
     }
 
     companion object {
@@ -99,6 +129,7 @@ class Notifier(private val context: Context) {
         const val WATCH = "watch"
         const val SUMMARY_ID = 1
         const val ATTENTION_ID = 2
+        const val MAX_ACTIONS = 3
 
         /** The deep link the phone app answers: it opens that pane and nothing else. */
         fun openUri(address: String): Uri = Uri.Builder().scheme("muxway").authority("open").appendQueryParameter("pane", address).build()

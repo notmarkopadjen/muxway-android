@@ -225,7 +225,10 @@ where they are whole and can be tapped; the bezel and the crown turn it
 as well as the finger, and an indicator at the right edge says how much
 more there is. Each row is a box at least 44 dp tall. The same list and
 the same scrolling serve the pane list the watch app opens with. First
-what Claude offers on the screen:
+a question's own choices, when the pane asked one with fixed answers
+(`» yes`, `» no`; the board's row carries them): a tap sends the choice
+to the asking process through the phone, nothing is typed. Then what
+Claude offers on the screen:
 its numbered choices (`❯ 1. Yes` … `3. No`, read from the last rows of
 the tail, the one marked `❯` first), each sent as its digit alone, which
 is how Claude Code takes it. Then the common answers, the same as on the
@@ -298,8 +301,8 @@ sequenceDiagram
 ```
 
 The messages are JSON documents on the Data Layer `MessageClient`, one
-path each (`/pane/read`, `/pane/key`, `/pane/text` to the phone;
-`/pane/tail`, `/pane/done`, `/clip/heard` back), capped at 64 KiB and read
+path each (`/pane/read`, `/pane/key`, `/pane/text`, `/pane/answer` to
+the phone; `/pane/tail`, `/pane/done`, `/clip/heard` back), capped at 64 KiB and read
 defensively on both ends: a broken document is ignored, strings are
 cleaned of control characters and capped, an address must fit the
 protocol's grammar, lines are capped at 60 of 400 characters. Each
@@ -310,7 +313,9 @@ channel named `/clip/<id>`, capped at 1 MiB on the phone.
 `WatchGate`, in the protocol module and tested on the JVM, is the phone's
 side: it holds the rate limit (one write a second, ten a minute), the
 ids already answered (a repeat answers the same without writing again)
-and the texts heard. `WatchRequests` is the Wear OS listener service that
+and the texts heard; a question's answer passes only when the choice is
+one the phone's listing carries for that pane, and goes as `POST
+.../answer`, never as typed text. `WatchRequests` is the Wear OS listener service that
 hands messages to the gate while `AttentionService` runs; with the
 service stopped every answer is `paused`.
 
@@ -356,7 +361,7 @@ watch's microphone.
 |---|---|---|
 | watch and notifications | off | the background service: notifications on the phone, the board of every hub's panes to the watch |
 | notification text | off | the notification's text travels to the shade and the watch; kind and pane name always do |
-| watch may answer | off | the watch may send `Enter`, `Esc`, `y`, `n`, `^C` and a spoken line to a writable pane through the phone, phone locked or not; off, the pane screen shows the tail and *phone* only |
+| watch may answer | off | the watch may send `Enter`, `Esc`, `y`, `n`, `^C`, a question's choice and a spoken line to a writable pane through the phone, phone locked or not; off, the pane screen shows the tail and *phone* only |
 
 ## Security considerations
 

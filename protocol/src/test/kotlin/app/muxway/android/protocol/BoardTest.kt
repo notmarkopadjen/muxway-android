@@ -53,6 +53,17 @@ class BoardTest {
     }
 
     @Test
+    fun aQuestionsChoicesRideOnItsRowAndOnlyWhileItWaits() {
+        val asked = pane(1, kind = "question").let { it.copy(attention = it.attention!!.copy(choices = listOf("yes", "no"))) }
+        val b = rank(listOf(asked, pane(2)), withText = true)
+        assertEquals(listOf("yes", "no"), b.rows[0].choices)
+        assertEquals(emptyList<String>(), b.rows[1].choices)
+        assertEquals(b, Board.parse(b.json()))
+        val hostile = Board.parse("""{"v":1,"at":1,"live":true,"rows":[{"address":"alice-laptop/work/0.1","name":"x","state":2,"kind":"question","at":1,"text":"","choices":["a|b","c"]}]}""")
+        assertEquals(emptyList<String>(), hostile.rows.single().choices)
+    }
+
+    @Test
     fun jsonRoundTrip() {
         val b = rank(listOf(pane(1, kind = "permission"), pane(2)), working = setOf("alice-laptop/work/0.2"), withText = true)
         assertEquals(b, Board.parse(b.json()))

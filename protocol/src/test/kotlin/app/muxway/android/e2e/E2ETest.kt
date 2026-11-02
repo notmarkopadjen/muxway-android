@@ -9,6 +9,7 @@ import app.muxway.android.protocol.Board
 import app.muxway.android.protocol.Changes
 import app.muxway.android.protocol.Clip
 import app.muxway.android.protocol.Files
+import app.muxway.android.protocol.Inbox
 import app.muxway.android.protocol.Keyboard
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.WatchGate
@@ -487,6 +488,96 @@ class E2ETest {
         assertEquals(409, again.status)
         assertEquals("exists", again.code)
         assertEquals(2, api.panes().size)
+    }
+
+    @Test
+    fun s16_anAnswerNeedsAWriteGrantAndAChoiceTheQuestionOfferedAndAQuestionStillWaiting() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        val ask = core.ask(core.paneId(), "deploy to staging?", "yes", "no")
+        cleanups.add { ask.kill() }
+        waitFor("the question listed with its choices") { api.panes().single().attention?.choices == listOf("yes", "no") }
+        // A read grant alone sees the question and cannot answer it.
+        val reader = Api(relay.url, core.token(write = null), "muxway-android-e2e")
+        assertEquals(listOf("yes", "no"), reader.inbox().single().attention?.choices)
+        val e1 = assertThrows(ApiException::class.java) { reader.answer(address, "yes") }
+        assertEquals(403, e1.status)
+        // A choice the question did not offer never reaches the asking process.
+        val e2 = assertThrows(ApiException::class.java) { api.answer(address, "maybe") }
+        assertEquals(400, e2.status)
+        assertEquals("bad_input", e2.code)
+        assertTrue(ask.alive)
+        assertEquals(listOf("yes", "no"), api.panes().single().attention?.choices)
+        // The right one ends the ask with the choice on its stdout and clears the attention.
+        api.answer(address, "yes")
+        assertEquals(0 to "yes", ask.wait())
+        waitFor("attention cleared") { api.panes().single().attention == null }
+        val e3 = assertThrows(ApiException::class.java) { api.answer(address, "yes") }
+        assertEquals(409, e3.status)
+        assertEquals("no_question", e3.code)
+        assertEquals("Nothing waits there any more", e3.message)
+        // A read-only pane cannot ask: the mark decides on the host.
+        core.tmux("split-window", "-t", "work:0", "-h")
+        core.cli("expose", "--tmux-name", core.tmux, "-t", "work:0.1")
+        val second = core.tmux("display-message", "-p", "-t", "work:0.1", "#{pane_id}")
+        val refused = core.ask(second, "deploy?", "yes", "no")
+        cleanups.add { refused.kill() }
+        assertEquals(1, refused.wait().first)
+        assertTrue(api.panes().all { it.attention == null })
+    }
+
+    @Test
+    fun s16b_theInboxFollowsTheTokensReadGrants() {
+        val (api, _) = setup()
+        core.tmux("split-window", "-t", "work:0", "-h")
+        core.cli("expose", "--tmux-name", core.tmux, "-t", "work:0.1", "--write")
+        val second = core.tmux("display-message", "-p", "-t", "work:0.1", "#{pane_id}")
+        core.notify("done", "finished", second)
+        val ask = core.ask(core.paneId(), "deploy to staging?", "yes", "no")
+        cleanups.add { ask.kill() }
+        waitFor("both wait") { api.inbox().size == 2 }
+        val narrow = Api(relay.url, core.token(read = "$HOST/work/0.1", write = null), "muxway-android-e2e")
+        val rows = narrow.inbox()
+        assertEquals(listOf("$HOST/work/0.1"), rows.map { it.address })
+        assertEquals("done", rows.single().attention?.kind)
+        assertTrue(narrow.panes().none { it.attention?.choices?.isNotEmpty() == true })
+    }
+
+    @Test
+    fun f27_aQuestionsChoicesRideTheEventsTheInboxComesOldestFirstAndTheGateAnswersOnlyWhatWasOffered() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        val cursor = api.events(null, 0).next
+        core.tmux("split-window", "-t", "work:0", "-h")
+        core.cli("expose", "--tmux-name", core.tmux, "-t", "work:0.1", "--write")
+        val second = core.tmux("display-message", "-p", "-t", "work:0.1", "#{pane_id}")
+        core.notify("done", "finished", second)
+        // Attention is timed in seconds: the question must come a tick later to be the newer.
+        Thread.sleep(1_100)
+        val ask = core.ask(core.paneId(), "deploy to staging?", "yes", "no")
+        cleanups.add { ask.kill() }
+        waitFor("both wait") { api.inbox().size == 2 }
+        val inbox = api.inbox()
+        assertEquals(listOf("$HOST/work/0.1", address), inbox.map { it.address })
+        assertEquals(listOf("yes", "no"), inbox[1].attention?.choices)
+        assertEquals(inbox.map { it.address }, Inbox.waiting(api.panes()).map { it.address })
+        val ev = api.events(cursor, 0).events
+        val q = ev.single { it.kind == "question" }
+        assertEquals(listOf("yes", "no"), q.choices)
+        assertEquals("deploy to staging?", q.text)
+        assertTrue(ev.single { it.kind == "done" }.choices.isEmpty())
+        // The watch answers through the phone's gate, which takes only a choice the listing carries.
+        val gate = WatchGate({ api }, { api.panes() }, { true })
+        assertEquals(WatchGate.REFUSED, gate.answer(Wire.Answer("a1", address, "later")).error)
+        assertEquals(WatchGate.REFUSED, gate.answer(Wire.Answer("a2", "$HOST/work/0.1", "yes")).error)
+        assertTrue(ask.alive)
+        assertTrue(gate.answer(Wire.Answer("a3", address, "no")).ok)
+        assertEquals(0 to "no", ask.wait())
+        waitFor("the question gone") { api.inbox().size == 1 }
+        assertEquals("$HOST/work/0.1", api.inbox().single().address)
+        // The board carries the choices to the wrist while the question waits, and nothing after.
+        val board = Board.rank(api.panes(), 1, true) { Lens.status(it, null, false) }
+        assertTrue(board.rows.all { it.choices.isEmpty() })
     }
 
     @Test

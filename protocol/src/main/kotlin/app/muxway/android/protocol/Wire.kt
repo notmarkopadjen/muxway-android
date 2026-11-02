@@ -6,13 +6,14 @@ import org.json.JSONObject
 
 /**
  * What the watch and the phone say to each other about one pane: a request for the tail,
- * a key, a short text or a heard clip to type, and the answers. One JSON document per
+ * a key, a short text or a heard clip to type, a question's answer, and the answers. One JSON document per
  * message, read defensively on both ends; anything that does not fit is dropped.
  */
 object Wire {
     const val READ = "/pane/read"
     const val KEY = "/pane/key"
     const val TEXT = "/pane/text"
+    const val ANSWER = "/pane/answer"
     const val TAIL = "/pane/tail"
     const val DONE = "/pane/done"
     const val CLIP = "/clip"
@@ -34,6 +35,8 @@ object Wire {
     class Key(id: String, address: String, val key: String) : Request(id, address)
     /** [text] as typed or chosen on the watch, or empty with [heard] naming a clip the phone transcribed. */
     class Text(id: String, address: String, val text: String, val heard: String, val enter: Boolean) : Request(id, address)
+    /** One of the fixed answers of the question the pane asked; the phone checks it against its listing. */
+    class Answer(id: String, address: String, val choice: String) : Request(id, address)
 
     /** [lines] keep their colour sequences; [command] is the pane's program, for the lens. */
     data class Tail(val id: String, val address: String, val etag: String, val lines: List<String>?, val writable: Boolean, val transcriber: Boolean, val error: String = "", val command: String = "")
@@ -49,6 +52,7 @@ object Wire {
             READ -> Read(id, address, short(o, "etag"))
             KEY -> Key(id, address, short(o, "key"))
             TEXT -> Text(id, address, Input.typed(o.optString("text")).take(Input.MAX_TEXT_BYTES), short(o, "heard"), o.optBoolean("enter"))
+            ANSWER -> Answer(id, address, short(o, "choice").take(Input.MAX_CHOICE))
             else -> null
         }
     }
@@ -87,6 +91,8 @@ object Wire {
 
     fun text(id: String, address: String, text: String, enter: Boolean): ByteArray =
         bytes(JSONObject().put("id", id).put("address", address).put("text", text).put("enter", enter))
+
+    fun answer(id: String, address: String, choice: String): ByteArray = bytes(JSONObject().put("id", id).put("address", address).put("choice", choice))
 
     fun heardText(id: String, address: String, heard: String, enter: Boolean): ByteArray =
         bytes(JSONObject().put("id", id).put("address", address).put("heard", heard).put("enter", enter))
