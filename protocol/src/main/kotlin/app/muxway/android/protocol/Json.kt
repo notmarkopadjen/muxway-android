@@ -155,7 +155,24 @@ object Json {
             cursorX = o.optInt("cursor_x").coerceAtLeast(0),
             cursorY = o.optInt("cursor_y").coerceAtLeast(0),
             windowLayout = o.optString("window_layout").take(WindowLayout.MAX_BYTES),
+            talk = talk(o.optJSONArray("talk")),
+            mail = o.optJSONObject("mail")?.let { m -> m.optInt("unread").takeIf { it > 0 }?.let { Mail(it, m.optLong("at")) } },
         )
+    }
+
+    /** The pane's talk partners: only addresses the protocol spells and ways it names, [Groups.MAX_PARTNERS] at most. */
+    private fun talk(arr: JSONArray?): List<Talk> {
+        if (arr == null) return emptyList()
+        val out = ArrayList<Talk>()
+        for (i in 0 until arr.length()) {
+            if (out.size >= Groups.MAX_PARTNERS) break
+            val t = arr.optJSONObject(i) ?: continue
+            val address = t.optString("address")
+            val way = t.optString("way")
+            if (!Address.valid(address) || way !in Groups.WAYS) continue
+            out.add(Talk(address, t.optString("pane_id").take(16), t.optLong("at"), way))
+        }
+        return out
     }
 
     private fun <T> list(arr: JSONArray?, item: (JSONObject) -> T): List<T> {
