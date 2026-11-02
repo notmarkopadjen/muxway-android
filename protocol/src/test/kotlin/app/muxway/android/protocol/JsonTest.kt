@@ -78,6 +78,26 @@ class JsonTest {
     }
 
     @Test
+    fun aQuestionsChoicesAreReadOnlyWhenTheyFitWhatTheHubAllows() {
+        fun att(choices: String) = Json.panes("""{"panes":[{"session":"work","attention":{"kind":"question","at":1,"text":"deploy?","choices":$choices}}]}""").single().attention!!.choices
+        assertEquals(listOf("yes", "no"), att("""["yes","no"]"""))
+        assertEquals(emptyList<String>(), att("""["yes"]"""))
+        assertEquals(emptyList<String>(), att("""["1","2","3","4","5","6","7","8","9"]"""))
+        assertEquals(emptyList<String>(), att("""["yes","${"x".repeat(41)}"]"""))
+        assertEquals(emptyList<String>(), att("""["yes","a|b"]"""))
+        assertEquals(emptyList<String>(), att("""["yes","no\u0007"]"""))
+        assertEquals(emptyList<String>(), att("""["yes","yes"]"""))
+        assertEquals(emptyList<String>(), Json.panes("""{"panes":[{"session":"work","attention":{"kind":"done","at":1,"text":""}}]}""").single().attention!!.choices)
+        val e = Json.events("""{"events":[{"seq":1,"at":1,"address":"alice-laptop/work/1.0","kind":"question","text":"deploy?","choices":["yes","no","later"]}],"next":1}""")
+        assertEquals(listOf("yes", "no", "later"), e.events.single().choices)
+        val inbox = Json.inbox("""{"inbox":[{"session":"work","window_index":0,"pane_index":0,"mode":"write","attention":{"kind":"question","at":5,"text":"deploy?","choices":["yes","no"]}}],"count":1}""")
+        assertEquals("deploy?", inbox.single().attention?.text)
+        assertEquals(true, Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true,"ask":true}]}""").single().ask)
+        assertEquals(false, Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true}]}""").single().ask)
+        assertEquals("""{"choice":"yes"}""", Json.choice("yes"))
+    }
+
+    @Test
     fun garbageIsABadAnswerNotACrash() {
         for (body in listOf("", "x", "[]", "{\"panes\":[1]}", "{\"panes\":{}}", "{\"pane\":\"s\"}")) {
             val e = assertThrows(ApiException::class.java) { Json.panes(body); Json.read(body, "") }

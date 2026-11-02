@@ -17,7 +17,7 @@ port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); pr
 port2=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
 
 cleanup() {
-    kill "${agent_pid:-}" "${hub_pid:-}" "${agent2_pid:-}" "${hub2_pid:-}" 2>/dev/null || true
+    kill "${ask_pid:-}" "${agent_pid:-}" "${hub_pid:-}" "${agent2_pid:-}" "${hub2_pid:-}" 2>/dev/null || true
     tmux -L "$tmuxname" kill-server 2>/dev/null || true
     tmux -L "$tmuxname2" kill-server 2>/dev/null || true
     adb -s "$serial" reverse --remove "tcp:$port" 2>/dev/null || true
@@ -44,6 +44,18 @@ code=$("$bin" hub pair-code --dir "$tmp/hub" --host alice-laptop)
 agent_pid=$!
 for _ in $(seq 50); do "$bin" hub agents --dir "$tmp/hub" | grep -q "alice-laptop	online" && break; sleep 0.2; done
 "$bin" expose --tmux-name "$tmuxname" -t work:0.0 --write
+# A session that asks a question with fixed answers again and again, for the choices and the
+# inbox; and one whose shell is dressed as Codex, for the mark.
+tmux -L "$tmuxname" new-session -d -s ask -x 80 -y 24
+tmux -L "$tmuxname" new-session -d -s codex -x 80 -y 24 "exec -a codex bash --norc --noprofile"
+"$bin" expose --tmux-name "$tmuxname" -t ask:0.0 --write
+"$bin" expose --tmux-name "$tmuxname" -t codex:0.0
+askpane=$(tmux -L "$tmuxname" display-message -p -t ask:0.0 '#{pane_id}')
+( while kill -0 "$hub_pid" 2>/dev/null; do
+    "$bin" ask --dir "$tmp/agent" --pane "$askpane" --text "deploy to staging?" --choice yes --choice no --timeout 10m >/dev/null 2>&1 || true
+    sleep 5
+  done ) &
+ask_pid=$!
 token=$("$bin" hub token create --dir "$tmp/hub" --name phone --read 'alice-laptop/*' --write 'alice-laptop/*')
 admin=$("$bin" hub token create --dir "$tmp/hub" --name owner --read 'alice-laptop/*' --write 'alice-laptop/*' --admin)
 

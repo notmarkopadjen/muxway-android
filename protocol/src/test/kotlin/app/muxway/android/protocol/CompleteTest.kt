@@ -33,6 +33,8 @@ class CompleteTest {
         assertEquals(listOf("/compact", "/context", "/cost", "/config"), Complete.forPane(claude, "/co", 3, emptyList()))
         assertEquals(listOf("/rename", "/resume", "/review", "/release-notes"), Complete.forPane(claude, "/re", 3, emptyList()))
         assertEquals(listOf("claude", "claude -c", "claude --resume", "clear"), Complete.forPane(shell, "cl", 2, emptyList()))
+        assertEquals(listOf("/approvals"), Complete.forPane(pane("codex", "codex"), "/ap", 3, emptyList()))
+        assertEquals(listOf("/goal", "/grill-me"), Complete.forPane(pane("agy", "notes"), "/g", 2, emptyList()))
         assertEquals(listOf("git status", "git diff", "git log --oneline -20", "git pull", "git push", "git stash", "git stash pop", "git fetch"), Complete.forPane(shell, "git", 3, listOf("git push", "git fetch", "ls -l")))
         assertTrue(Complete.forPane(pane("vim"), "cl", 2, emptyList()).isEmpty())
         assertTrue(Complete.forPane(shell, "zzz", 3, emptyList()).isEmpty())

@@ -4,11 +4,14 @@ Every pane every hub lists for its token, from each hub's `GET /v1/panes`,
 grouped by hub (with more than one) and by host.
 
 ```
-┌─ muxway · panes ───────────── [refresh] [settings] ─┐
+┌─ muxway · panes ─────── [⚑ 2] [refresh] [settings] ─┐
 ══ home ══════════════════════════════════════════════
 ── alice-laptop ───────────────────────── + session ──
 * build        node          ! permission
-* work/0.0     bash
+┌────────────────────────────────────────────────────┐
+│* work/0.0     Claude · review ✉ 2                   │
+│* work/0.1     Codex · fix                           │
+└────────────────────────────────────────────────────┘
 │  + pane
   work/1.0     tail
 ── bob-desktop ──────────────────────────── offline ──
@@ -23,15 +26,29 @@ grouped by hub (with more than one) and by host.
   [connect](connect.md)), so a pick of several can span hubs.
 
 - A row is `*` for a pane this token may write, the lens's glyph, the
-  pane's name (its command and what the program says of itself, or
-  *Claude* and its codename, see [lenses](lenses.md)), its place
+  pane's name (its command and what the program says of itself, or an
+  AI agent's name with its mark and its status, see [lenses](lenses.md)), its place
   `host/session/window.pane` dimmed, and the lens's word. A host with
   panes says `online` on its line; a hub whose listing failed shows the
   reason on its line and nothing under it until the next refresh answers.
+- `⚑ n` in the header, while any pane waits, counts them across every hub
+  and opens the [inbox](inbox.md): the waiting panes oldest first, with a
+  question's choices.
+- Panes that wrote or mailed to each other in the last ten minutes, the
+  partners of partners too (the listing's `talk`, see the core's
+  [talk](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/talk.md)),
+  form a **group**: within a window their rows are kept together and
+  framed as one in the talk hue, like a browser's tab group; a group
+  that spans two hosts is framed under each. No message is a
+  notification. A pane whose process holds unread
+  [mail](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/mail.md)
+  carries `✉ n` after its name, in the hue (the row's ink when the row is
+  selected). The messages themselves, and mailing a pane, are not on the
+  phone yet.
 - A pane with a pending notification shows `! <kind>` in the attention
   colour: `question`, `permission`, `idle` or `done`, see the core's
   [notifications](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/notifications.md).
-  A pane with a lens, Claude Code's for now, shows `⟳ working` while it
+  A pane running an AI agent the lens names shows `⟳ working` while it
   is busy (see [lenses](lenses.md)).
 - Hosts from `GET /v1/hosts` that are online with nothing exposed, and
   hosts that are offline, are listed after the panes.

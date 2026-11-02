@@ -128,8 +128,8 @@ sequenceDiagram
         S->>S: Board.rank, notifications
         S->>W: Data Layer /board
     end
-    W->>S: /pane/read, /pane/key, /pane/text, a clip (WatchRequests → WatchGate)
-    S->>H: GET the pane, POST input, POST transcribe
+    W->>S: /pane/read, /pane/key, /pane/text, /pane/answer, a clip (WatchRequests → WatchGate)
+    S->>H: GET the pane, POST input, POST answer, POST transcribe
     S-->>W: /pane/tail, /pane/done, /clip/heard
     W->>A: muxway://open?pane=address (through the Wear companion)
     A->>A: openLink: grammar, listed? then View
@@ -145,7 +145,7 @@ client's side of it.
 
 | Feature | Request | Used by |
 |---|---|---|
-| hosts and panes | `GET /v1/hosts`, `GET /v1/panes`; a host's `sessions`, `close` and `keys` flags decide what the UI offers | pane list, watch service |
+| hosts and panes | `GET /v1/hosts`, `GET /v1/panes`; a host's `sessions`, `close` and `keys` flags decide what the UI offers; a pane's `talk` partners draw the groups and its `mail` the `✉ n` count (`protocol/.../Groups.kt`) | pane list, strip, tiles, watch service |
 | reading a pane | `GET /v1/panes/{address}?lines=N&ansi=1` with `If-None-Match`; `304` when unchanged; colour kept, every other escape dropped | pane view, the watch's tail |
 | typing | `POST /v1/panes/{address}/input` with `{"text"}` (control characters removed, 4096 bytes at most) | input bar, watch |
 | keys | the same with `{"key"}`; the grammar (`C-`, `M-`, `S-` on any key, chords) where the host says `keys: 2`, the old names elsewhere | key row, keyboard, hardware keyboard, watch |
@@ -153,7 +153,9 @@ client's side of it.
 | fit | `POST /v1/panes/{address}/resize` with `{cols, rows}`, `scope: window` and `zoom` for a pane alone, `scope: window` and a `layout` naming the window's panes when the tiles are every one of them (`protocol/.../WindowLayout.kt`), `{"fit": "auto"}` to give it back | tiles |
 | split, new session, close | `POST /v1/windows/{host}/{session}/{window}/panes`, `POST /v1/hosts/{host}/sessions`, `POST /v1/panes/{address}/close`, where the host allows them | pane view, pane list |
 | changes | `GET /v1/panes/{address}/git` every ten seconds for a writable tile on a host with `preview` (every five while its sheet is open; a `404` is asked again after a minute), `GET /v1/panes/{address}/git/diff?path=` for a path the status listed, drawn as text | the count in a tile's header, the changes sheet, the file sheet's diff |
-| events | `GET /v1/events?after=cursor&wait=30&limit=50`, a long poll | pane list, watch service, the lens |
+| events | `GET /v1/events?after=cursor&wait=30&limit=50`, a long poll; a `question` may carry `choices` | pane list, watch service, the lens |
+| answers | `POST /v1/panes/{address}/answer` with `{"choice"}`, one of the choices the listing's `attention` carries; a host says `ask` in `/v1/hosts` when its agent takes them | the tile header, the inbox, a notification's actions, the watch's reply menu |
+| inbox | `GET /v1/inbox`, every waiting pane the token may read, oldest first, asked of each hub every five seconds while the sheet is open | the inbox sheet |
 | transcription | `GET /v1/transcribe` (`204` or `404`) to know there is one, `POST /v1/transcribe` with `audio/wav` | microphone button, the watch's clip |
 | files | `GET /v1/panes/{address}/files` (`204` or a refusal) to know the pane takes them, `POST` the same as `multipart/form-data` with one part `file` of a listed type, 8 MiB at most; the path answered lands on the input line | `⇪`, a paste into the line, a share from another app |
 | admin | `GET /v1/me` for the grant, `GET /v1/admin/log?limit=200`, `GET /v1/admin/overview`, `DELETE /v1/admin/sessions/{id}` | the admin section of Settings |

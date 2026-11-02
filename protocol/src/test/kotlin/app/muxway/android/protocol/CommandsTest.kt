@@ -33,8 +33,26 @@ class CommandsTest {
     }
 
     @Test
+    fun codexAndAntigravityGetTheirOwnSlashCommands() {
+        val (kind, row) = Commands.forPane(pane("codex", "codex"), emptyList())!!
+        assertEquals(Commands.Kind.CODEX, kind)
+        assertEquals(listOf("/new", "/quit", "/compact", "/model"), row.take(4).map { it.text.trim() })
+        assertFalse(row.first { it.label == "/mention" }.send)
+        val (k2, agy) = Commands.forPane(pane("agy", "notes"), emptyList())!!
+        assertEquals(Commands.Kind.ANTIGRAVITY, k2)
+        assertEquals(22, agy.size)
+        assertEquals(Commands.Tone.DANGER, agy.first { it.text == "/rewind" }.tone)
+        assertFalse(agy.first { it.label == "/plan" }.send)
+        assertNull(Commands.forPane(pane("opencode", "x"), emptyList()))
+        assertEquals(Lens.Agent.CODEX, Commands.SHELL.first { it.text == "codex" }.agent)
+        assertEquals(Lens.Agent.ANTIGRAVITY, Commands.SHELL.first { it.text == "agy" }.agent)
+        assertEquals(Lens.Agent.CLAUDE, Commands.SHELL.first { it.text == "claude -c" }.agent)
+        assertNull(Commands.SHELL.first { it.text == "exit" }.agent)
+    }
+
+    @Test
     fun theShellsStartersAreTheBrowsersWithTheirTones() {
-        assertEquals(28, Commands.SHELL.size)
+        assertEquals(29, Commands.SHELL.size)
         assertEquals(Commands.Tone.DANGER, Commands.SHELL.first { it.text == "exit" }.tone)
         assertEquals(Commands.Tone.START, Commands.SHELL.first { it.text == "claude -c" }.tone)
         assertEquals(Commands.Tone.INFO, Commands.SHELL.first { it.text == "git status" }.tone)

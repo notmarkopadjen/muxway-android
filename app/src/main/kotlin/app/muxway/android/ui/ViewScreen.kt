@@ -140,6 +140,7 @@ import app.muxway.android.protocol.Clip
 import app.muxway.android.protocol.Commands
 import app.muxway.android.protocol.Complete
 import app.muxway.android.protocol.Files
+import app.muxway.android.protocol.Groups
 import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.Keys
 import app.muxway.android.protocol.Lens
@@ -390,8 +391,10 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             // Tap: fit on, or send this size once more when it is on already; hold: fit off.
             Btn("⤢", { if (fit) fitAgain++ else fit = true }, selected = fit, enabled = writable, onLongClick = { fit = false })
             if (hardware) Btn("abc", { ime = !ime; if (ime) { fieldFocus.request(); keyboard?.show() } else keyboard?.hide() }, selected = ime)
+            InboxCount(model)
             Btn("⚙", { model.open(Screen.Connect) })
         }
+        if (model.inboxOpen) InboxSheet(model, now) { model.inboxOpen = false }
         Rule()
         Box(Modifier.weight(1f)) {
             val held = if (ids != null) emptySet() else TileFit.held(tiles, focused, windowOf)
@@ -445,10 +448,11 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
                 model.arrange(lead, proportional, tiles)
             }
             val sent = ids != null && model.view(lead).fitted
+            val groups = remember(model.panes) { Groups.of(model.panes) }
             val tile: @Composable (Int, Modifier) -> Unit = { i, m ->
                 key(tiles[i]) {
                     PaneTile(
-                        model, tiles[i], i == index, tiles.size > 1, fit, tiles[i] in held, siblings(tiles[i]), ids != null, exact?.sizes?.get(i)?.takeIf { sent },
+                        model, tiles[i], i == index, tiles.size > 1, tiles[i] in groups, fit, tiles[i] in held, siblings(tiles[i]), ids != null, exact?.sizes?.get(i)?.takeIf { sent },
                         fitAgain, now, if (i in bottom) slackPx else 0, m,
                         onMeasured = { sizes[tiles[i]] = it },
                         onDrop = { from, zone -> drop(from, i, zone) },
@@ -614,6 +618,10 @@ private fun stateColours(status: Lens.Status?): Pair<Color, Color> {
 @Composable
 private fun dimOf(status: Lens.Status?, ink: Color): Color = if (status == null || status == Lens.Status.QUIET) LocalPalette.current.dim else ink.copy(alpha = 0.7f)
 
+/** The mail count's colour: the talk hue on plain ground, the state's paint wins on a painted tab or header. */
+@Composable
+private fun mailOf(status: Lens.Status?, ink: Color): Color = if (status == null || status == Lens.Status.QUIET) LocalPalette.current.talk else ink
+
 /**
  * Every pane the token may read, each painted with its state: attention colour when it waits for
  * you, dim when it works, plain when quiet. Open panes have a thick border, the focused one the
@@ -628,40 +636,47 @@ private fun Tabs(model: AppModel, open: List<String>, minimised: List<String>, f
     val panes = ArrayList<Pair<String, Pane?>>()
     for (pane in model.panes) if (pane.key !in minimised) panes.add(pane.key to pane)
     for (a in open) if (panes.none { it.first == a }) panes.add(a to model.view(a).pane)
+    // The tabs of a group side by side inside one frame in the talk hue; the strip's items are the runs.
+    val groups = remember(model.panes) { Groups.of(model.panes) }
+    val runs = Groups.runs(Groups.pullTogether(panes, groups) { it.first }, groups) { it.first }
     val list = rememberLazyListState()
-    LaunchedEffect(focused, panes.size) { panes.indexOfFirst { it.first == focused }.takeIf { it >= 0 }?.let { list.animateScrollToItem(it) } }
+    LaunchedEffect(focused, runs.size) { runs.indexOfFirst { r -> r.rows.any { it.first == focused } }.takeIf { it >= 0 }?.let { list.animateScrollToItem(it) } }
     // The drag handler runs on from the tab's first composition: it holds the latest view.
     val hold by rememberUpdatedState(onHold)
     LazyRow(modifier.background(p.bg), state = list, verticalAlignment = Alignment.CenterVertically) {
-        items(panes, key = { it.first }) { (address, pane) ->
-            val isOpen = address in open
-            val isFocused = address == focused
-            val status = pane?.let { model.status(it, now) }
-            val (back, ink) = stateColours(status)
-            val waiting = status == Lens.Status.WAITING
-            val border: Dp = if (isFocused) 3.dp else if (isOpen) 2.dp else 1.dp
-            // The drag source comes before the border and the ground, so the whole painted tab
-            // is what travels under the finger.
-            Row(
-                Modifier.padding(2.dp)
-                    .clickable { onTap(address) }
-                    .dragAndDropSource {
-                        // The drag starts with the first movement after the long press; let go in
-                        // place, the hold opens the pane beside.
-                        var moved = false
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = { moved = false },
-                            onDragEnd = { if (!moved) hold(address) },
-                        ) { _, _ -> if (!moved) { moved = true; startTransfer(DragAndDropTransferData(paneClip(address))) } }
+        items(runs, key = { it.rows.first().first }) { run ->
+            val frame = if (run.group != null) Modifier.padding(end = 4.dp).border(1.dp, p.talk).padding(1.dp).testTag("group:${run.group}") else Modifier
+            Row(frame, verticalAlignment = Alignment.CenterVertically) {
+                for ((address, pane) in run.rows) {
+                    val isOpen = address in open
+                    val isFocused = address == focused
+                    val status = pane?.let { model.status(it, now) }
+                    val (back, ink) = stateColours(status)
+                    val border: Dp = if (isFocused) 3.dp else if (isOpen) 2.dp else 1.dp
+                    // The drag source comes before the border and the ground, so the whole painted
+                    // tab is what travels under the finger.
+                    Row(
+                        Modifier.padding(2.dp)
+                            .clickable { onTap(address) }
+                            .dragAndDropSource {
+                                // The drag starts with the first movement after the long press; let
+                                // go in place, the hold opens the pane beside.
+                                var moved = false
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = { moved = false },
+                                    onDragEnd = { if (!moved) hold(address) },
+                                ) { _, _ -> if (!moved) { moved = true; startTransfer(DragAndDropTransferData(paneClip(address))) } }
+                            }
+                            .border(border, if (isOpen) p.ink else p.faint).background(back)
+                            .padding(horizontal = 8.dp, vertical = 5.dp)
+                            .testTag("tab:${Keys.address(address)}"),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (status != null && status != Lens.Status.QUIET) { Mark(status, pane?.attention?.kind, ink); Text(" ", maxLines = 1) }
+                        if (pane != null) PaneName(pane, ink, dimOf(status, ink), bold = isFocused, tab = true, mail = mailOf(status, ink))
+                        else Text(Keys.address(address).substringAfter('/'), color = ink, maxLines = 1, style = LocalTextStyle.current.copy(fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal, shadow = null))
                     }
-                    .border(border, if (isOpen) p.ink else p.faint).background(back)
-                    .padding(horizontal = 8.dp, vertical = 5.dp)
-                    .testTag("tab:${Keys.address(address)}"),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (status != null && status != Lens.Status.QUIET) { Mark(status, pane?.attention?.kind, ink); Text(" ", maxLines = 1) }
-                if (pane != null) PaneName(pane, ink, dimOf(status, ink), bold = isFocused, tab = true)
-                else Text(Keys.address(address).substringAfter('/'), color = ink, maxLines = 1, style = LocalTextStyle.current.copy(fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal, shadow = null))
+                }
             }
         }
     }
@@ -695,7 +710,7 @@ private fun MinimisedRow(model: AppModel, keys: List<String>, now: Long, onTap: 
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (status != null && status != Lens.Status.QUIET) { Mark(status, pane?.attention?.kind, ink); Text(" ", maxLines = 1) }
-                if (pane != null) PaneName(pane, ink, dimOf(status, ink), tab = true)
+                if (pane != null) PaneName(pane, ink, dimOf(status, ink), tab = true, mail = mailOf(status, ink))
                 else Text(Keys.address(k).substringAfter('/'), color = ink, maxLines = 1, style = LocalTextStyle.current.copy(shadow = null))
             }
         }
@@ -717,29 +732,29 @@ private fun AddMenuPopup(model: AppModel, addresses: List<String>, tiles: List<S
             Modifier.width(300.dp).border(1.dp, p.ink).background(p.panel).padding(4.dp).testTag("add-menu")
                 .then(Modifier.heightIn(max = 420.dp)).verticalScroll(rememberScrollState()),
         ) {
-            val item: @Composable (String, String?, String?, () -> Unit) -> Unit = { label, place, reason, act ->
+            val item: @Composable (String, String?, String?, Lens.Agent?, () -> Unit) -> Unit = { label, place, reason, agent, act ->
                 Row(
                     Modifier.fillMaxWidth().clickable(enabled = reason == null, onClick = act).padding(horizontal = 4.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    if (agent != null) { AgentMark(agent); Text(" ", maxLines = 1) }
                     // The name keeps its width; the place after it takes the rest, cut with an ellipsis.
                     Text(label, color = if (reason == null) p.ink else p.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     (reason ?: place)?.let { Text("  $it", color = p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)) }
                 }
             }
             for (row in rows) when (row) {
-                is AddMenu.Row.NewPane -> item("+ pane", "beside ${row.pane.tab}", row.reason) {
+                is AddMenu.Row.NewPane -> item("+ pane", "beside ${row.pane.tab}", row.reason, null) {
                     onClose(); model.splitWindow(row.pane, into = addresses)
                 }
-                is AddMenu.Row.NewSession -> item("+ session", "on ${row.host}", row.reason) {
+                is AddMenu.Row.NewSession -> item("+ session", "on ${row.host}", row.reason, null) {
                     onClose(); model.createError = null; model.naming = Naming(row.hub, row.host, into = addresses)
                 }
                 is AddMenu.Row.Rule -> Rule(Modifier.padding(vertical = 2.dp))
                 is AddMenu.Row.Heading -> Text(row.text, color = p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
                 is AddMenu.Row.Item -> {
                     val g = Lens.glyph(model.status(row.pane, now), row.pane.attention?.kind)?.let { "$it " } ?: ""
-                    val mark = if (Lens.isClaude(row.pane)) "${Lens.MARK} " else ""
-                    item("$g$mark${row.pane.tab}", row.pane.place, null) { onClose(); onPick(row.pane.key) }
+                    item("$g${row.pane.tab}", row.pane.place, null, Lens.agent(row.pane)) { onClose(); onPick(row.pane.key) }
                 }
             }
             if (rows.isEmpty()) Text("nothing to add", color = p.dim, modifier = Modifier.padding(4.dp))
@@ -877,14 +892,16 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
         Btn("Enter", { model.key(state.key, "Enter") }, enabled = !busy, tint = p.tint(Input.group("Enter")))
     }
     state.pane?.let { Commands.forPane(it, model.recent) }?.let { (kind, commands) ->
-        val claude = kind == Commands.Kind.CLAUDE
-        val fixed = if (claude) commands.size else Commands.SHELL.size
+        val shell = kind == Commands.Kind.SHELL
+        val fixed = if (shell) Commands.SHELL.size else commands.size
         Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (claude) " ${Lens.MARK} " else " $ ", color = if (claude) p.claude else p.dim, maxLines = 1)
+            if (shell) Text(" $ ", color = p.dim, maxLines = 1)
+            else { Text(" ", maxLines = 1); AgentMark(Lens.agent(state.pane!!)); Text(" ", maxLines = 1) }
             LazyRow(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 itemsIndexed(commands, key = { _, c -> c.text }) { i, c ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (i == fixed) Text(" │ ", color = p.faint, maxLines = 1)
+                        if (c.agent != null) { Text(" ", maxLines = 1); AgentMark(c.agent) }
                         Btn(c.label, {
                             if (c.send) model.type(state.key, c.text, enter = true)
                             else { line.setTextAndPlaceCursorAtEnd(c.text); fieldFocus.request() }
@@ -974,7 +991,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun PaneTile(
-    model: AppModel, address: String, focused: Boolean, several: Boolean, fitAsked: Boolean, shared: Boolean, siblings: Boolean,
+    model: AppModel, address: String, focused: Boolean, several: Boolean, grouped: Boolean, fitAsked: Boolean, shared: Boolean, siblings: Boolean,
     windowFit: Boolean, expected: WindowLayout.Size?, fitAgain: Int, now: Long, slackPx: Int, modifier: Modifier,
     onMeasured: (WindowLayout.Size) -> Unit, onDrop: (String, Tiles.Zone) -> Unit, onZoom: () -> Unit, onClose: () -> Unit, onCloseTile: () -> Unit,
     onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onChanges: () -> Unit, onPrompt: () -> Unit, onFocus: () -> Unit,
@@ -1033,8 +1050,10 @@ private fun PaneTile(
     val waiting = status == Lens.Status.WAITING
     // A waiting pane's cell glows in the ink, outside its box: nothing around it moves.
     val glow = if (waiting) Modifier.glow(p.ink, pulse()) else Modifier
+    // A tile of a group wears one thin dimmed edge in the talk hue; the focused one keeps the ink.
+    val edgeColour = if (several && focused) p.ink else if (grouped) p.talk.copy(alpha = 0.4f) else p.faint
     Column(
-        modifier.padding(2.dp).then(glow).border(edge, if (several && focused) p.ink else p.faint).clickable(onClick = onFocus)
+        modifier.padding(2.dp).then(glow).border(edge, edgeColour).clickable(onClick = onFocus)
             .onGloballyPositioned { bounds = it.boundsInRoot() }
             .dragAndDropTarget(shouldStartDragAndDrop = { it.mimeTypes().contains(MIME) }, target = target)
             .testTag("tile:${Keys.address(address)}"),
@@ -1050,7 +1069,7 @@ private fun PaneTile(
         Row(header, verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 if (pane != null) {
-                    PaneName(pane, ink, dimOf(status, ink), bold = several && focused, modifier = Modifier.weight(1f, fill = false))
+                    PaneName(pane, ink, dimOf(status, ink), bold = several && focused, mail = mailOf(status, ink), modifier = Modifier.weight(1f, fill = false))
                     Text(" · ${pane.mode}", color = ink, maxLines = 1, style = LocalTextStyle.current.copy(shadow = null))
                 } else Text(address, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(shadow = null))
             }
@@ -1058,6 +1077,8 @@ private fun PaneTile(
                 Text(" ", maxLines = 1)
                 Mark(status, pane?.attention?.kind, ink)
                 Text(" ${Lens.word(status, pane?.attention?.kind)} ", color = ink, maxLines = 1, modifier = if (waiting) Modifier.alpha(pulse()) else Modifier)
+                // A question asked with fixed answers: its choices, answered here.
+                if (pane != null && waiting) Choices(model, pane)
             }
             if (fitAsked && pane?.writable == true) {
                 // Alert colour when the host did not keep this phone's size: another terminal holds

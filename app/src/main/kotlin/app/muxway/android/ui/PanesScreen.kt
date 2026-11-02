@@ -2,6 +2,7 @@ package app.muxway.android.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +34,7 @@ import androidx.compose.ui.window.Dialog
 import app.muxway.android.AppModel
 import app.muxway.android.Naming
 import app.muxway.android.Screen
+import app.muxway.android.protocol.Groups
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Pane
 
@@ -43,9 +45,12 @@ fun PanesScreen(model: AppModel) {
     val now = ticker()
     val conns = model.connections
     val several = conns.size > 1
+    // Panes that talked lately, from the listing: their rows are kept together and framed.
+    val groups = remember(model.panes) { Groups.of(model.panes) }
 
     Column(Modifier.fillMaxSize().padding(4.dp)) {
         Frame("muxway", crumb = "panes") {
+            InboxCount(model)
             Btn(if (model.listing) "…" else "refresh", { model.refreshList() }, enabled = !model.listing)
             Btn("settings", { model.open(Screen.Connect) })
         }
@@ -71,10 +76,17 @@ fun PanesScreen(model: AppModel) {
                         }) {
                             // Under a window's panes, when one of them is writable, a row that splits it.
                             for ((_, inWindow) in panes.groupBy { it.session to it.windowIndex }) {
-                                for (pane in inWindow) {
-                                    PaneRow(pane, model.status(pane, now), pane.key in model.selected,
-                                        onTap = { if (model.selected.isEmpty()) model.open(Screen.View(listOf(pane.key))) else model.toggleSelected(pane.key) },
-                                        onHold = { model.toggleSelected(pane.key) })
+                                // The rows of a group side by side, inside one frame in the talk hue.
+                                val pulled = Groups.pullTogether(inWindow, groups) { it.key }
+                                for (run in Groups.runs(pulled, groups) { it.key }) {
+                                    val rows: @Composable () -> Unit = {
+                                        for (pane in run.rows) {
+                                            PaneRow(pane, model.status(pane, now), pane.key in model.selected,
+                                                onTap = { if (model.selected.isEmpty()) model.open(Screen.View(listOf(pane.key))) else model.toggleSelected(pane.key) },
+                                                onHold = { model.toggleSelected(pane.key) })
+                                        }
+                                    }
+                                    if (run.group != null) Column(Modifier.fillMaxWidth().border(1.dp, p.talk).testTag("group:${run.group}")) { rows() } else rows()
                                 }
                                 inWindow.firstOrNull { it.writable }?.let { source -> NewPaneRow(enabled = !model.creating) { model.splitWindow(source) } }
                             }
@@ -95,6 +107,7 @@ fun PanesScreen(model: AppModel) {
         Text(if (model.selected.isEmpty()) "  tap to open · hold to pick several" else "  ${model.selected.size}/4 · hold to pick more", color = p.dim, modifier = Modifier.padding(4.dp))
     }
     model.naming?.takeIf { it.into == null }?.let { SessionDialog(it, model) }
+    if (model.inboxOpen) InboxSheet(model, now) { model.inboxOpen = false }
 }
 
 /** `═══ work ═══`, a hub's line over its hosts, with its trouble when it has any. */
@@ -174,7 +187,7 @@ private fun PaneRow(pane: Pane, status: Lens.Status, selected: Boolean, onTap: (
             Mark(status, pane.attention?.kind, if (selected) p.bg else if (status == Lens.Status.WAITING) p.attention else p.dim)
             Text(" ", maxLines = 1)
         }
-        PaneName(pane, fg, dim, modifier = Modifier.weight(1f, fill = false))
+        PaneName(pane, fg, dim, mail = if (selected) fg else null, modifier = Modifier.weight(1f, fill = false))
         Text("  ${pane.place}", color = dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Lens.word(status, pane.attention?.kind)?.let { w ->
             Text(" $w", color = if (selected) p.bg else if (status == Lens.Status.WAITING) p.attention else p.dim, maxLines = 1)

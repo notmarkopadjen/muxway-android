@@ -205,6 +205,23 @@ class ApiTest {
     }
 
     @Test
+    fun anAnswerSendsTheChoiceAsGivenAndRefusesWhatTheHubWould() {
+        answer = { Response(204) }
+        api().answer("h/w/0.0", "yes")
+        assertEquals("/v1/panes/h/w/0.0/answer", seen.single().path)
+        assertEquals("""{"choice":"yes"}""", String(seen.single().body))
+        for (bad in listOf("", "x".repeat(41), "a|b", "yes\u0007")) assertThrows(IllegalArgumentException::class.java) { api().answer("h/w/0.0", bad) }
+        assertEquals(1, seen.size)
+        answer = { json(409, """{"error":"no_question"}""") }
+        val e = assertThrows(ApiException::class.java) { api().answer("h/w/0.0", "yes") }
+        assertEquals("no_question", e.code)
+        assertEquals("Nothing waits there any more", e.message)
+        answer = { json(200, """{"inbox":[{"session":"work","window_index":0,"pane_index":0,"attention":{"kind":"done","at":1,"text":""}}],"count":1}""") }
+        assertEquals("done", api().inbox().single().attention?.kind)
+        assertEquals("/v1/inbox", seen.last().path)
+    }
+
+    @Test
     fun addressesArePercentEncoded() {
         answer = { Response(204) }
         api().key("alice-laptop/@build", "Enter")
