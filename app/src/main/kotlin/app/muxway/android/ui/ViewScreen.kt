@@ -640,8 +640,10 @@ private fun Tabs(model: AppModel, open: List<String>, minimised: List<String>, f
             val (back, ink) = stateColours(status)
             val waiting = status == Lens.Status.WAITING
             val border: Dp = if (isFocused) 3.dp else if (isOpen) 2.dp else 1.dp
+            // The drag source comes before the border and the ground, so the whole painted tab
+            // is what travels under the finger.
             Row(
-                Modifier.padding(2.dp).border(border, if (isOpen) p.ink else p.faint).background(back)
+                Modifier.padding(2.dp)
                     .clickable { onTap(address) }
                     .dragAndDropSource {
                         // The drag starts with the first movement after the long press; let go in
@@ -652,6 +654,7 @@ private fun Tabs(model: AppModel, open: List<String>, minimised: List<String>, f
                             onDragEnd = { if (!moved) hold(address) },
                         ) { _, _ -> if (!moved) { moved = true; startTransfer(DragAndDropTransferData(paneClip(address))) } }
                     }
+                    .border(border, if (isOpen) p.ink else p.faint).background(back)
                     .padding(horizontal = 8.dp, vertical = 5.dp)
                     .testTag("tab:${Keys.address(address)}"),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1036,12 +1039,14 @@ private fun PaneTile(
             .dragAndDropTarget(shouldStartDragAndDrop = { it.mimeTypes().contains(MIME) }, target = target)
             .testTag("tile:${Keys.address(address)}"),
     ) {
-        // The header drags by a long press, with another tile to drop it on; a double tap zooms the pane.
-        val header = Modifier.fillMaxWidth().background(back).padding(horizontal = 4.dp, vertical = 2.dp)
-            .pointerInput(address) { detectTapGestures(onDoubleTap = { onZoom() }, onTap = { onFocus() }) }
+        // The header drags by a long press, with another tile to drop it on, the whole painted
+        // header under the finger; a double tap zooms the pane.
+        val header = Modifier.fillMaxWidth()
             .then(if (several) Modifier.dragAndDropSource {
                 detectDragGesturesAfterLongPress { _, _ -> startTransfer(DragAndDropTransferData(paneClip(address))) }
             } else Modifier)
+            .background(back).padding(horizontal = 4.dp, vertical = 2.dp)
+            .pointerInput(address) { detectTapGestures(onDoubleTap = { onZoom() }, onTap = { onFocus() }) }
         Row(header, verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 if (pane != null) {
