@@ -10,6 +10,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Socket
 
 /** The client against a server that misbehaves on purpose. */
 class ApiTest {
@@ -230,12 +233,18 @@ class ApiTest {
         assertEquals("/v1/panes/alice-laptop/wo%20rk/1.0/input", seen[1].path)
     }
 
+    // The dead server is a port held open but never listened on: every connection to it is
+    // refused, and nothing else on the machine can take the port while the test runs, as it
+    // could a closed server's.
     @Test
     fun aDeadServerIsOffline() {
         server.close()
-        val e = assertThrows(ApiException::class.java) { api().hosts() }
-        assertEquals("offline", e.code)
-        assertEquals("No connection", e.message)
+        Socket().use { held ->
+            held.bind(InetSocketAddress(InetAddress.getLoopbackAddress(), 0))
+            val e = assertThrows(ApiException::class.java) { Api("http://127.0.0.1:${held.localPort}", token, "test").hosts() }
+            assertEquals("offline", e.code)
+            assertEquals("No connection", e.message)
+        }
     }
 
     @Test

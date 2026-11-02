@@ -3,7 +3,6 @@ package app.muxway.android.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.draganddrop.dragAndDropSource
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.focusable
@@ -15,6 +14,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.LocalOverscrollConfiguration
 import android.Manifest
 import android.content.ClipData
+import android.view.DragEvent
 import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Handler
@@ -218,10 +218,32 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val movable = ids != null && TileFit.movable(tiles, model.panes)
     val rearrangeable = tiles.size > 1 && (ids == null || movable)
     fun refusedMove() { model.told = "moving these panes needs every pane of the window writable" }
-    // A header dropped on a tile: its middle swaps the two, an edge splits that tile's place.
+    // A dropped key names a view only when it is a pane of the listing, and not one waiting below.
+    fun listed(from: String) = from !in minimised && model.panes.any { it.key == from }
+    // A tab of a pane not open, dropped on the view: the pane comes in as one more tile where
+    // the drop says. The count is a new view, so the made tree travels as a closed tile's does,
+    // and the pane is focused once the tiles are up.
+    fun bring(from: String, made: (leaf: Int) -> WindowLayout.Node) {
+        kept.carried = Saved(addresses + from, Layout.CUSTOM, made(tiles.size), emptyMap())
+        kept.focusNext = from
+        touch()
+        model.addPane(addresses, index, from, full = false)
+    }
+    // A header or a tab dropped on a tile: its middle swaps the two, an edge splits that tile's
+    // place. A pane not open takes the tile's place from the middle, as a tap on its tab would
+    // take the focused tile's, or comes in beside from an edge while there is room for one more.
     fun drop(from: String, to: Int, zone: Tiles.Zone) {
         val at = tiles.indexOf(from)
-        if (at < 0 || at == to) return
+        if (at == to) return
+        if (at < 0) {
+            if (!listed(from)) return
+            if (zone == Tiles.Zone.SWAP || addresses.size >= AddMenu.MAX_TILES) {
+                touch()
+                focusedIndex = to
+                model.swap(addresses, addresses.indexOf(tiles[to]), from)
+            } else bring(from) { leaf -> Tiles.dropOn(shape, leaf, to, zone) }
+            return
+        }
         if (!rearrangeable) { refusedMove(); return }
         touch()
         if (zone == Tiles.Zone.SWAP) { model.swapTiles(addresses, from, tiles[to]); return }
@@ -229,10 +251,15 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         layout = Layout.CUSTOM
         weights.clear()
     }
-    // A header dropped on a divider: the pane across that split, first or last.
+    // A header or a tab dropped on a divider: the pane across that split, first or last.
     fun lay(from: String, key: String, horizontal: Boolean, first: Boolean) {
         val at = tiles.indexOf(from)
-        if (at < 0) return
+        if (at < 0) {
+            if (!listed(from)) return
+            if (addresses.size >= AddMenu.MAX_TILES) model.told = "up to ${AddMenu.MAX_TILES} panes side by side"
+            else bring(from) { leaf -> Tiles.across(shape, leaf, key, horizontal, first) }
+            return
+        }
         if (!rearrangeable) { refusedMove(); return }
         touch()
         custom = Tiles.across(shape, at, key, horizontal, first)
@@ -533,13 +560,15 @@ private fun Tree(
             fun drag(k: Int, px: Float) { weights[node.key] = Tiles.drag(weights[node.key]?.takeIf { it.size == n } ?: Tiles.equal(n), k, px / total) }
             val bar: @Composable (Int) -> Unit = { k ->
                 var bounds by remember { mutableStateOf<Rect?>(null) }
+                // The target outlives the tree it was made for: it drops into the latest one.
+                val across by rememberUpdatedState(onAcross)
                 val target = remember(node.key, k) {
                     object : DragAndDropTarget {
                         override fun onDrop(event: DragAndDropEvent): Boolean {
                             val e = event.toAndroidDragEvent()
-                            val from = e.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString() ?: return false
+                            val from = dragged(e) ?: return false
                             val b = bounds ?: return false
-                            onAcross(from, node.key, !node.horizontal, if (node.horizontal) e.y < b.center.y else e.x < b.center.x)
+                            across(from, node.key, !node.horizontal, if (node.horizontal) e.y < b.center.y else e.x < b.center.x)
                             return true
                         }
                     }
@@ -597,7 +626,8 @@ private fun mailOf(status: Lens.Status?, ink: Color): Color = if (status == null
  * Every pane the token may read, each painted with its state: attention colour when it waits for
  * you, dim when it works, plain when quiet. Open panes have a thick border, the focused one the
  * thickest and its name in bold. Tapping a closed one swaps it into the focused tile; holding it
- * opens it beside, as the browser's Shift+click does.
+ * opens it beside, as the browser's Shift+click does; held and moved, it drags as a header does,
+ * to be dropped on a tile or a divider.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -611,6 +641,8 @@ private fun Tabs(model: AppModel, open: List<String>, minimised: List<String>, f
     val runs = Groups.runs(Groups.pullTogether(panes, groups) { it.first }, groups) { it.first }
     val list = rememberLazyListState()
     LaunchedEffect(focused, runs.size) { runs.indexOfFirst { r -> r.rows.any { it.first == focused } }.takeIf { it >= 0 }?.let { list.animateScrollToItem(it) } }
+    // The drag handler runs on from the tab's first composition: it holds the latest view.
+    val hold by rememberUpdatedState(onHold)
     LazyRow(modifier.background(p.bg), state = list, verticalAlignment = Alignment.CenterVertically) {
         items(runs, key = { it.rows.first().first }) { run ->
             val frame = if (run.group != null) Modifier.padding(end = 4.dp).border(1.dp, p.talk).padding(1.dp).testTag("group:${run.group}") else Modifier
@@ -621,9 +653,22 @@ private fun Tabs(model: AppModel, open: List<String>, minimised: List<String>, f
                     val status = pane?.let { model.status(it, now) }
                     val (back, ink) = stateColours(status)
                     val border: Dp = if (isFocused) 3.dp else if (isOpen) 2.dp else 1.dp
+                    // The drag source comes before the border and the ground, so the whole painted
+                    // tab is what travels under the finger.
                     Row(
-                        Modifier.padding(2.dp).border(border, if (isOpen) p.ink else p.faint).background(back)
-                            .combinedClickable(onClick = { onTap(address) }, onLongClick = { onHold(address) }).padding(horizontal = 8.dp, vertical = 5.dp)
+                        Modifier.padding(2.dp)
+                            .clickable { onTap(address) }
+                            .dragAndDropSource {
+                                // The drag starts with the first movement after the long press; let
+                                // go in place, the hold opens the pane beside.
+                                var moved = false
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = { moved = false },
+                                    onDragEnd = { if (!moved) hold(address) },
+                                ) { _, _ -> if (!moved) { moved = true; startTransfer(DragAndDropTransferData(paneClip(address))) } }
+                            }
+                            .border(border, if (isOpen) p.ink else p.faint).background(back)
+                            .padding(horizontal = 8.dp, vertical = 5.dp)
                             .testTag("tab:${Keys.address(address)}"),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -693,8 +738,9 @@ private fun AddMenuPopup(model: AppModel, addresses: List<String>, tiles: List<S
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (agent != null) { AgentMark(agent); Text(" ", maxLines = 1) }
-                    Text(label, color = if (reason == null) p.ink else p.faint, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    (reason ?: place)?.let { Text("  $it", color = p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)) }
+                    // The name keeps its width; the place after it takes the rest, cut with an ellipsis.
+                    Text(label, color = if (reason == null) p.ink else p.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    (reason ?: place)?.let { Text("  $it", color = p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)) }
                 }
             }
             for (row in rows) when (row) {
@@ -984,17 +1030,19 @@ private fun PaneTile(
             }
         }
     }
-    // Another tile's header dropped here: on the middle it swaps the two panes, on an edge it
-    // splits this tile's place that way.
+    // A header or a tab dropped here: on the middle it swaps the two panes, on an edge it splits
+    // this tile's place that way. The target outlives the view it was made for: it drops into
+    // the latest one.
     var bounds by remember { mutableStateOf<Rect?>(null) }
+    val dropped by rememberUpdatedState(onDrop)
     val target = remember(address) {
         object : DragAndDropTarget {
             override fun onDrop(event: DragAndDropEvent): Boolean {
                 val e = event.toAndroidDragEvent()
-                val from = e.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString() ?: return false
+                val from = dragged(e) ?: return false
                 val b = bounds
                 val zone = if (b == null || b.width <= 0f || b.height <= 0f) Tiles.Zone.SWAP else Tiles.zoneAt((e.x - b.left) / b.width, (e.y - b.top) / b.height)
-                onDrop(from, zone)
+                dropped(from, zone)
                 return true
             }
         }
@@ -1007,14 +1055,17 @@ private fun PaneTile(
     Column(
         modifier.padding(2.dp).then(glow).border(edge, edgeColour).clickable(onClick = onFocus)
             .onGloballyPositioned { bounds = it.boundsInRoot() }
-            .then(if (several) Modifier.dragAndDropTarget(shouldStartDragAndDrop = { it.mimeTypes().contains(MIME) }, target = target) else Modifier),
+            .dragAndDropTarget(shouldStartDragAndDrop = { it.mimeTypes().contains(MIME) }, target = target)
+            .testTag("tile:${Keys.address(address)}"),
     ) {
-        // The header drags by a long press; a double tap zooms the pane.
-        val header = Modifier.fillMaxWidth().background(back).padding(horizontal = 4.dp, vertical = 2.dp)
-            .pointerInput(address) { detectTapGestures(onDoubleTap = { onZoom() }, onTap = { onFocus() }) }
+        // The header drags by a long press, with another tile to drop it on, the whole painted
+        // header under the finger; a double tap zooms the pane.
+        val header = Modifier.fillMaxWidth()
             .then(if (several) Modifier.dragAndDropSource {
-                detectDragGesturesAfterLongPress { _, _ -> startTransfer(DragAndDropTransferData(ClipData.newPlainText(MIME, address))) }
+                detectDragGesturesAfterLongPress { _, _ -> startTransfer(DragAndDropTransferData(paneClip(address))) }
             } else Modifier)
+            .background(back).padding(horizontal = 4.dp, vertical = 2.dp)
+            .pointerInput(address) { detectTapGestures(onDoubleTap = { onZoom() }, onTap = { onFocus() }) }
         Row(header, verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 if (pane != null) {
@@ -1239,7 +1290,13 @@ private fun PaneTile(
     }
 }
 
-private const val MIME = "text/plain"
+/** A dragged header or tab carries its pane's key under a type of this app's own, so no text from elsewhere is taken for a pane. */
+private const val MIME = "application/x-muxway-pane"
+
+private fun paneClip(address: String) = ClipData("pane", arrayOf(MIME), ClipData.Item(address))
+
+private fun dragged(e: DragEvent): String? =
+    e.clipData?.takeIf { it.description.hasMimeType(MIME) && it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
 
 /** Where the list put a row, in its coordinates, and the row's text as laid out. */
 private class LaidRow {

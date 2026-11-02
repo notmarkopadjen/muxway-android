@@ -1,6 +1,12 @@
 package app.muxway.android
 
 import android.graphics.Bitmap
+import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
+import android.view.ViewConfiguration
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertCountEquals
@@ -29,6 +35,8 @@ import app.muxway.android.store.Settings
 import app.muxway.android.store.SettingsStore
 import app.muxway.android.store.Vault
 import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
@@ -88,6 +96,43 @@ class FlowTest {
         rule.waitUntil(seconds * 1000) { rule.onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().isNotEmpty() }
         return rule.onAllNodes(hasText(text, substring = true)).onFirst()
     }
+
+    /** A node's bounds on the screen, for a touch the system sees. */
+    private fun onScreen(tag: String): Rect {
+        val b = rule.onNodeWithTag(tag).fetchSemanticsNode().boundsInWindow
+        val xy = IntArray(2)
+        scenario!!.onActivity { it.window.decorView.getLocationOnScreen(xy) }
+        return b.translate(xy[0].toFloat(), xy[1].toFloat())
+    }
+
+    /**
+     * A drag as the window manager sees it, so a drop lands: down, a long press, moves, up,
+     * injected through UiAutomation, since the rule's touches never leave the view and the
+     * drag's window is the system's.
+     */
+    private fun dragOnScreen(from: Offset, to: Offset) {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val start = SystemClock.uptimeMillis()
+        fun send(action: Int, at: Offset) {
+            val e = MotionEvent.obtain(start, SystemClock.uptimeMillis(), action, at.x, at.y, 0)
+            e.source = InputDevice.SOURCE_TOUCHSCREEN
+            automation.injectInputEvent(e, true)
+            e.recycle()
+        }
+        send(MotionEvent.ACTION_DOWN, from)
+        SystemClock.sleep(ViewConfiguration.getLongPressTimeout() + 400L)
+        for (i in 1..12) {
+            send(MotionEvent.ACTION_MOVE, from + (to - from) * (i / 12f))
+            SystemClock.sleep(40)
+        }
+        send(MotionEvent.ACTION_UP, to)
+        rule.waitForIdle()
+    }
+
+    private fun tiles(): Int = rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size
+
+    /** Where a tile's top is in the window, or nothing while it is not there. */
+    private fun topOf(tag: String): Float? = rule.onAllNodesWithTag(tag).fetchSemanticsNodes().firstOrNull()?.boundsInWindow?.top
 
     @Test
     fun listOpenTypeAndNeverShowTheToken() {
@@ -277,6 +322,39 @@ class FlowTest {
         rule.onNodeWithTag("tab:alice-laptop/work/0.1").performTouchInput { longClick() }
         rule.waitUntil(5_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 2 }
         shot("beside")
+    }
+
+    @Test
+    fun aTabDroppedOnATileLaysItsPaneOut() {
+        seedSecondHub()
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        val tab = "tab:bob-server/ops/0.0"
+        val work = "tile:alice-laptop/work/0.0"
+        val ops = "tile:bob-server/ops/0.0"
+        rule.onNodeWithTag(tab).assertExists()
+        // The other hub's tab dropped on the right part of the one tile: two tiles side by side,
+        // the dropped pane on the right.
+        var t = onScreen(work)
+        dragOnScreen(onScreen(tab).center, Offset(t.left + t.width * 0.9f, t.center.y))
+        rule.waitUntil(15_000) { tiles() == 2 }
+        assertTrue(onScreen(ops).left > onScreen(work).left)
+        assertEquals(onScreen(work).top, onScreen(ops).top, 1f)
+        shot("tab-right")
+        // The second tile closed; the tab dropped on the lower part: stacked, the dropped pane below.
+        rule.onAllNodesWithTag("close")[1].performClick()
+        rule.waitUntil(5_000) { tiles() == 1 }
+        t = onScreen(work)
+        dragOnScreen(onScreen(tab).center, Offset(t.center.x, t.top + t.height * 0.9f))
+        rule.waitUntil(15_000) { tiles() == 2 }
+        assertTrue(onScreen(ops).top > onScreen(work).top)
+        shot("tab-below")
+        // The lower tile's tab dropped on the upper tile's middle: the two swap.
+        dragOnScreen(onScreen(tab).center, onScreen(work).center)
+        rule.waitUntil(5_000) { val o = topOf(ops); val w = topOf(work); o != null && w != null && o < w }
+        assertEquals(2, tiles())
+        shot("tab-swapped")
     }
 
     @Test

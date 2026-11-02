@@ -7,9 +7,10 @@ import kotlin.math.roundToInt
 
 /**
  * The tiles' arrangement as a tree of splits, each with a key its shares are kept under, as
- * the browser has it: a header dropped on a tile's middle swaps the two, on its edge splits
- * that tile's place, on a divider lays the pane across that split; a closed tile is pruned;
- * the host's layout of a window becomes the tree when the tiles are its panes.
+ * the browser has it: a header or a tab dropped on a tile's middle swaps the two, on its edge
+ * splits that tile's place, on a divider lays the pane across that split, a leaf the tree lacks
+ * coming in where the drop says; a closed tile is pruned; the host's layout of a window becomes
+ * the tree when the tiles are its panes.
  */
 object Tiles {
     const val FLOOR = 0.15f

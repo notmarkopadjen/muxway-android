@@ -41,7 +41,8 @@ focused pane.
   a rule, the panes minimised below, a rule, every other readable pane
   not on screen, grouped by hub (with several), host and session in
   listing order, each as its glyph and name with its place dimmed after
-  it, a minimised one too. The focused pane and the open tiles are not listed. An entry the
+  it, a minimised one too; the place is cut with an ellipsis before the
+  name is, and the menu never scrolls sideways. The focused pane and the open tiles are not listed. An entry the
   token or the host does not allow is dimmed with the reason (`read only`,
   `no sessions here`). A pick becomes one more tile, focused; with four
   panes open, tiles and minimised together, the menu's heading says `four open: a pick replaces <focused>`
@@ -64,7 +65,11 @@ focused pane.
   or previous tile, or with one tile open swaps the strip's next or
   previous pane into it, coming round at either end as `]` and `[` do
   in the browser. A tab **held** opens its pane beside the focused one,
-  as the browser's Shift+click does.
+  as the browser's Shift+click does; held and **moved**, it drags as a
+  header does, and dropped on a tile or on the bar between two it lays
+  its pane out there (see the tree of splits below): with one tile open,
+  a drop on the right part of the screen makes two columns, on the
+  lower part two rows.
 - One pane fills the screen. Several panes start **side by side in
   landscape** and **stacked in portrait**, each with an equal share; `▦`
   cycles the arrangements that make sense for the count: two panes have
@@ -79,7 +84,14 @@ focused pane.
   pane on that side, its old place closing up and every share equal
   again; drop it on the bar between two tiles to lay the pane across
   that split, over or under a row, left or right of a stack, by the half
-  of the bar it lands on; `▦` goes back to the presets. A tile closed or
+  of the bar it lands on; `▦` goes back to the presets. A tab from the
+  strip drops the same way: the tab of an open tile as its header
+  would; the tab of a pane not open takes the tile's place from its
+  middle, as a tap on it takes the focused tile's, comes in as one more
+  tile from an edge, the others keeping their places, or comes in
+  across the split from a bar; with four panes open, tiles and
+  minimised together, the whole tile is its middle and the pane takes
+  its place, and a bar says `up to 4 panes side by side`. A tile closed or
   minimised leaves a made tree closed up around it. **Zoom**: `⊡`, or
   a double tap on a header, shows the focused pane alone and remembers
   the tiles it came from; `⊡` from that pane goes back to them, in
