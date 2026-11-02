@@ -96,7 +96,7 @@ private fun BoardScreen(onOpen: (String) -> Unit) {
                     Column(Modifier.fillMaxWidth().clickable { onOpen(r.address) }.padding(horizontal = 12.dp, vertical = 5.dp)) {
                         Row {
                             Text(r.glyph ?: "·", color = Palette.forValue(value), fontFamily = Palette.mono, fontSize = 15.sp)
-                            Text(" ${r.name}", color = Palette.forValue(value), fontFamily = Palette.mono, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(" ${r.named}", color = Palette.forValue(value), fontFamily = Palette.mono, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         (r.word ?: "").let { if (it.isNotEmpty()) Text("  $it", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp, maxLines = 1) }
                         if (r.text.isNotEmpty()) Text("  ${r.text}", color = Palette.dim, fontFamily = Palette.mono, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)

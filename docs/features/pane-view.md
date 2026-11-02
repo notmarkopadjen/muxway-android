@@ -29,7 +29,11 @@ focused pane.
   quiet. Selection never changes the colour: the open pane has a thick
   border and its name in bold. Tapping another tab switches to that pane.
   The strip scrolls when the tabs do not fit and keeps the focused one in
-  view, with several panes open as well.
+  view, with several panes open as well. The tabs of a group (panes that
+  talked lately, see [the list](panes.md)) sit side by side inside one
+  frame in the talk hue, pulled next to the group's first tab; `✉ n`
+  after a tab's name while the pane's process has unread mail, in the
+  hue on a plain tab and in the tab's ink on a painted one.
 - **`+`** after the last tab opens the **add menu**, built from the
   listing the app holds, in this order: `+ pane` (one more pane beside
   the focused one on its host, where the token may type there), `+
@@ -91,10 +95,12 @@ focused pane.
   without a size). Moving them needs every pane of the window writable:
   otherwise `▦`, the bars and the drops are off and the tiles only
   follow, a drop saying so. Each header is painted like its
-  tab, with the pane's name (its status in italics, dimmer) and mode, the
+  tab, with the pane's name (its status in italics, dimmer), its mail
+  count `✉ n` when it has one, and mode, the
   lens's word (`! permission`, `⟳ working`) and, with fit on, the size;
   the focused one has the thick border and bold name; a waiting tile
-  glows in the ink around its box. A question asked with fixed answers
+  glows in the ink around its box; a tile of a group that is not focused
+  has its edge in the talk hue, thin and dimmed. A question asked with fixed answers
   (`muxway ask` on the host) shows its choices as buttons after the word:
   a tap sends the choice to the asking process through `/answer`,
   nothing is typed into the pane, and the attention goes with it; the

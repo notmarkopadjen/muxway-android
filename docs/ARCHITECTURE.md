@@ -145,7 +145,7 @@ client's side of it.
 
 | Feature | Request | Used by |
 |---|---|---|
-| hosts and panes | `GET /v1/hosts`, `GET /v1/panes`; a host's `sessions`, `close` and `keys` flags decide what the UI offers | pane list, watch service |
+| hosts and panes | `GET /v1/hosts`, `GET /v1/panes`; a host's `sessions`, `close` and `keys` flags decide what the UI offers; a pane's `talk` partners draw the groups and its `mail` the `✉ n` count (`protocol/.../Groups.kt`) | pane list, strip, tiles, watch service |
 | reading a pane | `GET /v1/panes/{address}?lines=N&ansi=1` with `If-None-Match`; `304` when unchanged; colour kept, every other escape dropped | pane view, the watch's tail |
 | typing | `POST /v1/panes/{address}/input` with `{"text"}` (control characters removed, 4096 bytes at most) | input bar, watch |
 | keys | the same with `{"key"}`; the grammar (`C-`, `M-`, `S-` on any key, chords) where the host says `keys: 2`, the old names elsewhere | key row, keyboard, hardware keyboard, watch |

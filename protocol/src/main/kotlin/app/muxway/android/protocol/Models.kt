@@ -6,6 +6,12 @@ package app.muxway.android.protocol
  */
 data class Host(val name: String, val online: Boolean, val sessions: Boolean = false, val close: Boolean = false, val keys: Int = 0, val preview: Boolean = false, val hub: String = "", val ask: Boolean = false)
 
+/** A pane this one wrote or mailed to, or was written to by, in the last ten minutes; [way] is `to`, `from` or `both`. */
+data class Talk(val address: String, val paneId: String, val at: Long, val way: String)
+
+/** Unread mail held for the pane's process: how much, and when the newest came. */
+data class Mail(val unread: Int, val at: Long)
+
 /** [choices]: the fixed answers of a question asked with `muxway ask`, empty for any other notification. */
 data class Attention(val kind: String, val at: Long, val text: String, val choices: List<String> = emptyList())
 
@@ -34,6 +40,10 @@ data class Pane(
     val hub: String = "",
     /** tmux's layout string for the pane's window, as the listing carries it; "" from an older hub. */
     val windowLayout: String = "",
+    /** The panes this one talked with lately, as the hub lists them; empty when it did not. */
+    val talk: List<Talk> = emptyList(),
+    /** Unread mail for the pane's process; null while there is none. */
+    val mail: Mail? = null,
 ) {
     val writable get() = mode == "write"
 

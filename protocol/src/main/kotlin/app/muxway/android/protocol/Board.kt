@@ -4,8 +4,14 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
-/** One pane as a glanceable client shows it: [address] is its key (see [Keys]); [state] is one of [Board.QUIET], [Board.WORKING], [Board.WAITING]. */
-data class Row(val address: String, val name: String, val state: Int, val kind: String, val at: Long, val text: String, val choices: List<String> = emptyList()) {
+/**
+ * One pane as a glanceable client shows it: [address] is its key (see [Keys]); [state] is one of
+ * [Board.QUIET], [Board.WORKING], [Board.WAITING]; [mail] is the unread mail its process holds.
+ */
+data class Row(val address: String, val name: String, val state: Int, val kind: String, val at: Long, val text: String, val choices: List<String> = emptyList(), val mail: Int = 0) {
+    /** The name with its mail count after it, as the board and the pane screen show it. */
+    val named: String get() = if (mail > 0) "$name ✉ $mail" else name
+
     val status: Lens.Status
         get() = when (state) {
             Board.WAITING -> Lens.Status.WAITING
@@ -40,6 +46,7 @@ data class Board(val rows: List<Row>, val at: Long, val live: Boolean) {
         for (r in rows) {
             val o = JSONObject().put("address", r.address).put("name", r.name).put("state", r.state).put("kind", r.kind).put("at", r.at).put("text", r.text)
             if (r.choices.isNotEmpty()) o.put("choices", JSONArray(r.choices))
+            if (r.mail > 0) o.put("mail", r.mail)
             arr.put(o)
         }
         return JSONObject().put("v", 1).put("at", at).put("live", live).put("rows", arr).toString()
@@ -54,6 +61,9 @@ data class Board(val rows: List<Row>, val at: Long, val live: Boolean) {
 
         /** The most rows any display asks for; more panes than this are counted, not listed. */
         const val MAX_ROWS = 64
+
+        /** A mail count past this would not fit a row. */
+        const val MAX_MAIL = 9999
 
         val EMPTY = Board(emptyList(), 0, false)
 
@@ -70,6 +80,7 @@ data class Board(val rows: List<Row>, val at: Long, val live: Boolean) {
                     at = a?.at ?: 0L,
                     text = if (withText && s == Lens.Status.WAITING) a?.text.orEmpty() else "",
                     choices = if (s == Lens.Status.WAITING) a?.choices.orEmpty() else emptyList(),
+                    mail = (p.mail?.unread ?: 0).coerceIn(0, MAX_MAIL),
                 )
             }
             val sorted = rows.sortedWith(compareByDescending<Row> { it.state }.thenBy { if (it.state == WAITING) it.at else 0L }.thenBy { it.address })
@@ -87,7 +98,7 @@ data class Board(val rows: List<Row>, val at: Long, val live: Boolean) {
                     val r = arr.optJSONObject(i) ?: continue
                     val address = clean(r.optString("address"))
                     if (!Keys.valid(address)) continue
-                    rows.add(Row(address, clean(r.optString("name")), r.optInt("state").coerceIn(QUIET, WAITING), clean(r.optString("kind")), r.optLong("at"), clean(r.optString("text")), choices(r.optJSONArray("choices"))))
+                    rows.add(Row(address, clean(r.optString("name")), r.optInt("state").coerceIn(QUIET, WAITING), clean(r.optString("kind")), r.optLong("at"), clean(r.optString("text")), choices(r.optJSONArray("choices")), r.optInt("mail").coerceIn(0, MAX_MAIL)))
                 }
                 Board(rows, o.optLong("at"), o.optBoolean("live"))
             } catch (e: JSONException) {

@@ -68,7 +68,9 @@ foreground service that holds the hub's events long poll, lists the panes
 after every answer, and computes the **board**: every pane with its lens
 state, ranked. Panes that wait come first, the one that has waited longest
 on top; then working panes; then quiet ones. Each row carries the pane's
-address, its name, the state, the notification's kind and time and, only
+address, its name, the state, the notification's kind and time, how much
+unread mail its process holds (the board and the pane screen say `✉ n`
+after the name; the face does not) and, only
 when the **notification text** setting is on, the notification's text. The
 board also says when it was computed and whether the service is running.
 

@@ -405,18 +405,20 @@ fun AgentMark(agent: Lens.Agent?, modifier: Modifier = Modifier) {
 
 /**
  * The pane's name, the agent's mark before it, and its status after it in italics and dimmer;
- * as a [tab], an agent's status alone (Claude's codename).
+ * as a [tab], an agent's status alone (Claude's codename). `✉ n` after the name while the pane's
+ * process has unread mail, in [mail]: the talk hue on plain ground, the surface's ink where the
+ * state paints it.
  */
 @Composable
-fun PaneName(pane: Pane, ink: Color, dim: Color, bold: Boolean = false, tab: Boolean = false, modifier: Modifier = Modifier) {
+fun PaneName(pane: Pane, ink: Color, dim: Color, bold: Boolean = false, tab: Boolean = false, mail: Color? = null, modifier: Modifier = Modifier) {
     val d = Lens.describe(pane)
     val weight = if (bold) FontWeight.Bold else FontWeight.Normal
+    val hue = mail ?: LocalPalette.current.talk
     val text = buildAnnotatedString {
         if (tab && d.agent != null) withStyle(SpanStyle(fontWeight = weight)) { append(d.status.ifEmpty { d.name }) }
-        else {
-            withStyle(SpanStyle(fontWeight = weight)) { append(d.name) }
-            if (d.status.isNotEmpty()) withStyle(SpanStyle(color = dim, fontStyle = FontStyle.Italic)) { append(" · ${d.status}") }
-        }
+        else withStyle(SpanStyle(fontWeight = weight)) { append(d.name) }
+        pane.mail?.let { withStyle(SpanStyle(color = hue)) { append(" ✉ ${it.unread}") } }
+        if (!(tab && d.agent != null) && d.status.isNotEmpty()) withStyle(SpanStyle(color = dim, fontStyle = FontStyle.Italic)) { append(" · ${d.status}") }
     }
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         if (d.agent != null) { AgentMark(d.agent); if (d.agent == Lens.Agent.CLAUDE || d.agent == Lens.Agent.CODEX || d.agent == Lens.Agent.ANTIGRAVITY) Text(" ", maxLines = 1) }

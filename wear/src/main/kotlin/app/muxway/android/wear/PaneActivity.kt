@@ -363,7 +363,7 @@ class PaneActivity : ComponentActivity() {
         LaunchedEffect(lines) { scroll.scrollTo(scroll.maxValue) }
         LaunchedEffect(Unit) { runCatching { wheel.requestFocus() } }
         val value = when (row?.state) { Board.WAITING -> 2; Board.QUIET -> 1; else -> 0 }
-        val name = row?.let { r -> r.glyph?.let { "$it ${r.name}" } ?: r.name } ?: address.substringAfter('/')
+        val name = row?.let { r -> r.glyph?.let { "$it ${r.named}" } ?: r.named } ?: address.substringAfter('/')
         val (body, pinned) = remember(lines, command) { shaped() }
         val ink = if (problem == null) Palette.ink else Palette.dim
         val config = LocalConfiguration.current

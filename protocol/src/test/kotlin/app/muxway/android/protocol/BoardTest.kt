@@ -8,11 +8,24 @@ import org.junit.Test
 class BoardTest {
     private val now = 1_767_225_600L
 
-    private fun pane(n: Int, title: String = "✳ pane $n", kind: String? = null, at: Long = now) = Pane(
+    private fun pane(n: Int, title: String = "✳ pane $n", kind: String? = null, at: Long = now, mail: Mail? = null) = Pane(
         host = "alice-laptop", address = "alice-laptop/work/0.$n", session = "work", windowIndex = 0, window = "claude",
         paneIndex = n, paneId = "%$n", width = 96, height = 28, title = title, command = "claude", mode = "write",
-        alias = "", activity = now, attention = kind?.let { Attention(it, at, "deploy to staging?") },
+        alias = "", activity = now, attention = kind?.let { Attention(it, at, "deploy to staging?") }, mail = mail,
     )
+
+    @Test
+    fun theMailCountTravelsAndIsClamped() {
+        val b = rank(listOf(pane(1, mail = Mail(2, now)), pane(2)))
+        assertEquals(listOf(2, 0), b.rows.map { it.mail })
+        assertEquals("pane 1 ✉ 2", b.rows[0].named)
+        assertEquals("pane 2", b.rows[1].named)
+        val back = Board.parse(b.json())
+        assertEquals(listOf(2, 0), back.rows.map { it.mail })
+        assertFalse(b.json().contains("\"mail\":0"))
+        val huge = Board.parse("""{"v":1,"at":$now,"live":true,"rows":[{"address":"alice-laptop/work/0.1","name":"a","state":0,"kind":"","at":0,"text":"","mail":1000000},{"address":"alice-laptop/work/0.2","name":"b","state":0,"kind":"","at":0,"text":"","mail":-4}]}""")
+        assertEquals(listOf(Board.MAX_MAIL, 0), huge.rows.map { it.mail })
+    }
 
     private fun rank(panes: List<Pane>, working: Set<String> = emptySet(), withText: Boolean = false) =
         Board.rank(panes, now, withText) { Lens.status(it, if (it.address in working) "working" else null, false) }
