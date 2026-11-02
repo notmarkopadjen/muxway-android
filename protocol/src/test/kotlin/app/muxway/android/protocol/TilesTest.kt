@@ -31,6 +31,19 @@ class TilesTest {
         assertSame(row, Tiles.dropOn(row, 1, 1, Tiles.Zone.LEFT))
     }
 
+    // A tab of a pane not open: the new leaf comes in where the drop says, and nothing else
+    // moves. A single tile is a leaf with no split.
+    @Test
+    fun aNewLeafComesInBesideATileOrAcrossASplit() {
+        assertEquals(Split(true, listOf(Leaf(0), Leaf(1)), "r"), Tiles.dropOn(Leaf(0), 1, 0, Tiles.Zone.RIGHT))
+        assertEquals(Split(false, listOf(Leaf(0), Leaf(1)), "r"), Tiles.dropOn(Leaf(0), 1, 0, Tiles.Zone.BOTTOM))
+        assertEquals(Split(true, listOf(Leaf(0), Leaf(3), Leaf(1), Leaf(2)), "r"), Tiles.dropOn(row, 3, 1, Tiles.Zone.LEFT))
+        assertEquals(Split(true, listOf(Leaf(0), Split(false, listOf(Leaf(1), Leaf(3)), "r.1"), Leaf(2)), "r"), Tiles.dropOn(row, 3, 1, Tiles.Zone.BOTTOM))
+        assertEquals(Split(false, listOf(Split(true, listOf(Leaf(0), Leaf(1), Leaf(2)), "r.0"), Leaf(3)), "r"), Tiles.across(row, 3, "r", false, false))
+        assertEquals(Split(true, listOf(Leaf(3), Leaf(0), Leaf(1), Leaf(2)), "r"), Tiles.across(row, 3, "r", true, true))
+        assertEquals(4, Tiles.leaves(Tiles.dropOn(row, 3, 1, Tiles.Zone.BOTTOM)).size)
+    }
+
     @Test
     fun aClosedTileIsPrunedAndTheRestRenumbered() {
         val t = Tiles.dropOn(row, 2, 0, Tiles.Zone.BOTTOM)
