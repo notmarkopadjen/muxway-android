@@ -41,9 +41,11 @@ waiting panes, and a tap lands on the pane behind the lock screen. A
 question asked with fixed answers (<code>muxway ask</code>) is answered
 from the notification, the tile, the inbox or the wrist, nothing typed.
 <code>⚑ n</code> in the header opens the inbox: everything that waits,
-on every hub, oldest first. Claude Code, Codex, Gemini, Antigravity,
-OpenCode, Copilot and the rest are named, Codex and Antigravity with
-marks of their own.</td>
+on every hub, oldest first. Agents that talk to each other are framed as
+one group, like browser tabs, and a pane with unread mail from another
+agent says <code>✉ n</code>; nothing pops up for a message. Claude Code,
+Codex, Gemini, Antigravity, OpenCode, Copilot and the rest are named,
+Codex and Antigravity with marks of their own.</td>
 </tr>
 <tr>
 <td valign="top"><img src="docs/images/icons/lens.png" width="54" alt=""></td>

@@ -8,7 +8,10 @@ grouped by hub (with more than one) and by host.
 ══ home ══════════════════════════════════════════════
 ── alice-laptop ───────────────────────── + session ──
 * build        node          ! permission
-* work/0.0     bash
+┌────────────────────────────────────────────────────┐
+│* work/0.0     Claude · review ✉ 2                   │
+│* work/0.1     Codex · fix                           │
+└────────────────────────────────────────────────────┘
 │  + pane
   work/1.0     tail
 ── bob-desktop ──────────────────────────── offline ──
@@ -31,6 +34,17 @@ grouped by hub (with more than one) and by host.
 - `⚑ n` in the header, while any pane waits, counts them across every hub
   and opens the [inbox](inbox.md): the waiting panes oldest first, with a
   question's choices.
+- Panes that wrote or mailed to each other in the last ten minutes, the
+  partners of partners too (the listing's `talk`, see the core's
+  [talk](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/talk.md)),
+  form a **group**: within a window their rows are kept together and
+  framed as one in the talk hue, like a browser's tab group; a group
+  that spans two hosts is framed under each. No message is a
+  notification. A pane whose process holds unread
+  [mail](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/mail.md)
+  carries `✉ n` after its name, in the hue (the row's ink when the row is
+  selected). The messages themselves, and mailing a pane, are not on the
+  phone yet.
 - A pane with a pending notification shows `! <kind>` in the attention
   colour: `question`, `permission`, `idle` or `done`, see the core's
   [notifications](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/notifications.md).
