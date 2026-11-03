@@ -1,10 +1,10 @@
 # Feature: a working pane is not painted dim
 
-> Status: written 2026-11-03 for
+> Status: written and approved 2026-11-03 for
 > [#50](https://github.com/notmarkopadjen/muxway-android/issues/50),
 > parity with the core's PR 210 (focus marks on the strip and the tile
-> header, and a working pane unpainted). Waits for the owner's approval
-> in the console before any code.
+> header, and a working pane unpainted); implemented the same day. The
+> diff is the owner's to review in the pull request.
 
 ## 1. Goal
 
@@ -106,11 +106,18 @@ owner's phone or the emulator, as the tab-drop plan's did.
 
 ## Review (after implementation)
 
-- [ ] Diff matches the plan, deviations explained here
-- [ ] Security rules (AGENTS.md section 2) hold
-- [ ] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
-- [ ] Docs and diagrams updated
+- [x] Diff matches the plan. One addition: the UI fixture
+  (`scripts/ui-tests.sh`) keeps the Codex pane working with the agent's
+  `notify`, as the web's spec does through its control endpoint, since
+  the pane is read-only and nothing else would make it work.
+- [x] Security rules (AGENTS.md section 2) hold: a paint change, no
+  request, nothing stored or logged.
+- [x] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
+- [x] Docs updated: lenses, pane-view, look.
 
 ## Test run
 
-Link to the recorded run: result, commit, logs, screenshots.
+The full suite without the UI run, 256 tests, 0 failed, at `4fdcf24`:
+https://github.com/notmarkopadjen/muxway-android/issues/59
+(`20261103-114839-4fdcf24`). The UI step `working-plain` waits for a
+device.
