@@ -85,6 +85,10 @@ for.
 | assume a hardware keyboard | The input field takes focus without raising the on-screen keyboard; `abc` in the pane view's top row brings it up. The input connection stays, so dictation keyboards keep working. Off by default. |
 | effects | Glow, scanlines, vignette, power-on and pulses (see [look](look.md)). On by default. |
 | reflow | With fit off, reflow long rows to the screen instead of scaling the pane's width. Off by default. |
+| names | In a writable shell pane on a host with preview roots, the names of the pane's directory on its screen are links (see [shell helper](shell-helper.md)). On by default. |
+| suggest | While a shell pane is typed into, the rest of a known line is drawn dim after the text, for a tap or a swipe right to take (see [shell helper](shell-helper.md), the ghost word). On by default; off for a host shell that draws its own. |
+| forget | Empties the lines sent to shells from this phone (the command row's recent lines and the ghost word's pool). Removing a hub empties them too. |
+| a file opens with | What a tap on a file's name does: `preview` (the file sheet, the default), `cat` (types `cat -- 'name'` and Enter), `command` (types the person's own command, `{}` standing for the quoted name, the name after it without one). |
 | watch and notifications | Follow the panes of every hub in the background: a notification when one waits, the board to a paired watch (see [notifications](notifications.md) and [the watch](watch.md)). Off by default. |
 | notification text | Send what a pane said to the notification shade and the watch, not only its kind and name. Off by default. |
 

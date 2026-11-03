@@ -144,6 +144,13 @@ class Api(private val baseUrl: String, private val token: String, private val us
     /** A file a pane printed the path of, from under the host's preview roots; a writer's call. */
     fun previewFile(address: String, path: String): Fetched = fetch("panes/${encode(address)}/preview?path=${query(path)}")
 
+    /** The pane's own directory, listed by the host for a writer; null when unchanged since [etag]. */
+    fun dir(address: String, etag: String?): Pair<Listing, String>? {
+        val r = get("panes/${encode(address)}/dir", etag)
+        if (r.status == 304) return null
+        return Json.listing(r.body) to r.etag
+    }
+
     /** Git's view of the repository the pane works in, on a host with preview roots; a writer's call. */
     fun git(address: String): ChangeSet = Json.changes(get("panes/${encode(address)}/git").body)
 

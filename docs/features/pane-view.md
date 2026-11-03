@@ -263,6 +263,19 @@ flowchart LR
   under the file's own name), *open* for the types the phone shows
   (handed to the system read-only from the app's cache) and `×`. What
   the host will not serve says `the host does not preview this file`.
+- **Names.** In a writable shell pane (by its program: `bash`, `zsh`,
+  `fish`, `sh` and their kind) on a host whose agent lists directories
+  (`dir` in the hosts listing), every name of an entry of the pane's
+  current directory that appears on the screen, after `ls`, `tree`,
+  `git status` or in prose, set off by the row's edge, blank space, a
+  bar, a quote or a bracket, is a link: a tap on a directory types
+  `cd -- 'name'` and Enter, a tap on a file opens it the way the
+  *a file opens with* setting says, and a long press on either puts the
+  quoted name on the input line with a space after it, nothing sent
+  (the web's Shift+click). Only a name the host listed links,
+  nothing is underlined (a listing is all names), and a web address, an
+  inbox file or a path with a slash comes first where they overlap. See
+  [shell helper](shell-helper.md); off with the *names* setting.
 - **Scrolling.** The body is a list of rows, newest at the bottom; a
   one-finger drag or a wheel scrolls back through the `lines` the hub
   sent (the pane's scrollback), and new output keeps the bottom in view
@@ -379,6 +392,17 @@ it is writable:
   Refusals land in the status line, one per file, with the file's name:
   `not a type the host takes`, `too large, 8 MiB at most`, the hub's
   code in words. See [attachments.md](attachments.md);
+- **suggestion**: while a writable shell pane is typed into, the rest
+  of a known line is drawn dim after the text in the field: a line this
+  phone sent before, a command the screen shows was typed at a prompt,
+  a starter of the command row, or after a command that takes a file a
+  name of the pane's directory (a directory with its slash). A tap on
+  it or a swipe right across the field takes it into the field; `⏎`
+  sends the text as typed, never the ghost. With direct typing the
+  ghost is drawn in the pane after the cursor, where the screen's
+  cursor row confirms what was typed, and `Right` takes it whole,
+  `Ctrl+Right` a word, both sent as text. See
+  [shell helper](shell-helper.md); off with the *suggest* setting.
 - **completion**: while a word is being typed, a row above the line
   offers, for the first word, what the program takes — Claude Code's,
   Codex's or Antigravity's slash commands, or a shell's starters and the lines sent to a shell

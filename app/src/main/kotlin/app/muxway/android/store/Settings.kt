@@ -1,6 +1,7 @@
 package app.muxway.android.store
 
 import android.content.Context
+import app.muxway.android.protocol.OpenMode
 
 enum class Theme { AMBER, GREEN, PAPER }
 
@@ -18,6 +19,13 @@ data class Settings(
     val watch: Boolean = false,
     val notifyText: Boolean = false,
     val watchAnswer: Boolean = false,
+    /** The names of a shell pane's directory on its screen are links. */
+    val names: Boolean = true,
+    /** How a tapped file opens, and the person's own command when that is picked. */
+    val openWith: OpenMode = OpenMode.PREVIEW,
+    val openCommand: String = "",
+    /** The ghost word after what is typed into a shell pane; off for a host shell that draws its own. */
+    val suggest: Boolean = true,
 ) {
     /** The hub in use, and its URL; empty until one is added. */
     val hub: Hub? get() = hubs.firstOrNull { it.id == current }
@@ -26,6 +34,10 @@ data class Settings(
 
 /** Everything but the token, in plain app-private preferences. */
 class SettingsStore(context: Context) {
+    companion object {
+        const val OPEN_COMMAND_MAX = 200
+    }
+
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
     fun load(): Settings {
@@ -53,6 +65,10 @@ class SettingsStore(context: Context) {
             watch = prefs.getBoolean("watch", d.watch),
             notifyText = prefs.getBoolean("notify_text", d.notifyText),
             watchAnswer = prefs.getBoolean("watch_answer", d.watchAnswer),
+            names = prefs.getBoolean("names", d.names),
+            openWith = runCatching { OpenMode.valueOf(prefs.getString("open_with", d.openWith.name)!!) }.getOrDefault(d.openWith),
+            openCommand = (prefs.getString("open_command", d.openCommand) ?: "").take(OPEN_COMMAND_MAX),
+            suggest = prefs.getBoolean("suggest", d.suggest),
         )
     }
 
@@ -72,6 +88,10 @@ class SettingsStore(context: Context) {
             .putBoolean("watch", s.watch)
             .putBoolean("notify_text", s.notifyText)
             .putBoolean("watch_answer", s.watchAnswer)
+            .putBoolean("names", s.names)
+            .putString("open_with", s.openWith.name)
+            .putString("open_command", s.openCommand.take(OPEN_COMMAND_MAX))
+            .putBoolean("suggest", s.suggest)
             .apply()
     }
 

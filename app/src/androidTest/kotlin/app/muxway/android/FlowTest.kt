@@ -10,6 +10,10 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
@@ -406,6 +410,49 @@ class FlowTest {
         rule.onAllNodes(hasText(token2.substring(4, 20), substring = true)).assertCountEquals(0)
     }
 
+    /** A tap, or with [hold] a long press, on the [col]th cell of the last row on the screen that holds [name]. */
+    private fun tapCell(name: String, col: Int, hold: Boolean = false) {
+        val node = rule.onAllNodes(hasText(name, substring = true)).onLast()
+        val text = node.fetchSemanticsNode().config.getOrNull(SemanticsProperties.Text)?.joinToString("") { it.text } ?: name
+        node.performTouchInput {
+            val at = Offset(width * (col + 0.5f) / text.length.coerceAtLeast(1), height / 2f)
+            if (hold) longClick(at) else click(at)
+        }
+    }
+
+    @Test
+    fun aNameOfTheDirectoryIsALinkThatEntersItOrOpensTheFile() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        rule.onNode(hasSetTextAction()).performTextInput("ls -1")
+        rule.onNodeWithText("⏎").performClick()
+        await("notes.txt")
+        // The listing arrives within the tile's two seconds; then the names are links.
+        SystemClock.sleep(3_000)
+        shot("names")
+        // Held, the quoted name lands on the line with a space after it, nothing is sent.
+        tapCell("notes.txt", 1, hold = true)
+        rule.waitUntil(5_000) { rule.onAllNodes(hasText("'notes.txt' ", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        shot("names-held")
+        rule.onNode(hasSetTextAction()).performTextClearance()
+        tapCell("src", 1)
+        rule.onNode(hasSetTextAction()).performTextInput("pwd")
+        rule.onNodeWithText("⏎").performClick()
+        await("/repo/src")
+        shot("names-cd")
+        // A file opens in the sheet by default: nothing is typed.
+        rule.onNode(hasSetTextAction()).performTextInput("ls -1")
+        rule.onNodeWithText("⏎").performClick()
+        await("a.go")
+        SystemClock.sleep(3_000)
+        tapCell("a.go", 1)
+        await("func A()")
+        shot("names-file")
+        Espresso.pressBack()
+        rule.onAllNodes(hasText("cat ", substring = true)).assertCountEquals(0)
+    }
+
     /** A pixel of a tab's ground: just left of its content, inside its padding. */
     private fun groundOf(tag: String): Int {
         val b = rule.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
@@ -433,5 +480,51 @@ class FlowTest {
         val quiet = groundOf("tab:alice-laptop/work/0.0")
         assertTrue("a working tab is not painted", apart(groundOf("tab:alice-laptop/codex/0.0"), quiet) < 16)
         assertTrue("a waiting tab is painted", apart(groundOf("tab:alice-laptop/ask/0.0"), quiet) > 64)
+    }
+
+    @Test
+    fun theGhostWordGoesOnFromALineSentBeforeAndATapTakesIt() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        rule.onNode(hasSetTextAction()).performTextInput("echo one two")
+        rule.onNodeWithText("⏎").performClick()
+        await("one two")
+        // The rest of the line sent before is drawn after the text; nothing is sent.
+        rule.onNode(hasSetTextAction()).performTextInput("echo o")
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("ghost").fetchSemanticsNodes().isNotEmpty() }
+        shot("ghost")
+        rule.onNodeWithTag("ghost").performClick()
+        rule.onNode(hasSetTextAction()).assert(hasText("echo one two"))
+        rule.onAllNodesWithTag("ghost").assertCountEquals(0)
+        rule.onNodeWithText("⏎").performClick()
+        rule.waitUntil(10_000) { rule.onAllNodes(hasText("one two", substring = true)).fetchSemanticsNodes().size >= 2 }
+        shot("ghost-taken")
+        // Forget empties the pool: the command row's recent line is gone, and so is the ghost.
+        rule.onNodeWithText("‹").performClick()
+        await("work/0.0")
+        rule.onNodeWithText("settings").performClick()
+        await("save settings")
+        rule.onNodeWithTag("forget").performClick()
+        shot("forget")
+        rule.onNodeWithText("panes").performClick()
+        await("work/0.0").performClick()
+        await("$ ")
+        rule.onAllNodes(hasText("echo one two", substring = false)).assertCountEquals(0)
+        rule.onNode(hasSetTextAction()).performTextInput("echo o")
+        SystemClock.sleep(1_500)
+        rule.onAllNodesWithTag("ghost").assertCountEquals(0)
+    }
+
+    @Test
+    fun theGhostWordIsOffBySetting() {
+        SettingsStore(context).save(SettingsStore(context).load().copy(suggest = false))
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        rule.onNode(hasSetTextAction()).performTextInput("git st")
+        SystemClock.sleep(1_500)
+        rule.onAllNodesWithTag("ghost").assertCountEquals(0)
+        shot("ghost-off")
     }
 }

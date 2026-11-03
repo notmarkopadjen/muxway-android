@@ -2,9 +2,10 @@ package app.muxway.android.protocol
 
 /**
  * [sessions]: the host's agent lets clients start sessions; [close]: and close writable panes;
- * [preview]: it serves files under roots its owner named, to writers, when a pane prints their paths.
+ * [preview]: it serves files under roots its owner named, to writers, when a pane prints their paths;
+ * [dir]: and lists a shell pane's directory under them, so its names on the screen are links.
  */
-data class Host(val name: String, val online: Boolean, val sessions: Boolean = false, val close: Boolean = false, val keys: Int = 0, val preview: Boolean = false, val hub: String = "", val ask: Boolean = false)
+data class Host(val name: String, val online: Boolean, val sessions: Boolean = false, val close: Boolean = false, val keys: Int = 0, val preview: Boolean = false, val hub: String = "", val ask: Boolean = false, val dir: Boolean = false)
 
 /** A pane this one wrote or mailed to, or was written to by, in the last ten minutes; [way] is `to`, `from` or `both`. */
 data class Talk(val address: String, val paneId: String, val at: Long, val way: String)
@@ -44,6 +45,8 @@ data class Pane(
     val talk: List<Talk> = emptyList(),
     /** Unread mail for the pane's process; null while there is none. */
     val mail: Mail? = null,
+    /** A shell pane's directory under a preview root, for a writer; null otherwise. Compared, never shown. */
+    val cwd: String? = null,
 ) {
     val writable get() = mode == "write"
 

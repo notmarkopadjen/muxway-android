@@ -102,6 +102,7 @@ class CommandsTest {
             "echo mxt_" + "A".repeat(43),
             "vault read secret/app",
             "export API_KEY=abc", "OPENAI_API_KEY=abc ./run", "export HOME=/tmp", "FOO=bar make",
+            "mysql -u root -p hunter2", "curl -u a:b https://example.com/",
         )
         for (l in secret) assertTrue(l, Commands.looksSecret(l))
         for (l in listOf("make test", "git status", "ls -la", "echo a=b", "lowercase=1 run", "cd ~/work")) assertFalse(l, Commands.looksSecret(l))
@@ -113,8 +114,19 @@ class CommandsTest {
     @Test
     fun theListIsBounded() {
         var recent = emptyList<String>()
-        for (i in 0 until Commands.RECENT_MAX + 3) recent = Commands.remembered(recent, "cmd $i")
-        assertEquals(Commands.RECENT_MAX, recent.size)
-        assertEquals("cmd ${Commands.RECENT_MAX + 2}", recent.first())
+        for (i in 0 until Commands.STORE_MAX + 3) recent = Commands.remembered(recent, "cmd $i")
+        assertEquals(Commands.STORE_MAX, recent.size)
+        assertEquals("cmd ${Commands.STORE_MAX + 2}", recent.first())
+        // The row shows the first eight of them.
+        val row = Commands.forPane(pane("bash", "bash"), recent)!!.second
+        assertEquals(Commands.RECENT_MAX, row.size - Commands.SHELL.size)
+        assertEquals("cmd ${Commands.STORE_MAX + 2}", row[Commands.SHELL.size].text)
+    }
+
+    @Test
+    fun aDatabaseClientsPasswordAndAUserPasswordPairAreSecretsToo() {
+        for (l in listOf("mysql -u root -p hunter2", "psql -h db -U a -ppw", "curl -u a:b https://example.com/", "mongosh --host x -p x", "sshpass -p x ssh host"))
+            assertTrue(l, Commands.looksSecret(l))
+        for (l in listOf("ls -p", "git log -p", "grep -u a", "echo a:b")) assertFalse(l, Commands.looksSecret(l))
     }
 }

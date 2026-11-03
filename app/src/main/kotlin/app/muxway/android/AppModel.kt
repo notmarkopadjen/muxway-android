@@ -29,6 +29,7 @@ import app.muxway.android.protocol.Keys
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.LogLine
 import app.muxway.android.protocol.ChangeSet
+import app.muxway.android.protocol.Listing
 import app.muxway.android.protocol.Diff
 import app.muxway.android.protocol.Pane
 import app.muxway.android.protocol.Setup
@@ -99,6 +100,12 @@ class PaneState(val key: String) {
     var changes by mutableStateOf<ChangeSet?>(null)
     var changesError by mutableStateOf<String?>(null)
     var noRepoUntil = 0L
+
+    /** The pane's directory as the host listed it, for the names on its screen; the directory it was listed for, its tag, and when not to ask again. */
+    var listing by mutableStateOf<Listing?>(null)
+    var listingCwd: String? = null
+    var listingEtag: String? = null
+    var noDirUntil = 0L
 
     /** Files on their way to the host's inbox: the one going, the ones waiting, the paths that landed. */
     var sending by mutableStateOf<String?>(null)
@@ -362,6 +369,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     /** Drops a hub and its token; the others go on. */
     fun removeHub(id: String) {
         vault.clear(id)
+        forgetRecent()
         val hubs = settings.hubs.filter { it.id != id }
         settings = settings.copy(hubs = hubs, current = if (settings.current == id) hubs.firstOrNull()?.id ?: "" else settings.current)
         store.save(settings)
@@ -605,6 +613,12 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         }
         if (sent && enter && '\n' !in clean && view(key).pane?.let { Commands.isShell(it.command) } == true) remember(clean)
         return sent
+    }
+
+    /** Empties the sent lines: the command row's and the ghost word's pool. */
+    fun forgetRecent() {
+        recent.clear()
+        store.saveRecent(emptyList())
     }
 
     private fun remember(line: String) {
@@ -921,6 +935,37 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     /** Whether the pane's host serves files a pane prints the paths of, to writers. */
     fun hostPreviews(key: String): Boolean = hostOf(key)?.preview == true
+
+    /** Whether the pane's host lists a shell pane's directory for writers. */
+    fun hostLists(key: String): Boolean = hostOf(key)?.dir == true
+
+    /** A writer's shell pane's directory under a root, from the listing or the last read; null otherwise. */
+    fun cwdOf(key: String): String? = panes.firstOrNull { it.key == key }?.cwd ?: view(key).pane?.cwd
+
+    /**
+     * The entries of the pane's directory, asked with the tag so an unchanged listing is no body;
+     * a directory the host will not list is not asked again for a minute, unless it changes.
+     */
+    suspend fun fetchListing(key: String) {
+        val v = view(key)
+        val cwd = cwdOf(key)
+        if (cwd == null) { v.listing = null; v.listingCwd = null; v.listingEtag = null; return }
+        if (cwd != v.listingCwd) { v.listingEtag = null; v.noDirUntil = 0L }
+        if (System.currentTimeMillis() < v.noDirUntil) return
+        try {
+            val got = withContext(Dispatchers.IO) { api(key).dir(v.address, v.listingEtag) }
+            if (got != null) { v.listing = got.first; v.listingEtag = got.second.ifEmpty { null } }
+            v.listingCwd = cwd
+        } catch (e: ApiException) {
+            if (e.code == "unauthorized") tokenRefused(conn(key))
+            if (e.code == "not_found" || e.code == "read_only") {
+                v.listing = null
+                v.listingEtag = null
+                v.listingCwd = cwd
+                v.noDirUntil = System.currentTimeMillis() + 60_000
+            }
+        }
+    }
 
     /** A word for the person in the pane view that is not an error: what was copied, what was saved. */
     var told by mutableStateOf<String?>(null)

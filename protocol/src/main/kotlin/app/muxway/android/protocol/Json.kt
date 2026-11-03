@@ -7,7 +7,7 @@ import org.json.JSONObject
 /** The hub's JSON, read defensively: a missing field is a default, a wrong type is an error. */
 object Json {
     fun hosts(body: String): List<Host> = parse(body) { o ->
-        list(o.optJSONArray("hosts")) { Host(it.optString("name"), it.optBoolean("online"), it.optBoolean("sessions"), it.optBoolean("close"), it.optInt("keys"), it.optBoolean("preview"), ask = it.optBoolean("ask")) }
+        list(o.optJSONArray("hosts")) { Host(it.optString("name"), it.optBoolean("online"), it.optBoolean("sessions"), it.optBoolean("close"), it.optInt("keys"), it.optBoolean("preview"), ask = it.optBoolean("ask"), dir = it.optBoolean("dir")) }
     }
 
     fun panes(body: String): List<Pane> = parse(body) { o -> list(o.optJSONArray("panes")) { pane(it) } }
@@ -157,6 +157,21 @@ object Json {
             windowLayout = o.optString("window_layout").take(WindowLayout.MAX_BYTES),
             talk = talk(o.optJSONArray("talk")),
             mail = o.optJSONObject("mail")?.let { m -> m.optInt("unread").takeIf { it > 0 }?.let { Mail(it, m.optLong("at")) } },
+            cwd = o.optString("cwd").takeIf { it.isNotEmpty() && it.length <= Names.MAX_PATH && it.none { c -> c < ' ' || c == '\u007f' } },
+        )
+    }
+
+    /** A directory's entries by name and kind; a name a shell could not take whole is dropped, as the agent drops it. */
+    fun listing(body: String): Listing = parse(body) { o ->
+        Listing(
+            path = o.optString("path").take(Names.MAX_PATH),
+            entries = list(o.optJSONArray("entries")) {
+                val name = it.optString("name")
+                val kind = it.optString("kind")
+                if (name.isEmpty() || name.toByteArray(Charsets.UTF_8).size > Names.MAX_NAME || name.any { c -> c < ' ' || c == '\u007f' }) null
+                else Entry(name, if (kind in Names.KINDS) kind else "other")
+            }.filterNotNull().take(Names.MAX_ENTRIES),
+            truncated = o.optBoolean("truncated"),
         )
     }
 

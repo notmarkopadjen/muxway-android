@@ -5,6 +5,10 @@ import app.muxway.android.protocol.Api
 import app.muxway.android.protocol.Wheel
 import app.muxway.android.protocol.WheelQueue
 import app.muxway.android.protocol.ApiException
+import app.muxway.android.protocol.Commands
+import app.muxway.android.protocol.Suggest
+import app.muxway.android.protocol.OpenMode
+import app.muxway.android.protocol.Names
 import app.muxway.android.protocol.Board
 import app.muxway.android.protocol.Changes
 import app.muxway.android.protocol.Clip
@@ -728,6 +732,102 @@ class E2ETest {
     }
 
     /** A preview root with a repository under it, and one outside; the pane's shell in the repository's `src`. */
+    @Test
+    fun s26_theDirectoryIsListedForWritersOnHostsWithRootsAndOnlyUnderThemWithNoNameAShellCannotTake() {
+        val (root, repo) = repoUnderRoot()
+        File(repo, "bad\u0007name").writeText("x\n")
+        val (api, _) = setup(preview = root)
+        val address = "$HOST/work/0.0"
+        core.cdTo("work:0.0", repo)
+        waitFor("cwd listed") { api.panes().single().cwd != null }
+        // A reader has no cwd and is refused; so is a writer of a read-only pane.
+        val reader = Api(relay.url, core.token(write = null), "muxway-android-e2e")
+        assertNull(reader.panes().single().cwd)
+        assertEquals("read_only", assertThrows(ApiException::class.java) { reader.dir(address, null) }.code)
+        core.tmux("split-window", "-t", "work:0", "-v", "-c", repo.path)
+        core.cli("expose", "--tmux-name", core.tmux, "-t", "work:0.1")
+        waitFor("two panes listed") { api.panes().size == 2 }
+        assertNull(api.panes().first { it.address == "$HOST/work/0.1" }.cwd)
+        assertEquals("read_only", assertThrows(ApiException::class.java) { api.dir("$HOST/work/0.1", null) }.code)
+        // Names a shell cannot take whole, and the hidden ones, are not listed.
+        val names = api.dir(address, null)!!.first.entries.map { it.name }
+        assertTrue(names.toString(), names.none { it.startsWith("bad") })
+        assertFalse(names.toString(), ".git" in names)
+        // Outside the roots there is no cwd and one refusal; without roots the same, and no dir flag.
+        core.cdTo("work:0.0", File(root.parentFile, "elsewhere/repo"))
+        waitFor("cwd gone") { api.panes().first { it.address == address }.cwd == null }
+        assertEquals("not_found", assertThrows(ApiException::class.java) { api.dir(address, null) }.code)
+        core.stop("agent")
+        core.startAgent()
+        waitFor("no roots listed") { !api.hosts().single().dir }
+        core.cdTo("work:0.0", repo)
+        assertNull(api.panes().first { it.address == address }.cwd)
+        assertEquals("not_found", assertThrows(ApiException::class.java) { api.dir(address, null) }.code)
+    }
+
+    @Test
+    fun f28_aWritersShellPaneCarriesItsDirectoryWhoseListingNamesTheEntriesAndFollowsACd() {
+        val (root, repo) = repoUnderRoot()
+        val (api, _) = setup(preview = root)
+        val address = "$HOST/work/0.0"
+        assertTrue(api.hosts().single().dir)
+        core.cdTo("work:0.0", repo)
+        waitFor("cwd listed") { api.panes().single().cwd != null }
+        assertEquals(repo.canonicalPath, File(api.panes().single().cwd!!).canonicalPath)
+        val (listing, etag) = api.dir(address, null)!!
+        assertEquals(repo.canonicalPath, File(listing.path).canonicalPath)
+        val kinds = listing.entries.associate { it.name to it.kind }
+        assertEquals("dir", kinds["src"])
+        assertEquals("file", kinds["notes.txt"])
+        assertEquals("file", kinds["with space.txt"])
+        assertFalse(listing.truncated)
+        // The same again with the tag is no body.
+        assertTrue(etag.isNotEmpty())
+        assertNull(api.dir(address, etag))
+        // The names on a screen, as the tile would find them, and what a tap on one types.
+        val index = Names.index(listing.entries)
+        assertEquals(listOf("notes.txt", "src", "with space.txt"), Names.find("notes.txt  src  'with space.txt'", index).map { it.name })
+        assertEquals("cd -- 'src'", Names.lineFor("dir", "src", OpenMode.PREVIEW, ""))
+        // A cd changes the directory, and the listing with it.
+        api.type(address, "cd -- 'src'")
+        api.key(address, "Enter")
+        waitFor("cwd follows") { api.panes().single().cwd?.let { File(it).canonicalPath } == File(repo, "src").canonicalPath }
+        val inside = api.dir(address, etag)!!.first
+        assertTrue(inside.entries.any { it.name == "a.go" && it.kind == "file" })
+    }
+
+    @Test
+    fun f29_theGhostWordIsTheClientsDrawingAndReachesThePaneOnlyWhenTakenAsText() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        api.type(address, "echo one two")
+        api.key(address, "Enter")
+        waitPane("one two")
+        val pool = Commands.remembered(emptyList(), "echo one two")
+        assertEquals(listOf("echo one two"), pool)
+        // Typed direct: the shadow follows the keys, and the ghost shows once the screen confirms it.
+        var shadow: String? = ""
+        api.type(address, "echo o")
+        shadow = Suggest.nextShadow(shadow, Suggest.Body.Text("echo o"))
+        waitPane("$ echo o")
+        val pane = api.panes().single()
+        val read = api.read(address, 50, null)!!
+        val rows = read.content.lines().map { Ansi.plain(it) }
+        val row = rows[rows.size - (pane.height - read.trimmed) + pane.cursorY - 1]
+        assertTrue(row, row.endsWith("echo o"))
+        assertEquals("ne two", Suggest.suggest(row, pane.cursorX, shadow, pool))
+        // The host shows what was typed and nothing more: the ghost is the client's alone.
+        assertEquals(core.pane(), 1, core.pane().lines().count { it.contains("echo one two") })
+        // Taken: ordinary text, then Enter runs the whole line.
+        api.type(address, "ne two")
+        api.key(address, "Enter")
+        waitFor("the line ran twice") { core.pane().lines().count { it.trim() == "one two" } == 2 }
+        // The hub audits bytes, never the text.
+        val log = File(Env.logs(name.methodName), "hub.log")
+        waitFor("audit lines") { log.exists() && log.readText().contains("text_bytes=6") }
+        assertFalse(log.readText().contains("one two"))
+    }
+
     private fun repoUnderRoot(): Pair<File, File> {
         val base = java.nio.file.Files.createTempDirectory("mxw-git-").toFile()
         val root = File(base, "work").also { it.mkdirs() }
