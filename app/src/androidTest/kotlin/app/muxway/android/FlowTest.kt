@@ -10,6 +10,9 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
@@ -404,5 +407,40 @@ class FlowTest {
         rule.onNodeWithText("settings").performClick()
         await("save and connect")
         rule.onAllNodes(hasText(token2.substring(4, 20), substring = true)).assertCountEquals(0)
+    }
+
+    /** A tap on the [col]th cell of the last row on the screen that holds [name]. */
+    private fun tapCell(name: String, col: Int) {
+        val node = rule.onAllNodes(hasText(name, substring = true)).onLast()
+        val text = node.fetchSemanticsNode().config.getOrNull(SemanticsProperties.Text)?.joinToString("") { it.text } ?: name
+        node.performTouchInput { click(Offset(width * (col + 0.5f) / text.length.coerceAtLeast(1), height / 2f)) }
+    }
+
+    @Test
+    fun aNameOfTheDirectoryIsALinkThatEntersItOrOpensTheFile() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        rule.onNode(hasSetTextAction()).performTextInput("ls -1")
+        rule.onNodeWithText("⏎").performClick()
+        await("notes.txt")
+        // The listing arrives within the tile's two seconds; then the names are links.
+        SystemClock.sleep(3_000)
+        shot("names")
+        tapCell("src", 1)
+        rule.onNode(hasSetTextAction()).performTextInput("pwd")
+        rule.onNodeWithText("⏎").performClick()
+        await("/repo/src")
+        shot("names-cd")
+        // A file opens in the sheet by default: nothing is typed.
+        rule.onNode(hasSetTextAction()).performTextInput("ls -1")
+        rule.onNodeWithText("⏎").performClick()
+        await("a.go")
+        SystemClock.sleep(3_000)
+        tapCell("a.go", 1)
+        await("func A()")
+        shot("names-file")
+        Espresso.pressBack()
+        rule.onAllNodes(hasText("cat ", substring = true)).assertCountEquals(0)
     }
 }

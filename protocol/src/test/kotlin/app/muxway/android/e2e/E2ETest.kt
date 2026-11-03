@@ -5,6 +5,8 @@ import app.muxway.android.protocol.Api
 import app.muxway.android.protocol.Wheel
 import app.muxway.android.protocol.WheelQueue
 import app.muxway.android.protocol.ApiException
+import app.muxway.android.protocol.OpenMode
+import app.muxway.android.protocol.Names
 import app.muxway.android.protocol.Board
 import app.muxway.android.protocol.Changes
 import app.muxway.android.protocol.Clip
@@ -728,6 +730,70 @@ class E2ETest {
     }
 
     /** A preview root with a repository under it, and one outside; the pane's shell in the repository's `src`. */
+    @Test
+    fun s26_theDirectoryIsListedForWritersOnHostsWithRootsAndOnlyUnderThemWithNoNameAShellCannotTake() {
+        val (root, repo) = repoUnderRoot()
+        File(repo, "bad\u0007name").writeText("x\n")
+        val (api, _) = setup(preview = root)
+        val address = "$HOST/work/0.0"
+        core.cdTo("work:0.0", repo)
+        waitFor("cwd listed") { api.panes().single().cwd != null }
+        // A reader has no cwd and is refused; so is a writer of a read-only pane.
+        val reader = Api(relay.url, core.token(write = null), "muxway-android-e2e")
+        assertNull(reader.panes().single().cwd)
+        assertEquals("read_only", assertThrows(ApiException::class.java) { reader.dir(address, null) }.code)
+        core.tmux("split-window", "-t", "work:0", "-v", "-c", repo.path)
+        core.cli("expose", "--tmux-name", core.tmux, "-t", "work:0.1")
+        waitFor("two panes listed") { api.panes().size == 2 }
+        assertNull(api.panes().first { it.address == "$HOST/work/0.1" }.cwd)
+        assertEquals("read_only", assertThrows(ApiException::class.java) { api.dir("$HOST/work/0.1", null) }.code)
+        // Names a shell cannot take whole, and the hidden ones, are not listed.
+        val names = api.dir(address, null)!!.first.entries.map { it.name }
+        assertTrue(names.toString(), names.none { it.startsWith("bad") })
+        assertFalse(names.toString(), ".git" in names)
+        // Outside the roots there is no cwd and one refusal; without roots the same, and no dir flag.
+        core.cdTo("work:0.0", File(root.parentFile, "elsewhere/repo"))
+        waitFor("cwd gone") { api.panes().first { it.address == address }.cwd == null }
+        assertEquals("not_found", assertThrows(ApiException::class.java) { api.dir(address, null) }.code)
+        core.stop("agent")
+        core.startAgent()
+        waitFor("no roots listed") { !api.hosts().single().dir }
+        core.cdTo("work:0.0", repo)
+        assertNull(api.panes().first { it.address == address }.cwd)
+        assertEquals("not_found", assertThrows(ApiException::class.java) { api.dir(address, null) }.code)
+    }
+
+    @Test
+    fun f28_aWritersShellPaneCarriesItsDirectoryWhoseListingNamesTheEntriesAndFollowsACd() {
+        val (root, repo) = repoUnderRoot()
+        val (api, _) = setup(preview = root)
+        val address = "$HOST/work/0.0"
+        assertTrue(api.hosts().single().dir)
+        core.cdTo("work:0.0", repo)
+        waitFor("cwd listed") { api.panes().single().cwd != null }
+        assertEquals(repo.canonicalPath, File(api.panes().single().cwd!!).canonicalPath)
+        val (listing, etag) = api.dir(address, null)!!
+        assertEquals(repo.canonicalPath, File(listing.path).canonicalPath)
+        val kinds = listing.entries.associate { it.name to it.kind }
+        assertEquals("dir", kinds["src"])
+        assertEquals("file", kinds["notes.txt"])
+        assertEquals("file", kinds["with space.txt"])
+        assertFalse(listing.truncated)
+        // The same again with the tag is no body.
+        assertTrue(etag.isNotEmpty())
+        assertNull(api.dir(address, etag))
+        // The names on a screen, as the tile would find them, and what a tap on one types.
+        val index = Names.index(listing.entries)
+        assertEquals(listOf("notes.txt", "src", "with space.txt"), Names.find("notes.txt  src  'with space.txt'", index).map { it.name })
+        assertEquals("cd -- 'src'", Names.lineFor("dir", "src", OpenMode.PREVIEW, ""))
+        // A cd changes the directory, and the listing with it.
+        api.type(address, "cd -- 'src'")
+        api.key(address, "Enter")
+        waitFor("cwd follows") { api.panes().single().cwd?.let { File(it).canonicalPath } == File(repo, "src").canonicalPath }
+        val inside = api.dir(address, etag)!!.first
+        assertTrue(inside.entries.any { it.name == "a.go" && it.kind == "file" })
+    }
+
     private fun repoUnderRoot(): Pair<File, File> {
         val base = java.nio.file.Files.createTempDirectory("mxw-git-").toFile()
         val root = File(base, "work").also { it.mkdirs() }

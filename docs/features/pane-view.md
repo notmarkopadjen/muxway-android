@@ -263,6 +263,17 @@ flowchart LR
   under the file's own name), *open* for the types the phone shows
   (handed to the system read-only from the app's cache) and `×`. What
   the host will not serve says `the host does not preview this file`.
+- **Names.** In a writable shell pane (by its program: `bash`, `zsh`,
+  `fish`, `sh` and their kind) on a host whose agent lists directories
+  (`dir` in the hosts listing), every name of an entry of the pane's
+  current directory that appears on the screen, after `ls`, `tree`,
+  `git status` or in prose, set off by the row's edge, blank space, a
+  bar, a quote or a bracket, is a link: a tap on a directory types
+  `cd -- 'name'` and Enter, a tap on a file opens it the way the
+  *a file opens with* setting says. Only a name the host listed links,
+  nothing is underlined (a listing is all names), and a web address, an
+  inbox file or a path with a slash comes first where they overlap. See
+  [shell helper](shell-helper.md); off with the *names* setting.
 - **Scrolling.** The body is a list of rows, newest at the bottom; a
   one-finger drag or a wheel scrolls back through the `lines` the hub
   sent (the pane's scrollback), and new output keeps the bottom in view
