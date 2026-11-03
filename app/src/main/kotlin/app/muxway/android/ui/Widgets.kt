@@ -330,15 +330,6 @@ fun Line(
         ) {
             if (state.text.isEmpty()) Text(hint, color = p.faint, maxLines = 1)
             val end = layout?.takeIf { ghost.isNotEmpty() && it.layoutInput.text.length == state.text.length }?.getCursorRect(state.text.length)
-            if (end != null) {
-                val w = measurer.measure(ghost, ghostStyle, softWrap = false).size.width
-                Box(
-                    Modifier.offset { IntOffset(end.right.toInt(), end.top.toInt()) }
-                        .size(with(LocalDensity.current) { w.toDp() }, with(LocalDensity.current) { end.height.toDp() })
-                        .clickable { take() }
-                        .testTag("ghost"),
-                )
-            }
             BasicTextField(
                 state = state,
                 modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).onFocusChanged { onFocus(it.isFocused) }
@@ -366,6 +357,16 @@ fun Line(
                 lineLimits = TextFieldLineLimits.MultiLine(1, maxLines),
                 cursorBrush = SolidColor(p.ink),
             )
+            // Over the field, so the tap is the ghost's and not the caret's.
+            if (end != null) {
+                val w = measurer.measure(ghost, ghostStyle, softWrap = false).size.width
+                Box(
+                    Modifier.offset { IntOffset(end.right.toInt(), end.top.toInt()) }
+                        .size(with(LocalDensity.current) { w.toDp() }, with(LocalDensity.current) { end.height.toDp() })
+                        .clickable { take() }
+                        .testTag("ghost"),
+                )
+            }
         }
     }
 }
