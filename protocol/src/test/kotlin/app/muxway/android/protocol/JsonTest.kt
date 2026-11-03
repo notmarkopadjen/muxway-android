@@ -123,4 +123,25 @@ class JsonTest {
         assertEquals(listOf("alice@example.com", "phone"), clients.map { it.who })
         assertEquals(listOf(true, false), clients.map { it.endable })
     }
+
+    @Test
+    fun aListingKeepsOnlyNamesAShellCanTakeWholeAndIsCapped() {
+        val many = (1..2100).joinToString(",") { """{"name":"f$it","kind":"file"}""" }
+        val l = Json.listing("""{"path":"/home/alice/work","entries":[{"name":"docs","kind":"dir"},{"name":"bad\u0007","kind":"file"},{"name":"","kind":"file"},{"name":"sock","kind":"weird"},$many],"truncated":true}""")
+        assertEquals("/home/alice/work", l.path)
+        assertEquals(Names.MAX_ENTRIES, l.entries.size)
+        assertEquals(Entry("docs", "dir"), l.entries[0])
+        assertEquals(Entry("sock", "other"), l.entries[1])
+        assertEquals(Entry("f1", "file"), l.entries[2])
+        assertTrue(l.truncated)
+    }
+
+    @Test
+    fun cwdAndTheDirFlagAreReadWhenGivenAndAHostileCwdIsNot() {
+        assertEquals("/home/alice/work", Json.panes("""{"panes":[{"session":"work","cwd":"/home/alice/work"}]}""").single().cwd)
+        assertNull(Json.panes("""{"panes":[{"session":"work"}]}""").single().cwd)
+        assertNull(Json.panes("""{"panes":[{"session":"work","cwd":"/x\u001b[2J"}]}""").single().cwd)
+        assertTrue(Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true,"dir":true}]}""").single().dir)
+        assertFalse(Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true}]}""").single().dir)
+    }
 }
