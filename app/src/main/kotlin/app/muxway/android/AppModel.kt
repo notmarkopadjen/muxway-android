@@ -369,6 +369,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     /** Drops a hub and its token; the others go on. */
     fun removeHub(id: String) {
         vault.clear(id)
+        forgetRecent()
         val hubs = settings.hubs.filter { it.id != id }
         settings = settings.copy(hubs = hubs, current = if (settings.current == id) hubs.firstOrNull()?.id ?: "" else settings.current)
         store.save(settings)
@@ -612,6 +613,12 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         }
         if (sent && enter && '\n' !in clean && view(key).pane?.let { Commands.isShell(it.command) } == true) remember(clean)
         return sent
+    }
+
+    /** Empties the sent lines: the command row's and the ghost word's pool. */
+    fun forgetRecent() {
+        recent.clear()
+        store.saveRecent(emptyList())
     }
 
     private fun remember(line: String) {

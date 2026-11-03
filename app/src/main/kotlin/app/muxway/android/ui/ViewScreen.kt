@@ -146,6 +146,8 @@ import app.muxway.android.protocol.Keys
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Links
 import app.muxway.android.protocol.Names
+import androidx.compose.ui.text.drawText
+import app.muxway.android.protocol.Suggest
 import app.muxway.android.protocol.Blocks
 import app.muxway.android.protocol.Changes
 import app.muxway.android.protocol.Pane
@@ -290,13 +292,35 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     // its name either way.
     var lineFocused by remember { mutableStateOf(false) }
     val direct = hardware && !lineFocused && writable
+    // The ghost word while typing direct: a shadow of the line from the keys sent, shown where
+    // the screen's cursor row confirms it; Right takes it whole, Ctrl+Right a word, as text.
+    var shadow by remember(focused) { mutableStateOf<String?>("") }
+    val shellPane = state.pane?.let { Commands.isShell(it.command) } == true
+    val ghost = if (direct && shellPane && model.settings.suggest) {
+        val pane = state.pane!!
+        val rows = remember(state.content) { state.content.lines().map { Ansi.plain(it) } }
+        val screenRows = pane.height - state.trimmed
+        val at = rows.size - screenRows + pane.cursorY - 1
+        val row = rows.getOrNull(at)
+        if (row == null || pane.cursorY < 1) null
+        else Suggest.suggest(row, pane.cursorX, shadow, model.recent + Suggest.screenCommands(rows, at) + Commands.SHELL.map { it.text }, state.listing?.let { Names.index(it.entries) })
+    } else null
     fun hardKey(e: KeyEvent): Boolean {
         if (e.type != KeyEventType.KeyDown || !writable) return false
-        HardKeys.name(e)?.let { model.key(focused, it); return true }
+        HardKeys.name(e)?.let { name ->
+            if (direct && ghost != null && (name == "Right" || name == "C-Right")) {
+                val taken = if (name == "Right") ghost else Suggest.firstWord(ghost)
+                if (taken.isNotEmpty() && model.type(focused, taken, enter = false)) shadow = Suggest.nextShadow(shadow, Suggest.Body.Text(taken))
+                return true
+            }
+            model.key(focused, name)
+            if (direct) shadow = Suggest.nextShadow(shadow, Suggest.Body.Key(name))
+            return true
+        }
         if (!direct) return false
         when (val d = HardKeys.direct(e) ?: return false) {
-            is HardKeys.Direct.Chord -> model.key(focused, d.name)
-            is HardKeys.Direct.Text -> model.type(focused, d.text, enter = false)
+            is HardKeys.Direct.Chord -> { model.key(focused, d.name); shadow = Suggest.nextShadow(shadow, Suggest.Body.Key(d.name)) }
+            is HardKeys.Direct.Text -> { model.type(focused, d.text, enter = false); shadow = Suggest.nextShadow(shadow, Suggest.Body.Text(d.text)) }
         }
         return true
     }
@@ -464,6 +488,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
                         onFile = { shown = it },
                         onChanges = { changesOf = tiles[i] },
                         onPrompt = { focusedIndex = i; fieldFocus.request() },
+                        ghost = if (i == index) ghost else null,
                     ) {
                         focusedIndex = i
                         focus.requestFocus()
@@ -803,6 +828,13 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
     val p = LocalPalette.current
     val line = key(state.address) { rememberTextFieldState() }
     val text = line.text.toString()
+    // The ghost word on the line: the rest of a known line after the text, for a shell pane,
+    // taken by a tap on it or a swipe right; send sends the text as typed.
+    val shellPane = state.pane?.let { Commands.isShell(it.command) && it.writable } == true
+    val ghost = if (shellPane && model.settings.suggest && text.isNotEmpty() && '\n' !in text) {
+        val rows = remember(state.content) { state.content.lines().map { Ansi.plain(it) } }
+        Suggest.completion(text, model.recent + Suggest.screenCommands(rows) + Commands.SHELL.map { it.text }, state.listing?.let { Names.index(it.entries) }) ?: ""
+    } else ""
     fun send(enter: Boolean) {
         if (text.isEmpty() && !enter) return
         model.type(state.key, text, enter)
@@ -958,6 +990,8 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
                     focusRequester = fieldFocus.requester,
                     onFocus = onFieldFocus,
                     maxLines = 6,
+                    ghost = ghost,
+                    onGhost = { line.setTextAndPlaceCursorAtEnd(text + ghost); fieldFocus.request() },
                     onSend = { send(true) },
                     onContent = ::files,
                 )
@@ -995,7 +1029,7 @@ private fun PaneTile(
     model: AppModel, address: String, focused: Boolean, several: Boolean, grouped: Boolean, fitAsked: Boolean, shared: Boolean, siblings: Boolean,
     windowFit: Boolean, expected: WindowLayout.Size?, fitAgain: Int, now: Long, slackPx: Int, modifier: Modifier,
     onMeasured: (WindowLayout.Size) -> Unit, onDrop: (String, Tiles.Zone) -> Unit, onZoom: () -> Unit, onClose: () -> Unit, onCloseTile: () -> Unit,
-    onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onChanges: () -> Unit, onPrompt: () -> Unit, onFocus: () -> Unit,
+    onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onChanges: () -> Unit, onPrompt: () -> Unit, ghost: String? = null, onFocus: () -> Unit,
 ) {
     // Another tile of this window carries the fit: this one is held. With the window fitted as
     // one ([windowFit]) the view sends the size and this tile is [expected] to be its share.
@@ -1198,6 +1232,7 @@ private fun PaneTile(
             // against them, not against the font's nominal pitch, which the list does not keep to.
             // The gesture reads the pane's facts as they are now, so a repaint does not cancel it.
             val laid = remember(address) { HashMap<Int, LaidRow>() }
+            val ghostMeasurer = rememberTextMeasurer()
             val facts by rememberUpdatedState(TapFacts(colPx, previews, names, clickable, wheel, screenRows, cursorRow, pane?.width ?: 0, pane?.height ?: 0, sideways))
             // The row under the finger, as an index into the rows shown and as a row of the pane.
             fun rowAt(py: Float): Pair<Int, Int>? {
@@ -1293,6 +1328,8 @@ private fun PaneTile(
                             }
                             // Links are underlined dotted, drawn under the row from its layout.
                             var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+                            // The ghost word, dim, from the cursor's cell on its row.
+                            val ghostHere = ghost?.takeIf { it.isNotEmpty() && at == rows.size - screenRows + cursorRow - 1 && (pane?.cursorX ?: 0) >= 1 }
                             Text(
                                 l.text, color = p.ink, style = style, softWrap = false, maxLines = 1,
                                 onTextLayout = { layout = it; mine.layout = it },
@@ -1302,6 +1339,7 @@ private fun PaneTile(
                                     mine.bottom = o.y + c.size.height
                                     mine.left = o.x
                                 }.drawBehind {
+                                    if (ghostHere != null) drawText(ghostMeasurer, ghostHere, topLeft = Offset(((pane?.cursorX ?: 1) - 1) * colPx, 0f), style = style.copy(color = p.dim), softWrap = false, maxLines = 1)
                                     val t = layout ?: return@drawBehind
                                     if (t.lineCount == 0) return@drawBehind
                                     val y = t.getLineBottom(0) - dash / 2

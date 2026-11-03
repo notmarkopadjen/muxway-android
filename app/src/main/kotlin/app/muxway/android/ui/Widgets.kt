@@ -50,6 +50,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.abs
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -266,12 +275,21 @@ fun Line(
     focusRequester: FocusRequester,
     onFocus: (Boolean) -> Unit,
     maxLines: Int = 6,
+    ghost: String = "",
+    onGhost: () -> Unit = {},
     onSend: () -> Unit,
     onContent: (List<Uri>) -> Unit,
 ) {
     val p = LocalPalette.current
     val send by rememberUpdatedState(onSend)
     val content by rememberUpdatedState(onContent)
+    val take by rememberUpdatedState(onGhost)
+    // The ghost is drawn after the text from the field's layout, never part of its value; a tap
+    // on it, or a swipe right across the field, takes it into the field.
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val measurer = rememberTextMeasurer()
+    val ghostStyle = LocalTextStyle.current.copy(color = p.dim)
+    val swipe = with(LocalDensity.current) { 48.dp.toPx() }
     // Items that are files go to the caller; whatever is left, text, is pasted.
     val receiver = remember {
         object : ReceiveContentListener {
@@ -289,11 +307,45 @@ fun Line(
     val action = remember { object : KeyboardActionHandler { override fun onKeyboardAction(performDefaultAction: () -> Unit) { send() } } }
     Row(modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
         Text("$label ", color = p.dim, maxLines = 1)
-        Box(Modifier.weight(1f).border(1.dp, p.dim).padding(horizontal = 6.dp, vertical = 6.dp)) {
+        Box(
+            Modifier.weight(1f).border(1.dp, p.dim).padding(horizontal = 6.dp, vertical = 6.dp)
+                .pointerInput(ghost.isNotEmpty()) {
+                    if (ghost.isEmpty()) return@pointerInput
+                    // Seen before the field, so a swipe is not a selection: a drag that is mostly
+                    // rightward takes the ghost and is consumed; anything else goes on to the field.
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        var dx = 0f
+                        var dy = 0f
+                        while (true) {
+                            val ev = awaitPointerEvent(PointerEventPass.Initial)
+                            val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!ch.pressed) break
+                            dx += ch.positionChange().x
+                            dy += ch.positionChange().y
+                            if (dx > swipe && abs(dy) < dx / 2) { ch.consume(); take(); break }
+                        }
+                    }
+                },
+        ) {
             if (state.text.isEmpty()) Text(hint, color = p.faint, maxLines = 1)
+            val end = layout?.takeIf { ghost.isNotEmpty() && it.layoutInput.text.length == state.text.length }?.getCursorRect(state.text.length)
+            if (end != null) {
+                val w = measurer.measure(ghost, ghostStyle, softWrap = false).size.width
+                Box(
+                    Modifier.offset { IntOffset(end.right.toInt(), end.top.toInt()) }
+                        .size(with(LocalDensity.current) { w.toDp() }, with(LocalDensity.current) { end.height.toDp() })
+                        .clickable { take() }
+                        .testTag("ghost"),
+                )
+            }
             BasicTextField(
                 state = state,
                 modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).onFocusChanged { onFocus(it.isFocused) }
+                    .drawWithContent {
+                        drawContent()
+                        if (end != null) drawText(measurer, ghost, topLeft = Offset(end.right, end.top), style = ghostStyle, softWrap = false, maxLines = 1)
+                    }
                     .contentReceiver(receiver)
                     .onPreviewKeyEvent { e ->
                         val enter = e.type == KeyEventType.KeyDown && (e.key == Key.Enter || e.key == Key.NumPadEnter)
@@ -307,6 +359,7 @@ fun Line(
                         }
                     },
                 inputTransformation = Typed,
+                onTextLayout = { get -> layout = get() },
                 textStyle = LocalTextStyle.current.copy(color = p.ink),
                 keyboardOptions = keyboard,
                 onKeyboardAction = action,
