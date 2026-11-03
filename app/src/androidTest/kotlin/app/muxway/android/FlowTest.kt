@@ -405,4 +405,33 @@ class FlowTest {
         await("save and connect")
         rule.onAllNodes(hasText(token2.substring(4, 20), substring = true)).assertCountEquals(0)
     }
+
+    /** A pixel of a tab's ground: just left of its content, inside its padding. */
+    private fun groundOf(tag: String): Int {
+        val b = rule.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+        return rule.onRoot().captureToImage().asAndroidBitmap().getPixel((b.left - 4).toInt(), b.center.y.toInt())
+    }
+
+    private fun apart(a: Int, b: Int): Int = maxOf(
+        Math.abs(((a shr 16) and 0xff) - ((b shr 16) and 0xff)),
+        Math.abs(((a shr 8) and 0xff) - ((b shr 8) and 0xff)),
+        Math.abs((a and 0xff) - (b and 0xff)),
+    )
+
+    @Test
+    fun aWorkingPaneIsPlainWithItsRingAndAWaitingOnePainted() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        // The fixture keeps the Codex pane working; its row says so, unpainted, in the list.
+        await("working")
+        await("Codex").performClick()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("tab:alice-laptop/codex/0.0").fetchSemanticsNodes().isNotEmpty() }
+        // The header: the ring is drawn, the word is text.
+        await("working")
+        rule.onNodeWithTag("tab:alice-laptop/ask/0.0").assertExists()
+        shot("working-plain")
+        // The working tab has the ground of a quiet one; the waiting tab is the one painted.
+        val quiet = groundOf("tab:alice-laptop/work/0.0")
+        assertTrue("a working tab is not painted", apart(groundOf("tab:alice-laptop/codex/0.0"), quiet) < 16)
+        assertTrue("a waiting tab is painted", apart(groundOf("tab:alice-laptop/ask/0.0"), quiet) > 64)
+    }
 }

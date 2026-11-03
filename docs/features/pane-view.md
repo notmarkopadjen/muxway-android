@@ -25,8 +25,8 @@ focused pane.
   the spark), else the command and what the program says of itself (see
   [lenses](lenses.md)). Each tab is **painted with its state** from
   the [lens](lenses.md): the attention colour when the pane waits
-  for you (`!` `?` `z` `✓`, pulsing), dim when it works (`⟳`), plain when
-  quiet. Selection never changes the colour: the open pane has a thick
+  for you (`!` `?` `z` `✓`, pulsing), plain otherwise, with the turning
+  ring (`⟳`) while it works. Selection never changes the colour: the open pane has a thick
   border and its name in bold. Tapping another tab switches to that pane.
   The strip scrolls when the tabs do not fit and keeps the focused one in
   view, with several panes open as well. The tabs of a group (panes that
