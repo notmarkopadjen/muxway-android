@@ -424,8 +424,9 @@ class FlowTest {
         // The fixture keeps the Codex pane working; its row says so, unpainted, in the list.
         await("working")
         await("Codex").performClick()
-        await("⟳ working")
-        rule.onNodeWithTag("tab:alice-laptop/codex/0.0").assertExists()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("tab:alice-laptop/codex/0.0").fetchSemanticsNodes().isNotEmpty() }
+        // The header: the ring is drawn, the word is text.
+        await("working")
         rule.onNodeWithTag("tab:alice-laptop/ask/0.0").assertExists()
         shot("working-plain")
         // The working tab has the ground of a quiet one; the waiting tab is the one painted.
