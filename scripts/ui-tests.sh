@@ -17,7 +17,7 @@ port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); pr
 port2=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
 
 cleanup() {
-    kill "${ask_pid:-}" "${agent_pid:-}" "${hub_pid:-}" "${agent2_pid:-}" "${hub2_pid:-}" 2>/dev/null || true
+    kill "${ask_pid:-}" "${work_pid:-}" "${agent_pid:-}" "${hub_pid:-}" "${agent2_pid:-}" "${hub2_pid:-}" 2>/dev/null || true
     tmux -L "$tmuxname" kill-server 2>/dev/null || true
     tmux -L "$tmuxname2" kill-server 2>/dev/null || true
     adb -s "$serial" reverse --remove "tcp:$port" 2>/dev/null || true
@@ -56,6 +56,13 @@ askpane=$(tmux -L "$tmuxname" display-message -p -t ask:0.0 '#{pane_id}')
     sleep 5
   done ) &
 ask_pid=$!
+# The Codex pane is kept working, as its hook on a submitted prompt would, for the lens's ring.
+codexpane=$(tmux -L "$tmuxname" display-message -p -t codex:0.0 '#{pane_id}')
+( while kill -0 "$hub_pid" 2>/dev/null; do
+    "$bin" notify --dir "$tmp/agent" --pane "$codexpane" --kind working --text building >/dev/null 2>&1 || true
+    sleep 5
+  done ) &
+work_pid=$!
 token=$("$bin" hub token create --dir "$tmp/hub" --name phone --read 'alice-laptop/*' --write 'alice-laptop/*')
 admin=$("$bin" hub token create --dir "$tmp/hub" --name owner --read 'alice-laptop/*' --write 'alice-laptop/*' --admin)
 

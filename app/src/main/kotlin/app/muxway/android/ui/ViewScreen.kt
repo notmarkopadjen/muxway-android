@@ -604,28 +604,27 @@ private fun Tree(
     }
 }
 
-/** The colours a pane's state paints a tab or header with: background, then ink. */
+/**
+ * The colours a pane's state paints a tab or header with: background, then ink. Only waiting
+ * paints; a working pane is plain, its ring and word say it.
+ */
 @Composable
 private fun stateColours(status: Lens.Status?): Pair<Color, Color> {
     val p = LocalPalette.current
-    return when (status) {
-        Lens.Status.WAITING -> p.attention to p.bg
-        Lens.Status.WORKING -> p.dim to p.bg
-        else -> p.panel to p.ink
-    }
+    return if (status == Lens.Status.WAITING) p.attention to p.bg else p.panel to p.ink
 }
 
 /** The dimmer ink for a status next to [ink]: the theme's dim on plain ground, a fainter ink on painted. */
 @Composable
-private fun dimOf(status: Lens.Status?, ink: Color): Color = if (status == null || status == Lens.Status.QUIET) LocalPalette.current.dim else ink.copy(alpha = 0.7f)
+private fun dimOf(status: Lens.Status?, ink: Color): Color = if (status == Lens.Status.WAITING) ink.copy(alpha = 0.7f) else LocalPalette.current.dim
 
 /** The mail count's colour: the talk hue on plain ground, the state's paint wins on a painted tab or header. */
 @Composable
-private fun mailOf(status: Lens.Status?, ink: Color): Color = if (status == null || status == Lens.Status.QUIET) LocalPalette.current.talk else ink
+private fun mailOf(status: Lens.Status?, ink: Color): Color = if (status == Lens.Status.WAITING) ink else LocalPalette.current.talk
 
 /**
  * Every pane the token may read, each painted with its state: attention colour when it waits for
- * you, dim when it works, plain when quiet. Open panes have a thick border, the focused one the
+ * you, plain otherwise with the ring while it works. Open panes have a thick border, the focused one the
  * thickest and its name in bold. Tapping a closed one swaps it into the focused tile; holding it
  * opens it beside, as the browser's Shift+click does; held and moved, it drags as a header does,
  * to be dropped on a tile or a divider.

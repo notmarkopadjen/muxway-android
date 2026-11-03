@@ -20,7 +20,10 @@ burn-in and battery, and a complication is drawn by whatever face it sits
 in, which honours no inversion of ours. Its face, its complications and
 its app paint a waiting pane in the hue above; working stays dim and
 quiet plain, so the three states stay apart (`wear/Palette.kt`, the face's
-`theme` colour options, and `ui-guideline.md` §1.5).
+`theme` colour options, and `ui-guideline.md` §1.5). On the phone a
+working pane is plain like a quiet one, the ring and the word carrying the
+state (decided by the owner on 2026-11-02); only waiting is painted,
+the ink inverted.
 
 Effects, on by default and off with the **effects** setting:
 
