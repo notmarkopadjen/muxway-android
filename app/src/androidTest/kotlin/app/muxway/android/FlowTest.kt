@@ -452,4 +452,50 @@ class FlowTest {
         Espresso.pressBack()
         rule.onAllNodes(hasText("cat ", substring = true)).assertCountEquals(0)
     }
+
+    @Test
+    fun theGhostWordGoesOnFromALineSentBeforeAndATapTakesIt() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        rule.onNode(hasSetTextAction()).performTextInput("echo one two")
+        rule.onNodeWithText("⏎").performClick()
+        await("one two")
+        // The rest of the line sent before is drawn after the text; nothing is sent.
+        rule.onNode(hasSetTextAction()).performTextInput("echo o")
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("ghost").fetchSemanticsNodes().isNotEmpty() }
+        shot("ghost")
+        rule.onNodeWithTag("ghost").performClick()
+        rule.onNode(hasSetTextAction()).assert(hasText("echo one two"))
+        rule.onAllNodesWithTag("ghost").assertCountEquals(0)
+        rule.onNodeWithText("⏎").performClick()
+        rule.waitUntil(10_000) { rule.onAllNodes(hasText("one two", substring = true)).fetchSemanticsNodes().size >= 2 }
+        shot("ghost-taken")
+        // Forget empties the pool: the command row's recent line is gone, and so is the ghost.
+        rule.onNodeWithText("‹").performClick()
+        await("work/0.0")
+        rule.onNodeWithText("settings").performClick()
+        await("save settings")
+        rule.onNodeWithTag("forget").performClick()
+        shot("forget")
+        rule.onNodeWithText("panes").performClick()
+        await("work/0.0").performClick()
+        await("$ ")
+        rule.onAllNodes(hasText("echo one two", substring = false)).assertCountEquals(0)
+        rule.onNode(hasSetTextAction()).performTextInput("echo o")
+        SystemClock.sleep(1_500)
+        rule.onAllNodesWithTag("ghost").assertCountEquals(0)
+    }
+
+    @Test
+    fun theGhostWordIsOffBySetting() {
+        SettingsStore(context).save(SettingsStore(context).load().copy(suggest = false))
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        rule.onNode(hasSetTextAction()).performTextInput("git st")
+        SystemClock.sleep(1_500)
+        rule.onAllNodesWithTag("ghost").assertCountEquals(0)
+        shot("ghost-off")
+    }
 }

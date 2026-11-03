@@ -4,8 +4,8 @@
 > [#58](https://github.com/notmarkopadjen/muxway-android/issues/58),
 > parity with the core's shell helper, round two (core PR 220,
 > `docs/features/shell-helper.md`, "The ghost word"). Follows #57 and
-> builds on its branch. Waits for the owner's approval in the console
-> before any code.
+> builds on its branch; approved and implemented the same day. The diff
+> is the owner's to review in the pull request.
 
 ## 1. Goal
 

@@ -81,6 +81,59 @@ sequenceDiagram
     A->>H: GET /v1/panes/{address}/dir (cwd changed)
 ```
 
+## The ghost word
+
+While a shell pane is typed into, on the input line or direct with a
+hardware keyboard, the rest of what the app thinks is being typed is
+drawn dim after the text: a line this phone sent before, a command the
+screen shows was typed at a prompt, one of the command row's starters,
+or, after a command that takes a file (`cd`, `cat`, `ls`, `vim` and
+their kind), a name of the pane's directory, a directory with its
+slash. On the line the ghost sits inside the field after the text; a
+tap on it or a swipe right across the field takes it into the field,
+and `⏎` sends the text as typed, never the ghost. The completion row
+above the line stays as it is.
+
+With direct typing the ghost is drawn in the pane after the cursor.
+The app does not know where the shell's prompt ends, so it keeps a
+shadow of the line from the keys it sent: text appends, Backspace
+takes a character, Enter and the keys that clear the line (`C-c`,
+`C-u`) start it afresh, and a key it cannot follow (history, Tab, a
+move, `C-r`) makes it unknown until the next line. A ghost shows only
+where the screen's cursor row ends with the shadow, so the screen
+confirms what was typed; without a shadow the app takes the longest
+suffix of the row that starts a word and that some known line starts
+with, two characters at least. `Right` takes it whole, `Ctrl+Right` its
+first word, both sent as ordinary text; any other key goes to the pane
+and the ghost follows the screen. Nothing shows while text stands right
+of the cursor, while the pane runs anything but a shell, or while the
+setting *suggest* is off, which is the switch for a host shell that
+draws its own (fish, zsh-autosuggestions).
+
+The sent lines are the command row's store, grown to two hundred (the
+row shows the first eight): a line that looks like it carries a secret
+(a credential word, a muxway token, an upper-case assignment, a
+database client with `-p`, `-u user:password`) is never kept, nor
+offered from the screen, and **forget** on the Settings screen empties
+the store; removing a hub empties it too. Nothing from the hub or
+another pane is ever suggested (`protocol/.../Suggest.kt`, the web's
+`suggest.ts`).
+
+```mermaid
+sequenceDiagram
+    participant P as Person
+    participant A as App
+    participant H as Hub
+    P->>A: types echo o on the line
+    A->>A: pool has echo one two, ghost ne two drawn dim in the field
+    P->>A: tap on the ghost (or swipe right)
+    A->>A: field reads echo one two, nothing sent
+    P->>A: send
+    A->>H: POST input {text echo one two}
+    A->>H: POST input {key Enter}
+    A->>A: echo one two remembered (200 kept, no secret)
+```
+
 ## Security considerations
 
 - **What an attacker gains.** A stolen write token lists directories
@@ -103,4 +156,11 @@ sequenceDiagram
 - **Logs.** Nothing on the phone. The hub and the agent audit the
   request and the tap's input as ordinary lines: who, when, which pane,
   how many bytes, never a name.
+- **The ghost sends nothing until taken.** It is a drawing of the
+  app's, from this phone's own sent lines, the pane's screen and the
+  listing; a copy of the screen, a `cat -v` on the host and the
+  text-mode read see nothing. Taking it sends ordinary text through the
+  same call, grant and audit. The store keeps no line that looks like a
+  secret, offers none from the screen either, and is emptied by
+  *forget* and by removing a hub.
 - **Dependencies.** None new.
