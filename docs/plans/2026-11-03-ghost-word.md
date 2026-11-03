@@ -147,11 +147,21 @@ The UI steps wait for a device.
 
 ## Review (after implementation)
 
-- [ ] Diff matches the plan, deviations explained here
-- [ ] Security rules (AGENTS.md section 2) hold
-- [ ] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
-- [ ] Docs and diagrams updated
+- [x] Diff matches the plan. One deviation: signing out is read as
+  removing a hub, which empties the store, since the phone has no other
+  sign-out; the secret filter gained the web's two patterns (a database
+  client's `-p`, `-u user:password`) that the plan listed and the store
+  lacked.
+- [x] Security rules (AGENTS.md section 2) hold: the ghost is never in
+  the field's value nor the shadow, nothing is sent until taken, the
+  store keeps no secret, nothing is logged.
+- [x] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
+- [x] Docs updated: shell-helper, pane-view, connect.
 
 ## Test run
 
-Link to the recorded run: result, commit, logs, screenshots.
+The full suite without the UI run, 281 tests, 0 failed, at `bca17b5`,
+against the core at `a572019`:
+https://github.com/notmarkopadjen/muxway-android/issues/64
+(`20261103-162326-bca17b5`). The UI steps `ghost`, `ghost-taken`,
+`forget` and `ghost-off` wait for a device.
