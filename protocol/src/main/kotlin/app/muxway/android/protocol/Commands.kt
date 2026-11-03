@@ -52,7 +52,9 @@ object Commands {
     private val shells = setOf("bash", "zsh", "fish", "sh", "dash", "ash", "ksh", "tcsh", "csh")
 
     /** How many recent lines are kept, and how long a line may be to count as a command. */
+    /** The command row shows this many sent lines; the store keeps [STORE_MAX], for the ghost word. */
     const val RECENT_MAX = 8
+    const val STORE_MAX = 200
     const val LINE_MAX = 200
     private const val LABEL = 24
 
@@ -65,20 +67,23 @@ object Commands {
         Lens.agent(p) == Lens.Agent.ANTIGRAVITY -> Kind.ANTIGRAVITY to ANTIGRAVITY
         isShell(p.command) -> Kind.SHELL to SHELL + recent
             .filter { r -> SHELL.none { it.text == r } }
+            .take(RECENT_MAX)
             .map { Command(if (it.length > LABEL) it.take(LABEL - 1) + "…" else it, it, true) }
         else -> null
     }
 
     private val secretWords = Regex("""(?i)authorization|token|passw(or)?d|secret|mxt_|api[_-]?key""")
     private val assignment = Regex("""(^|\s)(export\s+)?[A-Z][A-Z0-9_]*=""")
+    private val clientP = Regex("""(^|\s)(mysql|mariadb|psql|mongo(sh)?|redis-cli|sshpass|smbclient|ftp)\s(.*\s)?-p\S*""")
+    private val userPass = Regex("""\s-[ua]\s*\S+:\S+""")
 
-    /** A line that may carry a credential: a known word, a token prefix, or an upper-case NAME=value. */
-    fun looksSecret(line: String) = secretWords.containsMatchIn(line) || assignment.containsMatchIn(line)
+    /** A line that may carry a credential: a known word, a token prefix, an upper-case NAME=value, a database client's -p, a user:password. */
+    fun looksSecret(line: String) = secretWords.containsMatchIn(line) || assignment.containsMatchIn(line) || clientP.containsMatchIn(line) || userPass.containsMatchIn(line)
 
     /** [recent] with [line] first, once; unchanged when the line is empty, too long or looks like a secret. */
     fun remembered(recent: List<String>, line: String): List<String> {
         val t = line.trim()
         if (t.isEmpty() || t.length > LINE_MAX || looksSecret(t)) return recent
-        return (listOf(t) + recent.filter { it != t }).take(RECENT_MAX)
+        return (listOf(t) + recent.filter { it != t }).take(STORE_MAX)
     }
 }
