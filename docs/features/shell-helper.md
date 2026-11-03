@@ -16,12 +16,16 @@ rules as the file sheet. Nothing is listed without them, and a reader
 sees nothing either: whoever may type into the pane may see what `ls`
 would show them.
 
-| on | a tap | the status line says |
-|---|---|---|
-| a directory | types `cd -- 'name'` and Enter | `cd name` |
-| a file, *a file opens with: preview* | the file sheet, nothing typed | |
-| a file, *a file opens with: cat* | types `cat -- 'name'` and Enter | `cat name` |
-| a file, *a file opens with: command* | types the command with `{}` replaced by `'name'` (or the name after it), and Enter | the command with the name |
+| on | a tap | a long press | the status line says |
+|---|---|---|---|
+| a directory | types `cd -- 'name'` and Enter | puts `'name' ` on the input line, nothing sent | `cd name` |
+| a file, *a file opens with: preview* | the file sheet, nothing typed | the same | |
+| a file, *a file opens with: cat* | types `cat -- 'name'` and Enter | the same | `cat name` |
+| a file, *a file opens with: command* | types the command with `{}` replaced by `'name'` (or the name after it), and Enter | the same | the command with the name |
+
+The long press is the web's Shift+click: the quoted name lands on the
+line with a space after it, for a `cp` or `mv` in progress, where a
+long press elsewhere on the pane copies the block it is in.
 
 Nothing is underlined: a listing is all names, and a screen of
 underlines reads badly on a phone. A name the host lists as neither a
@@ -37,10 +41,6 @@ The settings are on the Settings screen: *names* on or off, and *a file
 opens with*, one of preview, cat and command, with a field for the
 command when that is picked (`vim {}`, `less {}`, `bat {}`; `{}` stands
 for the quoted name, and without it the name follows the command).
-
-The web's Shift+click, which only puts the quoted name on the line for
-a `cp` or `mv` in progress, has no gesture on the phone yet: it waits
-for its row in the core's `docs/ui-guideline.md`.
 
 ## How it works
 

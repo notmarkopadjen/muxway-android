@@ -13,6 +13,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
@@ -409,11 +410,14 @@ class FlowTest {
         rule.onAllNodes(hasText(token2.substring(4, 20), substring = true)).assertCountEquals(0)
     }
 
-    /** A tap on the [col]th cell of the last row on the screen that holds [name]. */
-    private fun tapCell(name: String, col: Int) {
+    /** A tap, or with [hold] a long press, on the [col]th cell of the last row on the screen that holds [name]. */
+    private fun tapCell(name: String, col: Int, hold: Boolean = false) {
         val node = rule.onAllNodes(hasText(name, substring = true)).onLast()
         val text = node.fetchSemanticsNode().config.getOrNull(SemanticsProperties.Text)?.joinToString("") { it.text } ?: name
-        node.performTouchInput { click(Offset(width * (col + 0.5f) / text.length.coerceAtLeast(1), height / 2f)) }
+        node.performTouchInput {
+            val at = Offset(width * (col + 0.5f) / text.length.coerceAtLeast(1), height / 2f)
+            if (hold) longClick(at) else click(at)
+        }
     }
 
     @Test
@@ -427,6 +431,11 @@ class FlowTest {
         // The listing arrives within the tile's two seconds; then the names are links.
         SystemClock.sleep(3_000)
         shot("names")
+        // Held, the quoted name lands on the line with a space after it, nothing is sent.
+        tapCell("notes.txt", 1, hold = true)
+        rule.waitUntil(5_000) { rule.onAllNodes(hasText("'notes.txt' ", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        shot("names-held")
+        rule.onNode(hasSetTextAction()).performTextClearance()
         tapCell("src", 1)
         rule.onNode(hasSetTextAction()).performTextInput("pwd")
         rule.onNodeWithText("⏎").performClick()

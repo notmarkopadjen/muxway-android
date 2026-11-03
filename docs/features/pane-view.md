@@ -270,7 +270,9 @@ flowchart LR
   `git status` or in prose, set off by the row's edge, blank space, a
   bar, a quote or a bracket, is a link: a tap on a directory types
   `cd -- 'name'` and Enter, a tap on a file opens it the way the
-  *a file opens with* setting says. Only a name the host listed links,
+  *a file opens with* setting says, and a long press on either puts the
+  quoted name on the input line with a space after it, nothing sent
+  (the web's Shift+click). Only a name the host listed links,
   nothing is underlined (a listing is all names), and a web address, an
   inbox file or a path with a slash comes first where they overlap. See
   [shell helper](shell-helper.md); off with the *names* setting.

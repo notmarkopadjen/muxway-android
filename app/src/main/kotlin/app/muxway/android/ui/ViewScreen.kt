@@ -1218,6 +1218,13 @@ private fun PaneTile(
                     detectTapGestures(
                         onLongPress = { at ->
                             val (index, _) = rowAt(at.y) ?: return@detectTapGestures
+                            // Held on a name of the directory, the quoted name lands on the line, nothing sent.
+                            val f = facts
+                            val px = at.x + if (f.sideways) horizontal.value else 0
+                            Names.at(shown[index].joinToString("") { it.text }, colAt(index, px), f.names)?.let { m ->
+                                state.landed = state.landed + Names.shellQuote(m.name)
+                                return@detectTapGestures
+                            }
                             val plain = shown.map { r -> r.joinToString("") { it.text } }
                             val b = Blocks.at(Blocks.find(plain), index) ?: return@detectTapGestures
                             model.copyBlock(b.text, b.end - b.start + 1)
