@@ -79,6 +79,7 @@ fun ConnectScreen(model: AppModel) {
     var names by rememberSaveable { mutableStateOf(saved.names) }
     var openWith by rememberSaveable { mutableStateOf(saved.openWith) }
     var openCommand by rememberSaveable { mutableStateOf(saved.openCommand) }
+    var suggest by rememberSaveable { mutableStateOf(saved.suggest) }
     val context = LocalContext.current
     val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
@@ -107,6 +108,7 @@ fun ConnectScreen(model: AppModel) {
                 names = names,
                 openWith = openWith,
                 openCommand = openCommand.trim(),
+                suggest = suggest,
             ),
         )
         if (model.hasToken) model.back()
@@ -176,6 +178,11 @@ fun ConnectScreen(model: AppModel) {
         }
         if (openWith == OpenMode.COMMAND) {
             Field("  command ", openCommand, { openCommand = it.filter { c -> c >= ' ' }.take(SettingsStore.OPEN_COMMAND_MAX) }, Modifier.fillMaxWidth(), hint = "vim {}  ({} is the quoted name; without it the name follows)")
+        }
+        Toggle("suggest: the rest of a known line, dim, after what is typed into a shell pane (off for a shell that draws its own)", suggest) { suggest = it }
+        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Btn("forget", { model.forgetRecent() }, enabled = model.recent.isNotEmpty(), modifier = Modifier.testTag("forget"))
+            Text(" the ${model.recent.size} lines sent to shells from this phone, kept for the command row and the suggestion", color = p.dim)
         }
         Rule(Modifier.padding(vertical = 6.dp))
         Toggle("watch and notifications: follow the panes in the background, tell the watch, notify when one waits", watch) {

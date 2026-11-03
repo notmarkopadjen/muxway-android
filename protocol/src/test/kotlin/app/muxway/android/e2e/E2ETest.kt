@@ -5,6 +5,8 @@ import app.muxway.android.protocol.Api
 import app.muxway.android.protocol.Wheel
 import app.muxway.android.protocol.WheelQueue
 import app.muxway.android.protocol.ApiException
+import app.muxway.android.protocol.Commands
+import app.muxway.android.protocol.Suggest
 import app.muxway.android.protocol.OpenMode
 import app.muxway.android.protocol.Names
 import app.muxway.android.protocol.Board
@@ -792,6 +794,38 @@ class E2ETest {
         waitFor("cwd follows") { api.panes().single().cwd?.let { File(it).canonicalPath } == File(repo, "src").canonicalPath }
         val inside = api.dir(address, etag)!!.first
         assertTrue(inside.entries.any { it.name == "a.go" && it.kind == "file" })
+    }
+
+    @Test
+    fun f29_theGhostWordIsTheClientsDrawingAndReachesThePaneOnlyWhenTakenAsText() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        api.type(address, "echo one two")
+        api.key(address, "Enter")
+        waitPane("one two")
+        val pool = Commands.remembered(emptyList(), "echo one two")
+        assertEquals(listOf("echo one two"), pool)
+        // Typed direct: the shadow follows the keys, and the ghost shows once the screen confirms it.
+        var shadow: String? = ""
+        api.type(address, "echo o")
+        shadow = Suggest.nextShadow(shadow, Suggest.Body.Text("echo o"))
+        waitPane("$ echo o")
+        val pane = api.panes().single()
+        val read = api.read(address, 50, null)!!
+        val rows = read.content.lines().map { Ansi.plain(it) }
+        val row = rows[rows.size - (pane.height - read.trimmed) + pane.cursorY - 1]
+        assertTrue(row, row.endsWith("echo o"))
+        assertEquals("ne two", Suggest.suggest(row, pane.cursorX, shadow, pool))
+        // The host shows what was typed and nothing more: the ghost is the client's alone.
+        assertEquals(core.pane(), 1, core.pane().lines().count { it.contains("echo one two") })
+        // Taken: ordinary text, then Enter runs the whole line.
+        api.type(address, "ne two")
+        api.key(address, "Enter")
+        waitFor("the line ran twice") { core.pane().lines().count { it.trim() == "one two" } == 2 }
+        // The hub audits bytes, never the text.
+        val log = File(Env.logs(name.methodName), "hub.log")
+        waitFor("audit lines") { log.exists() && log.readText().contains("text_bytes=6") }
+        assertFalse(log.readText().contains("one two"))
     }
 
     private fun repoUnderRoot(): Pair<File, File> {

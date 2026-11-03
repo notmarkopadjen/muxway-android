@@ -24,6 +24,8 @@ data class Settings(
     /** How a tapped file opens, and the person's own command when that is picked. */
     val openWith: OpenMode = OpenMode.PREVIEW,
     val openCommand: String = "",
+    /** The ghost word after what is typed into a shell pane; off for a host shell that draws its own. */
+    val suggest: Boolean = true,
 ) {
     /** The hub in use, and its URL; empty until one is added. */
     val hub: Hub? get() = hubs.firstOrNull { it.id == current }
@@ -66,6 +68,7 @@ class SettingsStore(context: Context) {
             names = prefs.getBoolean("names", d.names),
             openWith = runCatching { OpenMode.valueOf(prefs.getString("open_with", d.openWith.name)!!) }.getOrDefault(d.openWith),
             openCommand = (prefs.getString("open_command", d.openCommand) ?: "").take(OPEN_COMMAND_MAX),
+            suggest = prefs.getBoolean("suggest", d.suggest),
         )
     }
 
@@ -88,6 +91,7 @@ class SettingsStore(context: Context) {
             .putBoolean("names", s.names)
             .putString("open_with", s.openWith.name)
             .putString("open_command", s.openCommand.take(OPEN_COMMAND_MAX))
+            .putBoolean("suggest", s.suggest)
             .apply()
     }
 
