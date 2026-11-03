@@ -34,7 +34,10 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import app.muxway.android.AppModel
 import app.muxway.android.Screen
+import app.muxway.android.store.SettingsStore
 import app.muxway.android.store.Theme
+import androidx.compose.ui.platform.testTag
+import app.muxway.android.protocol.OpenMode
 
 @Composable
 private fun Toggle(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
@@ -73,6 +76,9 @@ fun ConnectScreen(model: AppModel) {
     var watch by rememberSaveable { mutableStateOf(saved.watch) }
     var notifyText by rememberSaveable { mutableStateOf(saved.notifyText) }
     var watchAnswer by rememberSaveable { mutableStateOf(saved.watchAnswer) }
+    var names by rememberSaveable { mutableStateOf(saved.names) }
+    var openWith by rememberSaveable { mutableStateOf(saved.openWith) }
+    var openCommand by rememberSaveable { mutableStateOf(saved.openCommand) }
     val context = LocalContext.current
     val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
@@ -98,6 +104,9 @@ fun ConnectScreen(model: AppModel) {
                 watch = watch,
                 notifyText = notifyText,
                 watchAnswer = watchAnswer,
+                names = names,
+                openWith = openWith,
+                openCommand = openCommand.trim(),
             ),
         )
         if (model.hasToken) model.back()
@@ -160,6 +169,14 @@ fun ConnectScreen(model: AppModel) {
         Toggle("assume a hardware keyboard: the on-screen one stays down until asked", hardware) { hardware = it }
         Toggle("effects: glow, scanlines, motion", effects) { effects = it }
         Toggle("reflow long rows to the screen when fit is off (else scale the pane's width)", reflow) { reflow = it }
+        Toggle("names: in a shell pane on a host with preview roots, the names of its directory are links", names) { names = it }
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("a file opens with  ", color = p.dim)
+            for (m in OpenMode.entries) Btn(m.name.lowercase(), { openWith = m }, selected = openWith == m, modifier = Modifier.testTag("open-with:${m.name.lowercase()}"))
+        }
+        if (openWith == OpenMode.COMMAND) {
+            Field("  command ", openCommand, { openCommand = it.filter { c -> c >= ' ' }.take(SettingsStore.OPEN_COMMAND_MAX) }, Modifier.fillMaxWidth(), hint = "vim {}  ({} is the quoted name; without it the name follows)")
+        }
         Rule(Modifier.padding(vertical = 6.dp))
         Toggle("watch and notifications: follow the panes in the background, tell the watch, notify when one waits", watch) {
             watch = it

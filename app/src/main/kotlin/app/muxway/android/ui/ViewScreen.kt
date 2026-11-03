@@ -145,6 +145,7 @@ import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.Keys
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Links
+import app.muxway.android.protocol.Names
 import app.muxway.android.protocol.Blocks
 import app.muxway.android.protocol.Changes
 import app.muxway.android.protocol.Pane
@@ -1030,6 +1031,19 @@ private fun PaneTile(
             }
         }
     }
+    // A writer's shell pane under a root has its directory listed, so the names on its screen
+    // are links: every two seconds when focused, five otherwise, and at once when it changes.
+    val cwd = if (model.settings.names && pane != null && Commands.isShell(pane.command) && model.hostLists(address)) model.cwdOf(address) else null
+    LaunchedEffect(address, cwd, focused) {
+        if (cwd == null) { model.fetchListing(address); return@LaunchedEffect }
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                model.fetchListing(address)
+                delay(if (focused) 2_000L else 5_000L)
+            }
+        }
+    }
+    val names = remember(state.listing, cwd) { if (cwd != null) state.listing?.let { Names.index(it.entries) } ?: Names.Index.EMPTY else Names.Index.EMPTY }
     // A header or a tab dropped here: on the middle it swaps the two panes, on an edge it splits
     // this tile's place that way. The target outlives the view it was made for: it drops into
     // the latest one.
@@ -1184,7 +1198,7 @@ private fun PaneTile(
             // against them, not against the font's nominal pitch, which the list does not keep to.
             // The gesture reads the pane's facts as they are now, so a repaint does not cancel it.
             val laid = remember(address) { HashMap<Int, LaidRow>() }
-            val facts by rememberUpdatedState(TapFacts(colPx, previews, clickable, wheel, screenRows, cursorRow, pane?.width ?: 0, pane?.height ?: 0, sideways))
+            val facts by rememberUpdatedState(TapFacts(colPx, previews, names, clickable, wheel, screenRows, cursorRow, pane?.width ?: 0, pane?.height ?: 0, sideways))
             // The row under the finger, as an index into the rows shown and as a row of the pane.
             fun rowAt(py: Float): Pair<Int, Int>? {
                 val index = laid.entries.firstOrNull { (_, r) -> py >= r.top && py < r.bottom }?.key ?: return null
@@ -1217,6 +1231,15 @@ private fun PaneTile(
                         if (Links.at(row, col) != null) return@detectTapGestures
                         Links.fileAt(row, col)?.let { onFile(Shown(address, name = it.name)); return@detectTapGestures }
                         if (f.previews) Links.pathAt(row, col)?.let { onFile(Shown(address, path = it.path)); return@detectTapGestures }
+                        // A name of the pane's directory: a directory is entered, a file opened as set;
+                        // the text typed is built from the host's listing, never from the screen.
+                        Names.at(row, col, f.names)?.let { m ->
+                            val s = model.settings
+                            val line = Names.lineFor(m.kind, m.name, s.openWith, s.openCommand)
+                            if (line == null) onFile(Shown(address, path = m.name))
+                            else if (model.type(address, line, enter = true)) model.told = Names.titleFor(m.kind, m.name, s.openWith, s.openCommand)
+                            return@detectTapGestures
+                        }
                         if (!f.clickable) return@detectTapGestures
                         // A click only where the program asked for the mouse; elsewhere a tap focuses.
                         val x = (px / f.colPx).toInt() + 1
@@ -1308,7 +1331,7 @@ private class LaidRow {
 
 /** What a tap on the pane needs to know, as it is at the moment of the tap. */
 private data class TapFacts(
-    val colPx: Float, val previews: Boolean, val clickable: Boolean, val wheel: Boolean,
+    val colPx: Float, val previews: Boolean, val names: Names.Index, val clickable: Boolean, val wheel: Boolean,
     val screenRows: Int, val cursorRow: Int, val cols: Int, val rows: Int, val sideways: Boolean,
 )
 
