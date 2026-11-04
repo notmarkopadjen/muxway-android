@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import app.muxway.android.AppModel
+import app.muxway.android.MailTarget
 import app.muxway.android.Naming
 import app.muxway.android.Screen
 import app.muxway.android.protocol.Groups
@@ -51,6 +52,7 @@ fun PanesScreen(model: AppModel) {
     Column(Modifier.fillMaxSize().padding(4.dp)) {
         Frame("muxway", crumb = "panes") {
             InboxCount(model)
+            MessagesCount(model)
             Btn(if (model.listing) "…" else "refresh", { model.refreshList() }, enabled = !model.listing)
             Btn("settings", { model.open(Screen.Connect) })
         }
@@ -83,7 +85,8 @@ fun PanesScreen(model: AppModel) {
                                         for (pane in run.rows) {
                                             PaneRow(pane, model.status(pane, now), pane.key in model.selected,
                                                 onTap = { if (model.selected.isEmpty()) model.openPane(pane.key) else model.toggleSelected(pane.key) },
-                                                onHold = { model.toggleSelected(pane.key) })
+                                                onHold = { model.toggleSelected(pane.key) },
+                                                onMail = { model.mailOpen = MailTarget(pane.key) })
                                         }
                                     }
                                     if (run.group != null) Column(Modifier.fillMaxWidth().border(1.dp, p.talk).testTag("group:${run.group}")) { rows() } else rows()
@@ -108,6 +111,8 @@ fun PanesScreen(model: AppModel) {
     }
     model.naming?.takeIf { it.into == null }?.let { SessionDialog(it, model) }
     if (model.inboxOpen) InboxSheet(model, now) { model.inboxOpen = false }
+    if (model.messagesOpen) MessagesSheet(model) { model.messagesOpen = false }
+    model.mailOpen?.let { MailSheet(model, it) { model.mailOpen = null } }
 }
 
 /** `═══ work ═══`, a hub's line over its hosts, with its trouble when it has any. */
@@ -173,12 +178,12 @@ private fun HostRow(name: String, state: String) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PaneRow(pane: Pane, status: Lens.Status, selected: Boolean, onTap: () -> Unit, onHold: () -> Unit) {
+private fun PaneRow(pane: Pane, status: Lens.Status, selected: Boolean, onTap: () -> Unit, onHold: () -> Unit, onMail: () -> Unit) {
     val p = LocalPalette.current
     val fg = if (selected) p.bg else p.ink
     val bg = if (selected) p.ink else p.bg
     Row(
-        Modifier.fillMaxWidth().background(bg).combinedClickable(onClick = onTap, onLongClick = onHold).padding(horizontal = 4.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().background(bg).combinedClickable(onClick = onTap, onLongClick = onHold).padding(horizontal = 4.dp, vertical = 6.dp).testTag("row:${pane.address}"),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val dim = if (selected) p.bg.copy(alpha = 0.7f) else p.dim
@@ -187,7 +192,7 @@ private fun PaneRow(pane: Pane, status: Lens.Status, selected: Boolean, onTap: (
             Mark(status, pane.attention?.kind, if (selected) p.bg else if (status == Lens.Status.WAITING) p.attention else p.dim)
             Text(" ", maxLines = 1)
         }
-        PaneName(pane, fg, dim, mail = if (selected) fg else null, modifier = Modifier.weight(1f, fill = false))
+        PaneName(pane, fg, dim, mail = if (selected) fg else null, onMail = onMail, modifier = Modifier.weight(1f, fill = false))
         Text("  ${pane.place}", color = dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Lens.word(status, pane.attention?.kind)?.let { w ->
             Text(" $w", color = if (selected) p.bg else if (status == Lens.Status.WAITING) p.attention else p.dim, maxLines = 1)
