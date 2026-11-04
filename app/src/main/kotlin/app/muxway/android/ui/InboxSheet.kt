@@ -20,7 +20,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import app.muxway.android.AppModel
-import app.muxway.android.Screen
 import app.muxway.android.protocol.Inbox
 import app.muxway.android.protocol.Lens
 import kotlinx.coroutines.delay
@@ -28,7 +27,9 @@ import kotlinx.coroutines.delay
 /**
  * The inbox, the browser's window as a sheet: every pane that waits for you, on every hub,
  * oldest first, with its mark, name, place, kind and text, how long it has waited and a
- * question's choices. A tap on a row opens the pane; *oldest* at the top opens the first. Each
+ * question's choices, then the panes parked for later, oldest parking first, with the moon and
+ * what waits under it dimmed. A tap on a row opens the pane, and wakes a parked one; *oldest*
+ * at the top opens the first awake row, and is not offered when every row is parked. Each
  * hub's `/v1/inbox` is asked every five seconds while the sheet is open; until the first
  * answer the rows are the listings the app already holds.
  */
@@ -54,29 +55,34 @@ fun InboxSheet(model: AppModel, now: Long, onClose: () -> Unit) {
             Box(Modifier.fillMaxWidth().heightIn(min = 80.dp, max = 480.dp).padding(top = 4.dp)) {
                 if (rows.isEmpty()) Text("nothing waits for you", color = p.dim, modifier = Modifier.padding(8.dp))
                 else LazyColumn(Modifier.fillMaxWidth()) {
-                    item(key = "oldest") {
-                        Text(
-                            "⚑ oldest", color = p.accent, maxLines = 1,
-                            modifier = Modifier.fillMaxWidth().clickable { model.open(Screen.View(listOf(rows.first().key))) }.padding(horizontal = 4.dp, vertical = 6.dp).testTag("inbox-oldest"),
-                        )
-                        Rule()
+                    Inbox.oldest(rows)?.let { first ->
+                        item(key = "oldest") {
+                            Text(
+                                "⚑ oldest", color = p.accent, maxLines = 1,
+                                modifier = Modifier.fillMaxWidth().clickable { model.openPane(first.key) }.padding(horizontal = 4.dp, vertical = 6.dp).testTag("inbox-oldest"),
+                            )
+                            Rule()
+                        }
                     }
                     items(rows.size, key = { rows[it].key }) { i ->
                         val pane = rows[i]
                         val a = pane.attention
                         val status = model.status(pane, now)
+                        val parked = status == Lens.Status.LATER
                         Column(
-                            Modifier.fillMaxWidth().clickable { model.open(Screen.View(listOf(pane.key))) }.padding(horizontal = 4.dp, vertical = 6.dp).testTag("inbox-row:${pane.address}"),
+                            Modifier.fillMaxWidth().clickable { model.openPane(pane.key) }.padding(horizontal = 4.dp, vertical = 6.dp).testTag("inbox-row:${pane.address}"),
                         ) {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                if (status != Lens.Status.QUIET) { Mark(status, a?.kind, p.attention); Text(" ", maxLines = 1) }
+                                if (status != Lens.Status.QUIET) { Mark(status, a?.kind, if (parked) p.dim else p.attention); Text(" ", maxLines = 1) }
                                 PaneName(pane, p.ink, p.dim, modifier = Modifier.weight(1f, fill = false))
                                 Text("  ${pane.place}", color = p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                                Text(" ${Inbox.ago(a?.at ?: 0L, now)}", color = p.dim, maxLines = 1)
+                                Text(" ${Inbox.ago(a?.at ?: pane.laterAt, now)}", color = p.dim, maxLines = 1)
                             }
-                            val said = (a?.kind ?: "waiting") + (if (a?.text.isNullOrEmpty()) "" else ": ${a.text}")
+                            // A parked row says so first, with what waits under the mark after a dot.
+                            val text = if (a?.text.isNullOrEmpty()) "" else ": ${a.text}"
+                            val said = if (parked) "later" + (a?.let { " · ${it.kind}" } ?: "") + text else (a?.kind ?: "waiting") + text
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Text("  $said", color = p.attention, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                Text("  $said", color = if (parked) p.dim else p.attention, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                                 Choices(model, pane)
                             }
                         }

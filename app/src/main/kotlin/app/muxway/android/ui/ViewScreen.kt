@@ -275,8 +275,11 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val now = ticker()
     val order = model.panes.map { it.key }.ifEmpty { addresses }
     DisposableEffect(Unit) { onDispose { model.releaseFits() } }
-    // The `+` menu after the tabs, and the session dialog it may open.
+    // The `+` menu after the tabs, and the session dialog it may open; the pane menu under a tab
+    // or a header held still, by the pane's key.
     var adding by remember { mutableStateOf(false) }
+    var tabMenu by remember { mutableStateOf<String?>(null) }
+    var headerMenu by remember { mutableStateOf<String?>(null) }
     model.naming?.takeIf { it.into != null }?.let { SessionDialog(it, model) }
     // A file of the host over the pane; the height the text line takes beyond one row, which
     // the tiles lose and the fit must not take for a resize.
@@ -330,9 +333,12 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
 
     fun show(key: String) {
         val at = tiles.indexOf(key)
+        // A parked tab's tap wakes it: the owner came back.
+        val asleep = model.panes.any { it.key == key && it.later }
+        if (asleep) model.wake(key)
         when {
             // The focused tab, tapped once more, names its pane.
-            key == focused && at >= 0 -> namingPane = key
+            key == focused && at >= 0 -> if (!asleep) namingPane = key
             at >= 0 -> focusedIndex = at
             key in minimised -> {
                 parked = minimised - key
@@ -347,6 +353,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     // counted, it takes the focused tile's place.
     fun add(key: String) {
         if (key in minimised) { show(key); return }
+        model.wake(key)
         val full = addresses.size >= AddMenu.MAX_TILES
         focusedIndex = if (full) index else tiles.size
         model.addPane(addresses, addresses.indexOf(focused), key, full)
@@ -410,7 +417,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Btn("‹", { model.open(Screen.Panes) })
-            Tabs(model, tiles, minimised, focused, now, Modifier.weight(1f), ::show, ::add)
+            Tabs(model, tiles, minimised, focused, now, Modifier.weight(1f), ::show, onHold = { tabMenu = it }, menu = tabMenu, onMenuClose = { tabMenu = null }, onBeside = ::add)
             Box {
                 Btn("+", { adding = true }, selected = adding, modifier = Modifier.testTag("add"))
                 if (adding) AddMenuPopup(model, addresses, tiles, minimised, focused, now, onClose = { adding = false }) { add(it) }
@@ -495,6 +502,9 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
                         onName = { namingPane = tiles[i] },
                         onPrompt = { focusedIndex = i; fieldFocus.request() },
                         ghost = if (i == index) ghost else null,
+                        menu = headerMenu == tiles[i],
+                        onMenu = { headerMenu = tiles[i] },
+                        onMenuClose = { headerMenu = null },
                     ) {
                         focusedIndex = i
                         focus.requestFocus()
@@ -655,21 +665,26 @@ private fun mailOf(status: Lens.Status?, ink: Color): Color = if (status == Lens
 
 /**
  * Every pane the token may read, each painted with its state: attention colour when it waits for
- * you, plain otherwise with the ring while it works. Open panes have a thick border, the focused one the
- * thickest and its name in bold. Tapping a closed one swaps it into the focused tile; holding it
- * opens it beside, as the browser's Shift+click does; held and moved, it drags as a header does,
- * to be dropped on a tile or a divider.
+ * you, plain otherwise with the ring while it works, the parked ones after every other with the
+ * moon. Open panes have a thick border, the focused one the thickest and its name in bold.
+ * Tapping a closed one swaps it into the focused tile; holding it still opens its menu, whose
+ * first row opens it beside, as the browser's Shift+click does; held and moved, it drags as a
+ * header does, to be dropped on a tile or a divider.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Tabs(model: AppModel, open: List<String>, minimised: List<String>, focused: String, now: Long, modifier: Modifier, onTap: (String) -> Unit, onHold: (String) -> Unit) {
+private fun Tabs(
+    model: AppModel, open: List<String>, minimised: List<String>, focused: String, now: Long, modifier: Modifier,
+    onTap: (String) -> Unit, onHold: (String) -> Unit, menu: String?, onMenuClose: () -> Unit, onBeside: (String) -> Unit,
+) {
     val p = LocalPalette.current
     val panes = ArrayList<Pair<String, Pane?>>()
     for (pane in model.panes) if (pane.key !in minimised) panes.add(pane.key to pane)
     for (a in open) if (panes.none { it.first == a }) panes.add(a to model.view(a).pane)
-    // The tabs of a group side by side inside one frame in the talk hue; the strip's items are the runs.
+    // The tabs of a group side by side inside one frame in the talk hue, the parked tabs last and
+    // outside any frame; the strip's items are the runs.
     val groups = remember(model.panes) { Groups.of(model.panes) }
-    val runs = Groups.runs(Groups.pullTogether(panes, groups) { it.first }, groups) { it.first }
+    val runs = Groups.strip(panes, groups, { it.first }) { it.second?.later == true }
     val list = rememberLazyListState()
     LaunchedEffect(focused, runs.size) { runs.indexOfFirst { r -> r.rows.any { it.first == focused } }.takeIf { it >= 0 }?.let { list.animateScrollToItem(it) } }
     // The drag handler runs on from the tab's first composition: it holds the latest view.
@@ -691,7 +706,7 @@ private fun Tabs(model: AppModel, open: List<String>, minimised: List<String>, f
                             .clickable { onTap(address) }
                             .dragAndDropSource {
                                 // The drag starts with the first movement after the long press; let
-                                // go in place, the hold opens the pane beside.
+                                // go in place, the hold opens the pane's menu.
                                 var moved = false
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = { moved = false },
@@ -706,6 +721,7 @@ private fun Tabs(model: AppModel, open: List<String>, minimised: List<String>, f
                         if (status != null && status != Lens.Status.QUIET) { Mark(status, pane?.attention?.kind, ink); Text(" ", maxLines = 1) }
                         if (pane != null) PaneName(pane, ink, dimOf(status, ink), bold = isFocused, tab = true, mail = mailOf(status, ink))
                         else Text(Keys.address(address).substringAfter('/'), color = ink, maxLines = 1, style = LocalTextStyle.current.copy(fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal, shadow = null))
+                        if (menu == address) PaneMenu(model, address, onBeside = { onBeside(address) }, onClose = onMenuClose)
                     }
                 }
             }
@@ -1034,7 +1050,8 @@ private fun PaneTile(
     model: AppModel, address: String, focused: Boolean, several: Boolean, grouped: Boolean, fitAsked: Boolean, shared: Boolean, siblings: Boolean,
     windowFit: Boolean, expected: WindowLayout.Size?, fitAgain: Int, now: Long, slackPx: Int, modifier: Modifier,
     onMeasured: (WindowLayout.Size) -> Unit, onDrop: (String, Tiles.Zone) -> Unit, onZoom: () -> Unit, onClose: () -> Unit, onCloseTile: () -> Unit,
-    onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onChanges: () -> Unit, onName: () -> Unit, onPrompt: () -> Unit, ghost: String? = null, onFocus: () -> Unit,
+    onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onChanges: () -> Unit, onName: () -> Unit, onPrompt: () -> Unit, ghost: String? = null,
+    menu: Boolean = false, onMenu: () -> Unit = {}, onMenuClose: () -> Unit = {}, onFocus: () -> Unit,
 ) {
     // Another tile of this window carries the fit: this one is held. With the window fitted as
     // one ([windowFit]) the view sends the size and this tile is [expected] to be its share.
@@ -1112,13 +1129,22 @@ private fun PaneTile(
             .testTag("tile:${Keys.address(address)}"),
     ) {
         // The header drags by a long press, with another tile to drop it on, the whole painted
-        // header under the finger; a double tap zooms the pane.
+        // header under the finger; held still, it opens the pane's menu; a double tap zooms the pane.
+        val held by rememberUpdatedState(onMenu)
         val header = Modifier.fillMaxWidth()
             .then(if (several) Modifier.dragAndDropSource {
-                detectDragGesturesAfterLongPress { _, _ -> startTransfer(DragAndDropTransferData(paneClip(address))) }
-            } else Modifier)
+                var moved = false
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { moved = false },
+                    onDragEnd = { if (!moved) held() },
+                ) { _, _ -> if (!moved) { moved = true; startTransfer(DragAndDropTransferData(paneClip(address))) } }
+            } else Modifier.pointerInput(address) {
+                var moved = false
+                detectDragGesturesAfterLongPress(onDragStart = { moved = false }, onDragEnd = { if (!moved) held() }) { _, _ -> moved = true }
+            })
             .background(back).padding(horizontal = 4.dp, vertical = 2.dp)
             .pointerInput(address) { detectTapGestures(onDoubleTap = { onZoom() }, onTap = { onFocus() }) }
+            .testTag("header")
         Row(header, verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 if (pane != null) {
@@ -1131,12 +1157,16 @@ private fun PaneTile(
                 } else Text(address, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(shadow = null))
             }
             if (status != null && status != Lens.Status.QUIET) {
+                val kind = pane?.attention?.kind
                 Text(" ", maxLines = 1)
-                Mark(status, pane?.attention?.kind, ink)
-                Text(" ${Lens.word(status, pane?.attention?.kind)} ", color = ink, maxLines = 1, modifier = if (waiting) Modifier.alpha(pulse()) else Modifier)
+                Mark(status, kind, ink)
+                Text(" ${Lens.word(status, kind)} ", color = ink, maxLines = 1, modifier = if (waiting) Modifier.alpha(pulse()) else Modifier)
+                // What waits under a parked pane's mark, dimmed, so it is not lost.
+                if (status == Lens.Status.LATER && kind != null) Text("· ${Lens.glyph(Lens.Status.WAITING, kind)} $kind ", color = dimOf(status, ink), maxLines = 1)
                 // A question asked with fixed answers: its choices, answered here.
                 if (pane != null && waiting) Choices(model, pane)
             }
+            if (menu) PaneMenu(model, address, onBeside = null, onClose = onMenuClose)
             if (fitAsked && pane?.writable == true) {
                 // Alert colour when the host did not keep this phone's size: another terminal holds
                 // it, or another tile of the window carries the fit.

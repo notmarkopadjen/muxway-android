@@ -396,6 +396,7 @@ fun Mark(status: Lens.Status, kind: String?, color: Color) {
         Lens.Status.WAITING -> Text(Lens.glyph(status, kind) ?: "!", color = color, maxLines = 1, modifier = Modifier.alpha(pulse()))
         Lens.Status.WORKING -> WorkingRing(color)
         Lens.Status.QUIET -> {}
+        Lens.Status.LATER -> Text("☾", color = color, maxLines = 1)
     }
 }
 
