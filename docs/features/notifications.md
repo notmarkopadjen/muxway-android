@@ -89,8 +89,8 @@ the tile's header shows the kind under the word, dimmed
 ┌ ✳ Claude · fixing the build        ☾ later · ! permission    _  × ┐
 ```
 
-- **Parking.** A tab or a tile's header **held still** opens the pane
-  menu; *☾ later* parks the pane with `POST
+- **Parking.** A tab or a tile's header **held and let go in place**,
+  the drag's long press without a move, opens the pane menu; *☾ later* parks the pane with `POST
   /v1/panes/{address}/later {"later": true}`, *☾ wake* wakes it. The row
   is dim with `read only` on a pane the token cannot write and `host
   without later` where the host's agent is older than the mark

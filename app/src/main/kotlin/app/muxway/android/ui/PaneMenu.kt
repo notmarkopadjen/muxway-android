@@ -21,7 +21,8 @@ import androidx.compose.ui.window.PopupProperties
 import app.muxway.android.AppModel
 
 /**
- * The pane menu, under a tab or a tile's header held still: *open beside* for a tab, then
+ * The pane menu, under a tab or a tile's header held and let go in place (the drag-and-drop
+ * long press without a move): *open beside* for a tab, then
  * *later* or *wake*, the owner's mark on the host (see the notifications page). The mark's row
  * is dim with the reason on a read-only pane or a host that does not park panes.
  */

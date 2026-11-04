@@ -276,7 +276,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val order = model.panes.map { it.key }.ifEmpty { addresses }
     DisposableEffect(Unit) { onDispose { model.releaseFits() } }
     // The `+` menu after the tabs, and the session dialog it may open; the pane menu under a tab
-    // or a header held still, by the pane's key.
+    // or a header held and let go in place, by the pane's key.
     var adding by remember { mutableStateOf(false) }
     var tabMenu by remember { mutableStateOf<String?>(null) }
     var headerMenu by remember { mutableStateOf<String?>(null) }
@@ -667,8 +667,8 @@ private fun mailOf(status: Lens.Status?, ink: Color): Color = if (status == Lens
  * Every pane the token may read, each painted with its state: attention colour when it waits for
  * you, plain otherwise with the ring while it works, the parked ones after every other with the
  * moon. Open panes have a thick border, the focused one the thickest and its name in bold.
- * Tapping a closed one swaps it into the focused tile; holding it still opens its menu, whose
- * first row opens it beside, as the browser's Shift+click does; held and moved, it drags as a
+ * Tapping a closed one swaps it into the focused tile; held and let go in place, the
+ * drag-and-drop long press without a move, it opens its menu, whose first row opens it beside, as the browser's Shift+click does; held and moved, it drags as a
  * header does, to be dropped on a tile or a divider.
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -1129,7 +1129,7 @@ private fun PaneTile(
             .testTag("tile:${Keys.address(address)}"),
     ) {
         // The header drags by a long press, with another tile to drop it on, the whole painted
-        // header under the finger; held still, it opens the pane's menu; a double tap zooms the pane.
+        // header under the finger; held and let go in place, it opens the pane's menu; a double tap zooms the pane.
         val held by rememberUpdatedState(onMenu)
         val header = Modifier.fillMaxWidth()
             .then(if (several) Modifier.dragAndDropSource {

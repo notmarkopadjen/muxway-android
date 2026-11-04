@@ -325,7 +325,7 @@ class FlowTest {
         rule.waitUntil(5_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 1 }
         rule.onNodeWithTag("tab:alice-laptop/work/0.1").assertExists()
         shot("tile-closed")
-        // The second pane's tab, held still, opens its menu; *open beside* opens it beside the first.
+        // The second pane's tab, held and let go in place, opens its menu; *open beside* opens it beside the first.
         rule.onNodeWithTag("tab:alice-laptop/work/0.1").performTouchInput { longClick() }
         rule.onNodeWithTag("pane-menu").assertExists()
         shot("pane-menu")
@@ -345,7 +345,7 @@ class FlowTest {
         val work = "tab:alice-laptop/work/0.0"
         val ask = "tab:alice-laptop/ask/0.0"
         rule.waitUntil(15_000) { val w = leftOf(work); val a = leftOf(ask); w != null && a != null && w < a }
-        // The header held still opens the pane menu; *later* parks the pane on the host.
+        // The header held and let go in place opens the pane menu; *later* parks the pane on the host.
         rule.onNodeWithTag("header").performTouchInput { longClick() }
         rule.onNodeWithTag("menu-later").assertExists()
         rule.onNodeWithTag("menu-later").performClick()

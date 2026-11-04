@@ -75,12 +75,13 @@ focused pane.
 - A **swipe** left or right across the page moves the focus to the next
   or previous tile, or with one tile open swaps the strip's next or
   previous pane into it, coming round at either end as `]` and `[` do
-  in the browser. A tab **held still** opens the **pane menu**: *open
+  in the browser. A tab **held and let go in place** (the drag's long
+  press without a move) opens the **pane menu**: *open
   beside* opens its pane beside the focused one, as the browser's
   Shift+click does; *☾ later* parks the pane and *☾ wake* wakes it (dim,
   with the reason, on a read-only pane or a host without `later`; see
-  [notifications](notifications.md#later)). A tile's header held still
-  opens the same menu without *open beside*. A tab held and **moved**
+  [notifications](notifications.md#later)). A tile's header held and let
+  go in place opens the same menu without *open beside*. A tab held and **moved**
   drags as a header does, and dropped on a tile or on the bar between two it lays
   its pane out there (see the tree of splits below): with one tile open,
   a drop on the right part of the screen makes two columns, on the
