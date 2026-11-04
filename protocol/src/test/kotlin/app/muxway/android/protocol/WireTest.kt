@@ -127,4 +127,15 @@ class WireTest {
             assertFalse(s.contains("token"))
         }
     }
+
+
+    @Test
+    fun aLaterRequestCarriesItsMark() {
+        val on = Wire.request(Wire.LATER, Wire.later("l1", address, true)) as Wire.Later
+        assertEquals("l1", on.id)
+        assertEquals(address, on.address)
+        assertTrue(on.on)
+        assertFalse((Wire.request(Wire.LATER, Wire.later("l2", address, false)) as Wire.Later).on)
+        assertNull(Wire.request(Wire.LATER, Wire.later("l3", "not an address", true)))
+    }
 }

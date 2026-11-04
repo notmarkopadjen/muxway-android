@@ -140,4 +140,14 @@ class LensTest {
         assertEquals("/", Lens.folder(pane("bash", "").copy(cwd = "/")))
         assertNull(Lens.folder(pane("bash", "")))
     }
+
+
+    @Test
+    fun aParkedPaneIsLaterWhateverWaitsOrWorksUnderneath() {
+        assertEquals(Lens.Status.LATER, Lens.status(pane("claude", "✳ x", "permission").copy(later = true), "working", true))
+        assertEquals(Lens.Status.LATER, Lens.status(pane("bash", "").copy(later = true), null, false))
+        assertEquals(Lens.Status.WAITING, Lens.status(pane("bash", "", "done"), null, false))
+        assertEquals("☾", Lens.glyph(Lens.Status.LATER, "permission"))
+        assertEquals("later", Lens.word(Lens.Status.LATER, "permission"))
+    }
 }

@@ -1,6 +1,7 @@
 package app.muxway.android.protocol
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class InboxTest {
@@ -26,5 +27,17 @@ class InboxTest {
         assertEquals("3m", Inbox.ago(now - 200, now))
         assertEquals("2h", Inbox.ago(now - 7300, now))
         assertEquals("1d", Inbox.ago(now - 90000, now))
+    }
+
+
+    @Test
+    fun parkedPanesComeAfterEveryAwakeOneOldestParkingFirstAndOldestSkipsThem() {
+        val parked = pane(6, "a", "done", now - 300).copy(later = true, laterAt = now - 20)
+        val bare = pane(7, "b").copy(later = true, laterAt = now - 90)
+        val rows = Inbox.waiting(listOf(parked, pane(2, "a", "done", now - 5), bare, pane(3, "b", "question", now - 60), pane(4, "b")))
+        assertEquals(listOf("b:alice-laptop/work/0.3", "a:alice-laptop/work/0.2", "a:alice-laptop/work/0.6", "b:alice-laptop/work/0.7"), rows.map { it.key })
+        assertEquals("b:alice-laptop/work/0.3", Inbox.oldest(rows)?.key)
+        assertNull(Inbox.oldest(listOf(parked, bare)))
+        assertNull(Inbox.oldest(emptyList()))
     }
 }

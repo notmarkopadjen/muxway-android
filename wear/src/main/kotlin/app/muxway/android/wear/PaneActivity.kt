@@ -227,6 +227,12 @@ class PaneActivity : ComponentActivity() {
         else text(d, enter)
     }
 
+    /** Parks the pane for later, or wakes it; the phone checks it as it checks an answer. */
+    private fun later(on: Boolean) {
+        menu = false
+        id("l").let { send(Wire.LATER, it, Wire.later(it, address, on)) }
+    }
+
     /** The phone opens this pane behind its lock screen, so unlocking lands on it. */
     private fun openOnThePhone() {
         menu = false
@@ -458,6 +464,7 @@ class PaneActivity : ComponentActivity() {
                 item { Text("┌─ reply ─┐", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp) }
                 for (a in answers) item { MenuRow(a.label, if (a.choice.isNotEmpty() || a.label.contains('·')) Palette.attention else Palette.ink) { answer(a) } }
                 item { MenuRow("type…", Palette.ink) { typeOnTheWatch() } }
+                item { MenuRow(if (row?.later == true) "☾ wake" else "☾ later", Palette.dim) { later(row?.later != true) } }
                 item { MenuRow("phone", Palette.dim) { openOnThePhone() } }
                 item { Text("└ back", color = Palette.dim, fontFamily = Palette.mono, fontSize = 12.sp, modifier = Modifier.clickable { menu = false }.padding(8.dp)) }
             }

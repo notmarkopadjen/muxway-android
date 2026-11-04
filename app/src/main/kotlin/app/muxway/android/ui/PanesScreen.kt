@@ -82,7 +82,7 @@ fun PanesScreen(model: AppModel) {
                                     val rows: @Composable () -> Unit = {
                                         for (pane in run.rows) {
                                             PaneRow(pane, model.status(pane, now), pane.key in model.selected,
-                                                onTap = { if (model.selected.isEmpty()) model.open(Screen.View(listOf(pane.key))) else model.toggleSelected(pane.key) },
+                                                onTap = { if (model.selected.isEmpty()) model.openPane(pane.key) else model.toggleSelected(pane.key) },
                                                 onHold = { model.toggleSelected(pane.key) })
                                         }
                                     }
@@ -157,7 +157,7 @@ private fun SelectionBar(model: AppModel) {
     val n = model.selected.size
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Btn("clear", { model.selected.clear() })
-        Btn(if (n == 1) "open" else "open $n side by side", { model.open(Screen.View(model.selected.toList())) })
+        Btn(if (n == 1) "open" else "open $n side by side", { model.openSelected() })
     }
 }
 

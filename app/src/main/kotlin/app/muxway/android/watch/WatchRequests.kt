@@ -27,6 +27,7 @@ class WatchRequests : WearableListenerService() {
             r is Wire.Key -> Wire.DONE to Wire.done(gate.key(r))
             r is Wire.Text -> Wire.DONE to Wire.done(gate.text(r))
             r is Wire.Answer -> Wire.DONE to Wire.done(gate.answer(r))
+            r is Wire.Later -> Wire.DONE to Wire.done(gate.later(r))
             else -> return
         }
         Wearable.getMessageClient(this).sendMessage(m.sourceNodeId, path, bytes)

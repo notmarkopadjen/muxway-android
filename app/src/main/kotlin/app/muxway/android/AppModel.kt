@@ -440,7 +440,20 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         val key = pendingOpen ?: return
         if (panes.none { it.key == key }) return
         pendingOpen = null
+        openPane(key)
+    }
+
+    /** Opens one pane from the list, the inbox, the add menu or a link, and wakes it when it was parked. */
+    fun openPane(key: String) {
+        wake(key)
         open(Screen.View(listOf(key)))
+    }
+
+    /** Opens the picked panes side by side, each woken when it was parked. */
+    fun openSelected() {
+        val keys = selected.toList()
+        for (k in keys) wake(k)
+        open(Screen.View(keys))
     }
 
     /** Lists every hub; each answers on its own. */
@@ -941,6 +954,34 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     /** Whether the pane's host names panes for writers. */
     fun hostRenames(key: String): Boolean = hostOf(key)?.rename == true
+
+    /** Whether the pane's host parks panes for later. */
+    fun hostParks(key: String): Boolean = hostOf(key)?.later == true
+
+    /**
+     * Parks the pane for later, or wakes it: a write the hub and the host check. The listing
+     * held here is marked at once, so the strip moves the tab, and the hub's is asked again.
+     */
+    fun later(key: String, on: Boolean) {
+        val c = conn(key)
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { api(key).later(Keys.address(key), on) }
+                c.panes = c.panes.map { if (it.key == key) it.copy(later = on) else it }
+                views[key]?.let { v -> v.pane = v.pane?.copy(later = on) }
+                refreshList(c)
+            } catch (e: ApiException) {
+                sendError = e.message
+                if (e.code == "unauthorized") tokenRefused(c)
+            }
+        }
+    }
+
+    /** Coming back to a parked pane wakes it: a writer's pane on a host that parks; nothing otherwise. */
+    fun wake(key: String) {
+        val pane = panes.firstOrNull { it.key == key } ?: return
+        if (pane.later && pane.writable && hostParks(key)) later(key, false)
+    }
 
     /** A writer's pane's directory under a root, from the listing or the last read; null otherwise. */
     fun cwdOf(key: String): String? = panes.firstOrNull { it.key == key }?.cwd ?: view(key).pane?.cwd

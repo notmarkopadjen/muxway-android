@@ -41,6 +41,9 @@ class WatchGate(
         return write(r, r.choice.takeIf { it in offered }) { api, address, c -> api.answer(address, c) }
     }
 
+    /** Parks the pane or wakes it: a write, under the same gate as an answer. */
+    fun later(r: Wire.Later): Wire.Done = write(r, if (r.on) "on" else "off") { api, address, v -> api.later(address, v == "on") }
+
     fun text(r: Wire.Text): Wire.Done {
         val text = when {
             r.heard.isNotEmpty() -> heard[r.heard]

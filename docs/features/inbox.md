@@ -22,20 +22,24 @@ first". The inbox is that list, the browser's inbox window as a sheet.
 
 - **The count.** While anything waits, `⚑ n` sits in the header of the
   pane list and of the pane view, before *refresh* and `⚙`. It counts the
-  panes with attention in the listings the app already holds, for every
-  hub, so it costs no request of its own; it is gone when nothing waits.
-  A tap opens the sheet.
+  panes with attention, and the panes parked for later, in the listings
+  the app already holds, for every hub, so it costs no request of its
+  own; it is gone when nothing waits. A tap opens the sheet.
 - **The sheet.** One row per waiting pane, oldest first: the lens's glyph,
   the pane's name with its agent's mark, its place
   `host/session/window.pane`, how long it has waited (`12s`, `3m`, `2h`,
   `1d`), then the kind and what the pane said, and a question's choices
   as buttons (see
-  [notifications](notifications.md#questions-with-fixed-answers)). A tap
-  on a row opens the pane; **⚑ oldest** at the top opens the first row,
-  the browser's `o`. Back or `×` closes. Empty, it says *nothing waits
-  for you*.
+  [notifications](notifications.md#questions-with-fixed-answers)). After
+  every awake row come the panes parked for later, oldest parking first,
+  with `☾` and `later` where the kind was, what waits underneath after a
+  dot (`later · permission`), dimmed. A tap on a row opens the pane, and
+  wakes a parked one; **⚑ oldest** at the top opens the first awake row,
+  the browser's `o`, and is not offered when every row is parked. Back
+  or `×` closes. Empty, it says *nothing waits for you*.
 - **What it reads.** While open, the sheet asks every hub's
-  `GET /v1/inbox` every five seconds and merges the answers oldest first,
+  `GET /v1/inbox` every five seconds and merges the answers in the hub's
+  own order (awake oldest first, then parked oldest first),
   so a question answered elsewhere leaves within seconds; until the first
   answer it shows the listings held in memory. A hub that does not answer
   keeps its last rows.

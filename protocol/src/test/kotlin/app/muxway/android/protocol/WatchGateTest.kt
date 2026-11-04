@@ -180,4 +180,23 @@ class WatchGateTest {
         now += 2_000
         assertEquals(WatchGate.RATE_LIMITED, g.key(Wire.Key("k2", address, "Enter")).error)
     }
+
+
+    @Test
+    fun theLaterMarkIsAWriteWithAnAnswersRules() {
+        answer = { r -> if (r.path.endsWith("/later")) Response(204) else Response(404) }
+        val g = gate()
+        assertEquals(WatchGate.READ_ONLY, g.later(Wire.Later("l1", "alice-laptop/work/0.2", true)).error)
+        assertEquals(WatchGate.REFUSED, g.later(Wire.Later("l2", "alice-laptop/work/9.9", true)).error)
+        assertTrue(seen.isEmpty())
+        assertTrue(g.later(Wire.Later("l3", address, true)).ok)
+        assertEquals("/v1/panes/$address/later", seen.single().path)
+        assertEquals("""{"later":true}""", String(seen.single().body))
+        now += 2_000
+        assertTrue(g.later(Wire.Later("l4", address, false)).ok)
+        assertEquals("""{"later":false}""", String(seen.last().body))
+        allowed = false
+        now += 2_000
+        assertEquals(WatchGate.NOT_ALLOWED, g.later(Wire.Later("l5", address, true)).error)
+    }
 }

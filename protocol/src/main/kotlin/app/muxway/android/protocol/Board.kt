@@ -6,16 +6,18 @@ import org.json.JSONObject
 
 /**
  * One pane as a glanceable client shows it: [address] is its key (see [Keys]); [state] is one of
- * [Board.QUIET], [Board.WORKING], [Board.WAITING]; [mail] is the unread mail its process holds.
+ * [Board.QUIET], [Board.WORKING], [Board.WAITING]; [mail] is the unread mail its process holds;
+ * [later] says the owner parked it, a quiet row with the mark.
  */
-data class Row(val address: String, val name: String, val state: Int, val kind: String, val at: Long, val text: String, val choices: List<String> = emptyList(), val mail: Int = 0) {
+data class Row(val address: String, val name: String, val state: Int, val kind: String, val at: Long, val text: String, val choices: List<String> = emptyList(), val mail: Int = 0, val later: Boolean = false) {
     /** The name with its mail count after it, as the board and the pane screen show it. */
     val named: String get() = if (mail > 0) "$name ✉ $mail" else name
 
     val status: Lens.Status
-        get() = when (state) {
-            Board.WAITING -> Lens.Status.WAITING
-            Board.WORKING -> Lens.Status.WORKING
+        get() = when {
+            later -> Lens.Status.LATER
+            state == Board.WAITING -> Lens.Status.WAITING
+            state == Board.WORKING -> Lens.Status.WORKING
             else -> Lens.Status.QUIET
         }
     val glyph: String? get() = Lens.glyph(status, kind.ifEmpty { null })
@@ -47,6 +49,7 @@ data class Board(val rows: List<Row>, val at: Long, val live: Boolean) {
             val o = JSONObject().put("address", r.address).put("name", r.name).put("state", r.state).put("kind", r.kind).put("at", r.at).put("text", r.text)
             if (r.choices.isNotEmpty()) o.put("choices", JSONArray(r.choices))
             if (r.mail > 0) o.put("mail", r.mail)
+            if (r.later) o.put("later", true)
             arr.put(o)
         }
         return JSONObject().put("v", 1).put("at", at).put("live", live).put("rows", arr).toString()
@@ -75,12 +78,13 @@ data class Board(val rows: List<Row>, val at: Long, val live: Boolean) {
                 Row(
                     address = p.key,
                     name = p.tab,
-                    state = when (s) { Lens.Status.WAITING -> WAITING; Lens.Status.WORKING -> WORKING; Lens.Status.QUIET -> QUIET },
+                    state = when (s) { Lens.Status.WAITING -> WAITING; Lens.Status.WORKING -> WORKING; Lens.Status.QUIET, Lens.Status.LATER -> QUIET },
                     kind = if (s == Lens.Status.WAITING) a?.kind.orEmpty() else "",
                     at = a?.at ?: 0L,
                     text = if (withText && s == Lens.Status.WAITING) a?.text.orEmpty() else "",
                     choices = if (s == Lens.Status.WAITING) a?.choices.orEmpty() else emptyList(),
                     mail = (p.mail?.unread ?: 0).coerceIn(0, MAX_MAIL),
+                    later = s == Lens.Status.LATER,
                 )
             }
             val sorted = rows.sortedWith(compareByDescending<Row> { it.state }.thenBy { if (it.state == WAITING) it.at else 0L }.thenBy { it.address })
@@ -98,7 +102,7 @@ data class Board(val rows: List<Row>, val at: Long, val live: Boolean) {
                     val r = arr.optJSONObject(i) ?: continue
                     val address = clean(r.optString("address"))
                     if (!Keys.valid(address)) continue
-                    rows.add(Row(address, clean(r.optString("name")), r.optInt("state").coerceIn(QUIET, WAITING), clean(r.optString("kind")), r.optLong("at"), clean(r.optString("text")), choices(r.optJSONArray("choices")), r.optInt("mail").coerceIn(0, MAX_MAIL)))
+                    rows.add(Row(address, clean(r.optString("name")), r.optInt("state").coerceIn(QUIET, WAITING), clean(r.optString("kind")), r.optLong("at"), clean(r.optString("text")), choices(r.optJSONArray("choices")), r.optInt("mail").coerceIn(0, MAX_MAIL), r.optBoolean("later")))
                 }
                 Board(rows, o.optLong("at"), o.optBoolean("live"))
             } catch (e: JSONException) {
