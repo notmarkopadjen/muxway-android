@@ -16,6 +16,9 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onFirst
@@ -359,6 +362,33 @@ class FlowTest {
         rule.waitUntil(5_000) { val o = topOf(ops); val w = topOf(work); o != null && w != null && o < w }
         assertEquals(2, tiles())
         shot("tab-swapped")
+    }
+
+    @Test
+    fun theFocusedTabTappedNamesThePaneAndTheHeaderShowsTheFolder() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        // The pane's shell runs in the fixture's repository under a preview root: the header shows the folder.
+        await("· repo")
+        // The focused tab, tapped once more, opens the name sheet with the whole path.
+        rule.onNodeWithTag("tab:alice-laptop/work/0.0").performClick()
+        rule.onNodeWithTag("name-sheet").assertExists()
+        await("/work/repo")
+        shot("name-sheet")
+        rule.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("name-sheet"))).performTextInput("Fix Tests")
+        await("alice-laptop/@fix-tests")
+        rule.onNodeWithTag("name-save").performClick()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("name-sheet").fetchSemanticsNodes().isEmpty() }
+        await("fix-tests")
+        rule.onNodeWithTag("tab:alice-laptop/work/0.0").assert(hasAnyDescendant(hasText("fix-tests", substring = true)))
+        shot("named")
+        // The sheet again, from the header's name this time; clear takes the name away.
+        rule.onNodeWithTag("name").performClick()
+        rule.onNodeWithTag("name-clear").performClick()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("name-sheet").fetchSemanticsNodes().isEmpty() }
+        rule.waitUntil(15_000) { rule.onAllNodes(hasText("fix-tests", substring = true)).fetchSemanticsNodes().isEmpty() }
+        shot("name-cleared")
     }
 
     @Test
