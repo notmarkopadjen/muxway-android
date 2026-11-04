@@ -65,6 +65,22 @@ class Api(private val baseUrl: String, private val token: String, private val us
     /** Every pane the token may read that waits for someone, oldest first, the parked ones after. */
     fun inbox(): List<Pane> = Json.inbox(get("inbox").body)
 
+    /** The mail a pane's process holds, read and unread, oldest first; a reader's call. */
+    fun mailbox(address: String): List<Letter> = Json.mailbox(get("panes/${encode(address)}/mail").body)
+
+    /** What panes said to panes, mail and typed, the last hundred entries, oldest first. */
+    fun talk(): List<TalkEntry> = Json.talk(get("talk?limit=${MailRows.MAX_ENTRIES}").body)
+
+    /**
+     * A message for the pane's process, held by its host and never typed. The owner is no pane,
+     * so it carries no origin and the process reads it as from you. The mail's id.
+     */
+    fun mail(address: String, text: String): Long {
+        val clean = Input.typed(text)
+        require(clean.isNotEmpty() && clean.length <= MailRows.MAX_TEXT) { "text length" }
+        return Json.mailed(post("panes/${encode(address)}/mail", Json.text(clean)).body)
+    }
+
     /**
      * A mouse button at a cell (1-based) of the pane, the wheel turned [count] notches; a hub
      * without mouse input answers bad_json, one from before the count bad_input to a count.

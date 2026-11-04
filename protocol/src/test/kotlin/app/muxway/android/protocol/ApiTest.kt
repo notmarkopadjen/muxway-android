@@ -341,4 +341,25 @@ class ApiTest {
         assertThrows(IllegalArgumentException::class.java) { api().transcribe(ByteArray(10)) }
         assertThrows(IllegalArgumentException::class.java) { api().transcribe(ByteArray(5 shl 20)) }
     }
+
+    @Test
+    fun mailPostsTheTextAloneAndTheMailboxAndTheFeedAreRead() {
+        answer = { r ->
+            when {
+                r.method == "POST" -> json(201, """{"mail":{"id":7,"at":1767225600}}""")
+                r.path == "/v1/talk" -> json(200, """{"talk":[],"next":0}""")
+                else -> json(200, """{"mail":[{"id":7,"at":1,"actor":{"name":"phone"},"from":null,"text":"hi"}]}""")
+            }
+        }
+        assertEquals(7L, api().mail("alice-laptop/@review", "run the tests\u0007 now"))
+        assertEquals("/v1/panes/alice-laptop/@review/mail", seen[0].path)
+        assertEquals("""{"text":"run the tests now"}""", String(seen[0].body))
+        assertEquals(1, api().mailbox("alice-laptop/work/0.0").size)
+        assertEquals("/v1/panes/alice-laptop/work/0.0/mail", seen[1].path)
+        assertTrue(api().talk().isEmpty())
+        assertEquals("/v1/talk", seen[2].path)
+        assertEquals("limit=100", seen[2].uri.substringAfter('?'))
+        for (bad in listOf("", "\u0007", "x".repeat(4001))) assertThrows(IllegalArgumentException::class.java) { api().mail("alice-laptop/work/0.0", bad) }
+        assertEquals(3, seen.size)
+    }
 }

@@ -7,7 +7,7 @@ import org.json.JSONObject
 /** The hub's JSON, read defensively: a missing field is a default, a wrong type is an error. */
 object Json {
     fun hosts(body: String): List<Host> = parse(body) { o ->
-        list(o.optJSONArray("hosts")) { Host(it.optString("name"), it.optBoolean("online"), it.optBoolean("sessions"), it.optBoolean("close"), it.optInt("keys"), it.optBoolean("preview"), ask = it.optBoolean("ask"), dir = it.optBoolean("dir"), rename = it.optBoolean("rename"), later = it.optBoolean("later")) }
+        list(o.optJSONArray("hosts")) { Host(it.optString("name"), it.optBoolean("online"), it.optBoolean("sessions"), it.optBoolean("close"), it.optInt("keys"), it.optBoolean("preview"), ask = it.optBoolean("ask"), dir = it.optBoolean("dir"), rename = it.optBoolean("rename"), later = it.optBoolean("later"), mail = it.optBoolean("mail")) }
     }
 
     fun panes(body: String): List<Pane> = parse(body) { o -> list(o.optJSONArray("panes")) { pane(it) } }
@@ -36,6 +36,48 @@ object Json {
         for (i in 0 until arr.length()) out.add(arr.optString(i))
         return Input.choices(out)
     }
+
+    /**
+     * The mail a pane holds, oldest first, as the hub lists it: texts keep their lines, tabs made spaces,
+     * and lose every other control character, an origin the protocol does not spell is dropped.
+     */
+    fun mailbox(body: String): List<Letter> = parse(body) { o ->
+        list(o.optJSONArray("mail")) {
+            Letter(
+                it.optLong("id").coerceAtLeast(0), it.optLong("at"), actor(it), end(it.optJSONObject("from")),
+                mailText(it.optString("text"), MailRows.MAX_TEXT), it.optLong("read_at").coerceAtLeast(0), it.optLong("reply_to").coerceAtLeast(0), it.optBoolean("replied"),
+            )
+        }.take(MailRows.MAX_LETTERS)
+    }
+
+    /** The talk feed, oldest first; an entry whose destination the protocol does not spell is left out. */
+    fun talk(body: String): List<TalkEntry> = parse(body) { o ->
+        list(o.optJSONArray("talk")) {
+            val to = end(it.optJSONObject("to"))
+            if (to == null) null
+            else TalkEntry(
+                it.optLong("seq"), it.optLong("at"), actor(it), end(it.optJSONObject("from")), to,
+                Input.printable(it.optString("kind")).take(16), it.optInt("bytes").coerceAtLeast(0), mailText(it.optString("text"), MailRows.MAX_EXCERPT),
+                it.optLong("id").coerceAtLeast(0), it.optLong("reply_to").coerceAtLeast(0),
+            )
+        }.filterNotNull().take(MailRows.MAX_ENTRIES)
+    }
+
+    /** The id of a mail the hub took. */
+    fun mailed(body: String): Long = parse(body) { o -> o.getJSONObject("mail").optLong("id").coerceAtLeast(0) }
+
+    private fun actor(o: JSONObject): String = Input.printable(o.optJSONObject("actor")?.optString("name") ?: "").take(64)
+
+    /** A pane at one end of a write: only an address the protocol spells, else nothing. */
+    private fun end(o: JSONObject?): End? {
+        if (o == null) return null
+        val address = o.optString("address")
+        if (!Address.valid(address)) return null
+        return End(o.optString("host").take(32), address, o.optString("pane_id").take(16), o.optString("alias").take(32))
+    }
+
+    /** A mail's text as it is shown: lines kept, tabs made spaces, the rest of the control characters gone, cut at [max]. */
+    private fun mailText(s: String, max: Int): String = Input.screen(s).take(max)
 
     /** Whether `/v1/me` names an admin. */
     fun admin(body: String): Boolean = parse(body) { o -> o.optBoolean("admin") }
