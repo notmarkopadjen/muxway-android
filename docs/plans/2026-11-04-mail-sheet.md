@@ -272,11 +272,34 @@ owner's phone or the emulator, as the last plans' did.
 
 ## Review (after implementation)
 
-- [ ] Diff matches the plan, deviations explained here
-- [ ] Security rules (AGENTS.md section 2) hold
-- [ ] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
-- [ ] Docs and diagrams updated
+- [x] Diff matches the plan. Deviations: the owner's own mail to a
+  pane is listed in the sheet of every partner of that pane's
+  conversation too, marked *you (name)*, as the web's rows do, which
+  the end-to-end test records; the core's guideline change (§1.6
+  *messages*, *the mail window*, *mail the open pane*, Android columns)
+  is committed on the branch `guideline-android-mail` (4da7ca1, from
+  origin/main 1b2a71a) in a worktree of the core checkout on the build
+  machine and waits for the owner to push it, since this session may
+  not push to the core; the mark of the newest feed entry looked at
+  lives in the app's preferences, where the web keeps it in local
+  storage.
+- [x] Security rules (AGENTS.md section 2) hold: the read grant on a
+  pane is what shows its mail, a partner's mailbox is read only when the
+  partner is in the token's own listing, sending needs the write grant
+  on the target and the hub's checks stand, mail is drawn as text with
+  no links, lengths and control characters are bounded on parse, and
+  nothing of any mail is logged or stored.
+- [x] Privacy check passed: the secret scan and the deny-list grep over
+  the branch's commits are clean, and the diff read.
+- [x] Docs and diagrams updated: the mail page with its sequence and
+  state diagrams, the pane view, the list, the inbox, the architecture
+  table and diagram, the testing page, the README.
 
 ## Test run
 
-(filled in after the run)
+The full suite without the UI run, 310 tests, 0 failed, at `b38ba9c`
+against the core's `1b2a71a`:
+https://github.com/notmarkopadjen/muxway-android/issues/81
+(`20261104-140828-b38ba9c`). The UI step
+`theEnvelopeOpensTheMailSheetAndMailBackAnswersTheSender` waits for a
+device.
