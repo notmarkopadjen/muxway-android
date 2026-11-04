@@ -210,4 +210,10 @@ owner's phone or the emulator, as the last plans' did.
 
 ## Test run
 
-Link to the recorded run: result, commit, logs, screenshots.
+The full suite without the UI run, 287 tests, 0 failed, at `73f213b`
+against the core's `71a48fd`:
+https://github.com/notmarkopadjen/muxway-android/issues/72
+(`20261104-080627-73f213b`; the first run, `20261104-080512-ea49955`,
+failed on the new test's own last assertion, fixed in `73f213b`). The
+UI step `theFocusedTabTappedNamesThePaneAndTheHeaderShowsTheFolder`
+waits for a device.
