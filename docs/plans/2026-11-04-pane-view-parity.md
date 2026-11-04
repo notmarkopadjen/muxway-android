@@ -5,7 +5,8 @@
 > parity pass of 2026-11-04 over the core's `docs/ui-guideline.md` §1)
 > and [#87](https://github.com/notmarkopadjen/muxway-android/issues/87)
 > (parity with the core's any-file-type change, muxway#267, merged in
-> muxway#270). Waits for the owner's approval.
+> muxway#270). Approved and implemented the same day; the diff is the
+> owner's to review in the pull request.
 
 ## 1. Goal
 
@@ -309,11 +310,38 @@ owner's phone or the emulator.
 
 ## Review (after implementation)
 
-- [ ] Diff matches the plan, deviations explained here
-- [ ] Security rules (AGENTS.md section 2) hold
-- [ ] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
-- [ ] Docs and diagrams updated
+- [x] Diff matches the plan. Deviations: the hub names a file by the
+  last word of the client's name even when the name carries a path
+  (`../../etc/x.sh/` lands as `.sh`, under the inbox), so s38 asserts
+  the inbox directory and the stamped shape of the name, and `.bin` for
+  a name whose extension is no word (`x.a b`); the across rows wear the
+  guideline's `⬌` and `⬍`, which the bundled font has; the chain is
+  drawn with strokes (`Chain` in `Widgets.kt`), since the font has no
+  `⛓`; a parked pane's entry in the per-tile fit set is kept while the
+  pane is minimised and goes with the view's count, not dropped on its
+  own; the help sheet's text is a static table in `HelpSheet.kt`.
+- [x] Security rules (AGENTS.md section 2) hold: a program's link is
+  taken only as `http` or `https`, bounded and clean, opened through
+  the system and never sent to the host, its address shown on a hold
+  before anything opens; of a file's name only an extension matching
+  `[a-z0-9]{1,8}` leaves the phone and the hub checks it again; beside
+  and across rearrange the view from the listing alone; the end-session
+  question changes words, not the request; the notice text is the
+  listing's printable text; nothing new is stored or logged.
+- [x] Privacy check passed: the secret scan and the deny-list grep over
+  the branch's commits are clean, and the diff read.
+- [x] Docs and diagrams updated: the pane view page (the controls, the
+  menu, the chain, the header, fit, the links, the cadence, closing),
+  the list, mail, attachments, connect, the architecture table, the
+  testing page, the README; the guideline's cells on the core's
+  `parity-docs` branch as section 7 asked.
 
 ## Test run
 
-Link to the recorded run: result, commit, logs, screenshots.
+The full suite without the UI run, 328 tests, 0 failed, against the
+core's `b501f93` (the `parity-docs` branch, which holds the any-file
+change), at `3c21624`
+(https://github.com/notmarkopadjen/muxway-android/issues/89,
+`20261104-211211-3c21624`). The UI step
+`thePartnerIsLaidBesideWithTheChainFitIsPerTileAndHelpListsTheGestures`
+waits for a device.
