@@ -57,7 +57,12 @@ class Api(private val baseUrl: String, private val token: String, private val us
         post("panes/${encode(address)}/answer", Json.choice(choice))
     }
 
-    /** Every pane the token may read that waits for someone, oldest first. */
+    /** Parks the pane for later, or wakes it: the owner's mark on the host, a write like an answer. */
+    fun later(address: String, on: Boolean) {
+        post("panes/${encode(address)}/later", Json.later(on))
+    }
+
+    /** Every pane the token may read that waits for someone, oldest first, the parked ones after. */
     fun inbox(): List<Pane> = Json.inbox(get("inbox").body)
 
     /**

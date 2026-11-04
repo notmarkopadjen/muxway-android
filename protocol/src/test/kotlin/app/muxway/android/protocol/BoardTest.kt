@@ -135,4 +135,24 @@ class BoardTest {
         for (bad in listOf("", "alice-laptop", "alice-laptop/work", "alice-laptop/work/0", "Alice/work/0.0", "alice-laptop/work/0.0/x",
             "alice-laptop/@Build", "alice-laptop/@", "alice/work/0.0?token=x", "alice/wo rk/0.0", "a/b/c.\u0000", "a".repeat(40) + "/b/c.0", "alice//0.0")) assertFalse(bad, Address.valid(bad))
     }
+
+
+    @Test
+    fun aParkedPaneIsAQuietRowWithTheMarkAndNothingOfItsQuestion() {
+        val b = rank(listOf(pane(1, kind = "question", at = now - 60).copy(later = true, laterAt = now - 30), pane(2, kind = "done", at = now - 5)), withText = true)
+        assertEquals(listOf("pane 2", "pane 1"), b.rows.map { it.name })
+        val parked = b.rows[1]
+        assertEquals(Board.QUIET, parked.state)
+        assertTrue(parked.later)
+        assertEquals(Lens.Status.LATER, parked.status)
+        assertEquals("☾", parked.glyph)
+        assertEquals("later", parked.word)
+        assertEquals("", parked.kind)
+        assertEquals("", parked.text)
+        assertEquals(0, parked.choices.size)
+        assertEquals(1, b.waiting)
+        assertEquals(b, Board.parse(b.json()))
+        assertTrue(b.json().contains("\"later\":true"))
+        assertFalse(b.json().contains("\"later\":false"))
+    }
 }

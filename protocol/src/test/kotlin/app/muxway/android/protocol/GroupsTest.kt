@@ -82,4 +82,17 @@ class GroupsTest {
         assertNull(Json.panes("""{"panes":[{"session":"work","mail":{"unread":-3}}]}""").single().mail)
         assertNull(Json.panes("""{"panes":[{"session":"work"}]}""").single().mail)
     }
+
+
+    @Test
+    fun theStripKeepsAParkedTabAfterEveryOtherAndOutsideItsGroupsFrame() {
+        val panes = listOf(pane(1, talk = listOf(to("alice-laptop", 3))), pane(2), pane(3, talk = listOf(to("alice-laptop", 1, "from"))), pane(4))
+        val groups = Groups.of(panes)
+        val parked = setOf("a:alice-laptop/work/0.1", "a:alice-laptop/work/0.4")
+        val runs = Groups.strip(panes, groups, { it.key }) { it.key in parked }
+        assertEquals(listOf(listOf("a:alice-laptop/work/0.2"), listOf("a:alice-laptop/work/0.3"), listOf("a:alice-laptop/work/0.1"), listOf("a:alice-laptop/work/0.4")), runs.map { r -> r.rows.map { it.key } })
+        assertEquals(listOf(null, 1, null, null), runs.map { it.group })
+        val awake = Groups.strip(panes, groups, { it.key }) { false }
+        assertEquals(listOf(listOf("a:alice-laptop/work/0.1", "a:alice-laptop/work/0.3"), listOf("a:alice-laptop/work/0.2"), listOf("a:alice-laptop/work/0.4")), awake.map { r -> r.rows.map { it.key } })
+    }
 }

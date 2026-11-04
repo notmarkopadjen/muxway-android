@@ -7,7 +7,7 @@ import org.json.JSONObject
 /** The hub's JSON, read defensively: a missing field is a default, a wrong type is an error. */
 object Json {
     fun hosts(body: String): List<Host> = parse(body) { o ->
-        list(o.optJSONArray("hosts")) { Host(it.optString("name"), it.optBoolean("online"), it.optBoolean("sessions"), it.optBoolean("close"), it.optInt("keys"), it.optBoolean("preview"), ask = it.optBoolean("ask"), dir = it.optBoolean("dir"), rename = it.optBoolean("rename")) }
+        list(o.optJSONArray("hosts")) { Host(it.optString("name"), it.optBoolean("online"), it.optBoolean("sessions"), it.optBoolean("close"), it.optInt("keys"), it.optBoolean("preview"), ask = it.optBoolean("ask"), dir = it.optBoolean("dir"), rename = it.optBoolean("rename"), later = it.optBoolean("later")) }
     }
 
     fun panes(body: String): List<Pane> = parse(body) { o -> list(o.optJSONArray("panes")) { pane(it) } }
@@ -25,7 +25,7 @@ object Json {
         }, o.optLong("next"))
     }
 
-    /** The inbox: the panes that wait, as the hub orders them, oldest first. */
+    /** The inbox: the panes that wait, as the hub orders them, oldest first, the parked ones after; a parked entry may carry no attention. */
     fun inbox(body: String): List<Pane> = parse(body) { o -> list(o.optJSONArray("inbox")) { pane(it) } }
 
     /** A question's choices, only when they fit what the hub itself allows. */
@@ -132,6 +132,9 @@ object Json {
 
     fun alias(a: String): String = JSONObject().put("alias", a).toString()
 
+    /** Parks the pane for later, or wakes it. */
+    fun later(on: Boolean): String = JSONObject().put("later", on).toString()
+
     /** The pane an answer carries, after a resize, a split or a new session, and the window's panes when it lists them. */
     fun resized(body: String): Resized = parse(body) { o -> Resized(pane(o.getJSONObject("pane")), list(o.optJSONArray("panes")) { pane(it) }) }
 
@@ -160,6 +163,8 @@ object Json {
             talk = talk(o.optJSONArray("talk")),
             mail = o.optJSONObject("mail")?.let { m -> m.optInt("unread").takeIf { it > 0 }?.let { Mail(it, m.optLong("at")) } },
             cwd = o.optString("cwd").takeIf { it.isNotEmpty() && it.length <= Names.MAX_PATH && it.none { c -> c < ' ' || c == '\u007f' } },
+            later = o.optBoolean("later"),
+            laterAt = o.optLong("later_at").coerceAtLeast(0),
         )
     }
 

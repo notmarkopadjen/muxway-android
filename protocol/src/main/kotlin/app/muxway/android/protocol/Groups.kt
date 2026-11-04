@@ -63,6 +63,10 @@ object Groups {
         return out
     }
 
+    /** The strip: the awake rows pulled together and cut into runs, then the parked rows, each a run of its own outside any frame. */
+    fun <T> strip(rows: List<T>, groups: Map<String, Int>, key: (T) -> String, parked: (T) -> Boolean): List<Run<T>> =
+        runs(pullTogether(rows.filterNot(parked), groups, key), groups, key) + rows.filter(parked).map { Run(null, listOf(it)) }
+
     /** The rows cut into stretches that share a group; a row outside any group is a stretch of its own. */
     fun <T> runs(rows: List<T>, groups: Map<String, Int>, key: (T) -> String): List<Run<T>> {
         val out = ArrayList<Run<T>>()

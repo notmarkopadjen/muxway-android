@@ -6,9 +6,10 @@ package app.muxway.android.protocol
  * comes from the last event the hub sent for the pane (`working` is what the agent's hooks, or
  * the host's watcher, report) or, for a pane the app is reading, from its content changing.
  * The listing's `activity` is the window's, shared by every pane in it, so it is not used.
+ * Later is the owner's own mark on the pane, kept by the host, and wins over the rest.
  */
 object Lens {
-    enum class Status { WAITING, WORKING, QUIET }
+    enum class Status { WAITING, WORKING, QUIET, LATER }
 
     /** The AI CLIs every client names, the browser's table. */
     enum class Agent(val label: String) {
@@ -92,6 +93,7 @@ object Lens {
     fun status(p: Pane, lastKind: String?, changed: Boolean): Status {
         val agent = agent(p) != null
         return when {
+            p.later -> Status.LATER
             p.attention != null && !(p.attention.kind == "idle" && agent && changed) -> Status.WAITING
             agent && (lastKind == "working" || changed) -> Status.WORKING
             else -> Status.QUIET
@@ -109,6 +111,7 @@ object Lens {
         }
         Status.WORKING -> "⟳"
         Status.QUIET -> null
+        Status.LATER -> "☾"
     }
 
     /** The word next to the glyph. */
@@ -116,6 +119,7 @@ object Lens {
         Status.WAITING -> kind ?: "waiting"
         Status.WORKING -> "working"
         Status.QUIET -> null
+        Status.LATER -> "later"
     }
 
     private fun said(d: Description): String = if (d.status.isEmpty()) d.name else "${d.name} · ${d.status}"

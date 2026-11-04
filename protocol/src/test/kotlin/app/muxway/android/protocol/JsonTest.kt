@@ -157,4 +157,23 @@ class JsonTest {
         assertTrue(Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true,"dir":true}]}""").single().dir)
         assertFalse(Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true}]}""").single().dir)
     }
+
+
+    @Test
+    fun theLaterMarkItsTimeAndTheHostsFlagAreReadWhenGivenAndTheBodyIsOneBoolean() {
+        val p = Json.panes("""{"panes":[{"session":"work","later":true,"later_at":1767225600,"attention":{"kind":"done","at":1767225500,"text":"x"}}]}""").single()
+        assertTrue(p.later)
+        assertEquals(1767225600L, p.laterAt)
+        assertEquals("done", p.attention?.kind)
+        val awake = Json.panes("""{"panes":[{"session":"work","later_at":-5}]}""").single()
+        assertFalse(awake.later)
+        assertEquals(0L, awake.laterAt)
+        val bare = Json.inbox("""{"inbox":[{"session":"work","later":true,"later_at":7}],"count":1}""").single()
+        assertTrue(bare.later)
+        assertNull(bare.attention)
+        assertEquals(true, Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true,"later":true}]}""").single().later)
+        assertEquals(false, Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true}]}""").single().later)
+        assertEquals("""{"later":true}""", Json.later(true))
+        assertEquals("""{"later":false}""", Json.later(false))
+    }
 }
