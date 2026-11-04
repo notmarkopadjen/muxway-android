@@ -260,9 +260,13 @@ owner's phone or the emulator.
 
 ## Test run
 
-The full suite without the UI run, 319 tests, 0 failed, at `b5f5e38`
-against the core's `1b2a71a`:
-https://github.com/notmarkopadjen/muxway-android/issues/83
-(`20261104-142010-b5f5e38`). The UI step
+The full suite without the UI run, 319 tests, 0 failed, against the
+core's `1b2a71a`: first at `b5f5e38`
+(https://github.com/notmarkopadjen/muxway-android/issues/83,
+`20261104-142010-b5f5e38`), then again at `4b0f9ba`, the same tree
+after a test fixture's made-up password was renamed so the secret
+scanner would not take it for a key
+(https://github.com/notmarkopadjen/muxway-android/issues/84,
+`20261104-142430-4b0f9ba`). The UI step
 `theShareSheetMakesALinkOnceCountsItOnTheHeaderAndRevokesIt` waits for
 a device.
