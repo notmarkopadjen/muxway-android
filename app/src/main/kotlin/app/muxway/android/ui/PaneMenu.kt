@@ -20,16 +20,22 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import app.muxway.android.AppModel
 import app.muxway.android.MailTarget
+import app.muxway.android.protocol.Beside
+import app.muxway.android.protocol.Keys
 
 /**
  * The pane menu, under a tab or a tile's header held and let go in place (the drag-and-drop
- * long press without a move): *open beside* for a tab, then
- * *later* or *wake*, the owner's mark on the host (see the notifications page), then *mail*, the
- * pane's mail sheet with its line focused, and *share*, the share sheet, on a hub that shares
- * panes. A row is dim with the reason on a read-only pane or a host that does not park panes.
+ * long press without a move): *open beside* for a tab, *beside* a partner the pane talked with
+ * (see [Beside]), *across* the width or the height for a tile among several, then *later* or
+ * *wake*, the owner's mark on the host (see the notifications page), then *mail*, the pane's
+ * mail sheet with its line focused, and *share*, the share sheet, on a hub that shares panes.
+ * A row is dim with the reason on a read-only pane or a host that does not park panes.
  */
 @Composable
-fun PaneMenu(model: AppModel, key: String, onBeside: (() -> Unit)?, onClose: () -> Unit) {
+fun PaneMenu(
+    model: AppModel, key: String, onBeside: (() -> Unit)?, onClose: () -> Unit, onPartner: (String) -> Unit = {},
+    onAcross: ((horizontal: Boolean) -> Unit)? = null, acrossNow: (Boolean) -> Boolean = { false },
+) {
     val p = LocalPalette.current
     val pane = model.panes.firstOrNull { it.key == key } ?: model.view(key).pane
     BackHandler(onBack = onClose)
@@ -40,11 +46,19 @@ fun PaneMenu(model: AppModel, key: String, onBeside: (() -> Unit)?, onClose: () 
                     Modifier.fillMaxWidth().clickable(enabled = reason == null, onClick = act).padding(horizontal = 4.dp, vertical = 6.dp).testTag(tag),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(label, color = if (reason == null) p.ink else p.faint, maxLines = 1)
+                    Text(label, color = if (reason == null) p.ink else p.faint, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     reason?.let { Text("  $it", color = p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)) }
                 }
             }
             if (onBeside != null) item("open beside", null, "menu-beside") { onClose(); onBeside() }
+            // The panes this one talked with lately, each laid beside it; four at most.
+            if (pane != null) for (partner in Beside.partners(pane, model.panes).take(Beside.MAX_TILES)) {
+                item("⇆ beside ${partner.tab}", null, "menu-partner:${Keys.address(partner.key)}") { onClose(); onPartner(partner.key) }
+            }
+            if (onAcross != null) {
+                item("↔ across the width", if (acrossNow(false)) "already" else null, "menu-across-width") { onClose(); onAcross(false) }
+                item("↕ across the height", if (acrossNow(true)) "already" else null, "menu-across-height") { onClose(); onAcross(true) }
+            }
             val parked = pane?.later == true
             val reason = when {
                 pane == null -> "not listed"
