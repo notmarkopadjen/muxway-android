@@ -92,7 +92,9 @@ for.
 | watch and notifications | Follow the panes of every hub in the background: a notification when one waits, the board to a paired watch (see [notifications](notifications.md) and [the watch](watch.md)). Off by default. |
 | notification text | Send what a pane said to the notification shade and the watch, not only its kind and name. Off by default. |
 
-**save settings** keeps them and returns to the panes.
+**save settings** keeps them and returns to the panes. **help** beside
+it opens the help sheet: every gesture and key of the list, the strip,
+the tiles, the body, the line and the keys, in the guideline's order.
 
 ## The connect code
 

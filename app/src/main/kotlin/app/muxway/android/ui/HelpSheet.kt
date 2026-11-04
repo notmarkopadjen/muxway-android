@@ -48,7 +48,7 @@ private val PARTS = listOf(
         "equal shares in every split" to "hold ▦",
         "swap two tiles, or split a tile's place" to "hold a header, drag it onto a tile's middle or its edge",
         "lay a tile across a split" to "drop a header onto the divider, on the half it should take",
-        "lay the focused tile across the whole view" to "hold its header still: ↔ across the width, ↕ across the height",
+        "lay the focused tile across the whole view" to "hold its header still: ⬌ across the width, ⬍ across the height",
         "lay the pane a tile talks with beside it" to "hold its header still: ⇆ beside; the chain on the divider marks the pair",
         "fit on, again, off: this tile" to "⤢ tap, tap again, hold",
         "minimise a tile; bring it back" to "_ on the header; tap its tab in the row above the keys",

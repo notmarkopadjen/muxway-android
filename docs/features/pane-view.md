@@ -4,7 +4,7 @@ One or more panes on one screen, tabs above to switch, one input bar for the
 focused pane.
 
 ```
-[‹] [ ⟳ build ][ ! review ][ logs ] [+]     ⤢ abc ⚙
+[‹] [ ⟳ build ][ ! review ][ logs ] [+]   ▦ ⊡ ⤢ abc ⚑ 1 ✉ ⚙
 ┌──────────────────────────────────────────────────┐
 │ build · claude · write        ⟳ working 96×28 _ × │
 │ $ make test                                       │
@@ -71,8 +71,13 @@ focused pane.
   to the view's arrangement and are forgotten with it; the pane's fit is
   released when it is minimised, as a closed tile's is.
 - The **controls** sit at the right end of the same row: `▦` (with
-  several panes) the next arrangement, `⤢` fit on or off, `abc` the on-screen keyboard (only with the hardware keyboard
-  setting), `⚑ n` while any pane waits (the [inbox](inbox.md)), `⚙` settings.
+  several panes) the next arrangement, held, equal shares; `⊡` zoom
+  (with several panes, or a pane whose window has more); `⤢` fit on,
+  again or off for the focused tile; `abc` the on-screen keyboard (only
+  with the hardware keyboard setting); `⚑ n` while any pane waits (the
+  [inbox](inbox.md)); `✉`, with the count of messages not looked at,
+  while panes talked (the [messages sheet](mail.md#the-messages-sheet));
+  `⚙` settings.
 - A **swipe** left or right across the page moves the focus to the next
   or previous tile, or with one tile open swaps the strip's next or
   previous pane into it, coming round at either end as `]` and `[` do
@@ -80,13 +85,23 @@ focused pane.
   that landed on one would only wake it. A tab **held and let go in place** (the drag's long
   press without a move) opens the **pane menu**: *open
   beside* opens its pane beside the focused one, as the browser's
-  Shift+click does; *☾ later* parks the pane and *☾ wake* wakes it (dim,
+  Shift+click does; *⇆ beside <partner>*, one row per pane this one
+  talked with lately (four at most, see [the list](panes.md)), lays
+  that pane beside it as the browser's `L` does: swapped next to it when
+  it is open, opened after it when there is room, in the place of the
+  tile focused longest ago when four are open (`protocol/Beside.kt`,
+  unit-tested; from a tab whose pane is not open, the pane first takes
+  the focused tile, as a tap on the tab would); *☾ later* parks the pane and *☾ wake* wakes it (dim,
   with the reason, on a read-only pane or a host without `later`; see
   [notifications](notifications.md#later)); *✉ mail* opens the pane's
   [mail sheet](mail.md) with its line focused; *⇗ share* opens the
   [share sheet](share.md) for a writable pane, on a hub that shares
   panes. A tile's header held and let
-  go in place opens the same menu without *open beside*. A tab held and **moved**
+  go in place opens the same menu without *open beside* and, with
+  several tiles, with *⬌ across the width* and *⬍ across the height*,
+  which lay the tile across the whole view, over or under the rest, or
+  left or right of it, by the side its middle is on (the browser's `e`
+  and `E`; dim with *already* when it is). A tab held and **moved**
   drags as a header does, and dropped on a tile or on the bar between two it lays
   its pane out there (see the tree of splits below): with one tile open,
   a drop on the right part of the screen makes two columns, on the
@@ -105,7 +120,9 @@ focused pane.
   pane on that side, its old place closing up and every share equal
   again; drop it on the bar between two tiles to lay the pane across
   that split, over or under a row, left or right of a stack, by the half
-  of the bar it lands on; `▦` goes back to the presets. A tab from the
+  of the bar it lands on; `▦` goes back to the presets. The bar between
+  two tiles of a group, side by side, carries the chain in the talk hue
+  (two links, drawn), as the browser's divider does. A tab from the
   strip drops the same way: the tab of an open tile as its header
   would; the tab of a pane not open takes the tile's place from its
   middle, as a tap on it takes the focused tile's, comes in as one more
@@ -136,7 +153,9 @@ focused pane.
   (nothing for write), the
   lens's word (`! permission`, `⟳ working`; `☾ later` with what waits
   underneath dimmed after it, for a parked pane, whose name in the
-  header is in italics), with fit on the size, and `⇗ n`, dim, while
+  header is in italics), for a question or a permission the notice's
+  own words after the word (`? question · deploy to staging?`, one
+  line, cut, in the room the name leaves), with fit on the size, and `⇗ n`, dim, while
   the pane has live [shares](share.md) made by this token (a tap opens
   the share sheet);
   the focused one has the thick border and bold name; a waiting tile
@@ -153,19 +172,21 @@ focused pane.
 ## The body
 
 The hub sends the pane's last `lines` rows with tmux's colour sequences
-(`ansi=1`). The client keeps only SGR sequences, drops every other escape
+(`ansi=1`). The client keeps only SGR sequences and the links a program
+names (OSC 8), drops every other escape
 and control character, and renders rows of styled spans:
 
 ```mermaid
 flowchart LR
-    H[hub: content with SGR] --> K[Ansi.keep: text, newline, tab, SGR only]
+    H[hub: content with SGR] --> K[Ansi.keep: text, newline, tab, SGR and OSC 8 links only]
     K --> R[Ansi.rows: spans with colour and attributes, cut at pane width]
     R --> A[AnnotatedString per theme: 16-colour table, 256 cube, true colour]
     A --> T[Text in the bundled monospace font, scaled to fit]
 ```
 
 - **Fit.** With **fit** on (`⤢` in the top row, on by default for every
-  pane you may write to, one or several), the pane on the host is sized to the
+  pane you may write to, one or several; per tile, `⤢` serving the
+  focused one, as the browser's `f`), the pane on the host is sized to the
   columns and rows that fit the tile at the **text** setting, the way a
   terminal tells tmux its size: `POST .../resize`, debounced, once per
   distinct size, and `fit: auto` when you leave the view or turn it off,
@@ -178,10 +199,12 @@ flowchart LR
   because two clients fitting one tmux window can only fight: the header
   shows the host's size in the alert colour with "held". Tapping `⤢`
   while it is on sends the size again at once, and holding it turns fit
-  off. A pane shorter than the tile sits at the bottom with empty rows
+  off for the focused tile alone; the others keep theirs, and `⤢` shows
+  the focused tile's state. A pane shorter than the tile sits at the bottom with empty rows
   above; nothing can make 27 host rows fill 44. **One fit per window:**
   tiles that are every pane of one tmux window, every one writable, fit
-  the window as one (`"scope": "window"` with a `layout`), laid out as
+  the window as one (`"scope": "window"` with a `layout`), while the
+  focused tile's fit is on, laid out as
   the tiles are, so each pane is its tile and the host's panes follow
   the phone's arrangement and its dragged splits
   (`docs/plans/2026-10-29-one-window-fit-and-parity.md`). The layout is
@@ -274,8 +297,15 @@ flowchart LR
   the browser; the punctuation after it stays text, a bracket it opened
   stays in, and an address wrapped onto a second row opens up to the
   row's end. A tap on a link is not a tap on the pane: nothing goes to
-  the host, mouse mode or not. A path of the host's inbox
-  (`…/20261025-102235-56fwge.png`) is a link too, underlined the same
+  the host, mouse mode or not. A program may name the address itself
+  (OSC 8, as Claude Code does for a file or a work item): the label is
+  the link, underlined the same way, a tap opens the address and a
+  long press shows it in the status line, since the label may say
+  anything; only `http` and `https`, 2048 characters at most, without a
+  control or space character, are taken, and the label of any other
+  address is text (`Ansi.target`). A path of the host's inbox
+  (`…/20261025-102235-56fwge.png`, any extension of one to eight
+  lowercase letters or digits) is a link too, underlined the same
   way, in any pane, and on
   a host whose owner named preview roots (`preview` in the hosts
   listing) any path with a slash in it or from `~` ending in a type the
@@ -331,9 +361,11 @@ flowchart LR
 
 Every open pane is read on its own loop while the screen is resumed:
 `GET /v1/panes/{address}?lines=N&ansi=1` with `If-None-Match`, the
-focused tile every `every` seconds (Settings), the other tiles and the
-minimised panes every twice that, as the guideline's one and two
-seconds. An unchanged pane answers `304` and costs a few
+focused tile every `every` seconds (Settings, 2 by default), the other
+tiles and the minimised panes every twice that: the phone's own
+cadence, slower than the browser's one and two seconds, since a phone
+polls on a battery and a radio; *every* set to 1 matches the browser.
+An unchanged pane answers `304` and costs a few
 bytes. Leaving the screen or the app stops the loops. The event long poll
 and a re-list every 15 s run on every screen once connected, so tabs and
 the list stay current.
@@ -478,9 +510,11 @@ left the pane list shows.
 
 Every tile's header has `×`. Where the host's agent runs with
 `--allow-close` and the pane is writable, tapping it asks on the header,
-`close the pane on alice-laptop? y n`; `y` closes the pane on the host,
-ending what runs in it, and the tile leaves (the list shows when it was
-the last); `n` keeps it. Elsewhere `×` closes the tile alone: its fit is
+`close the pane on alice-laptop? y n`, or `end session work on
+alice-laptop? y n` when the pane is the only one of its session (the
+listing's `last`), since closing it ends the session; `y` closes the
+pane on the host, ending what runs in it, and the tile leaves (the list
+shows when it was the last); `n` keeps it. Elsewhere `×` closes the tile alone: its fit is
 given back and the view goes on without it, or back to the list when it
 was the last. See the core's `docs/features/new-panes.md` (Closing a
 pane).
@@ -508,10 +542,14 @@ pane).
   on a line you read, nothing more.
 - A file goes to the hub only, with the bearer token, and the hub's
   checks stand in front of the host's inbox: the write grant and mark,
-  the type sniffed, 8 MiB, one per two seconds. This client sends only
-  a type on the list and a file under the cap, never the file's own
-  name, and types nothing: the path lands on the line for you to send.
-  See [attachments.md](attachments.md).
+  a known type sniffed, 8 MiB, one per two seconds. This client sends a
+  file under the cap and, of its own name, at most an extension of one
+  to eight lowercase letters or digits, and types nothing: the path
+  lands on the line for you to send. See [attachments.md](attachments.md).
+- A link a program names (OSC 8) opens only as `http` or `https`,
+  bounded and clean, through the system's handler, and never sends
+  anything to the host; its label is the program's and may lie, which
+  is why a long press shows the address first.
 - The command row sends what you could type: a fixed string from the
   app's own list, or a line you sent before, and `Enter`. Nothing from
   a pane, a title or the hub reaches the list; a pane dressed as Claude

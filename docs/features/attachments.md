@@ -19,9 +19,9 @@ Three ways in, each landing on the line of the focused pane:
   holds a file. Text pastes as text, as before.
 - **`⇪`**, right of `⌨`, opens the system picker; several files can be
   picked at once and go one after another.
-- **Share.** muxway is a share target for the nine types: a screenshot
-  shared from the gallery, a PDF from a browser, up to ten files at
-  once. The chooser lists the writable panes by host; those whose host
+- **Share.** muxway is a share target for any type: a screenshot
+  shared from the gallery, a PDF from a browser, a capture from a
+  network tool, up to ten files at once. The chooser lists the writable panes by host; those whose host
   takes files carry `⇪` and are tappable, the others say `takes no
   files` (no inbox on that host, or no write grant for this token). A
   tap sends the files to that pane and opens it, the paths landing on
@@ -43,9 +43,18 @@ While a file goes, the line reads `⇪ shot.png · 2.1 KiB…` in the
 field's place, as it reads `⟳ hearing…` for the microphone. Then the
 path is appended to whatever is on the line, with a space before it when
 needed and one after, the line takes focus, and **nothing is sent**
-until `⏎`. The types the inbox takes: PNG, JPEG, GIF and WebP images,
-PDF, plain text, Markdown, JSON and zip archives, 8 MiB each. The agent
-keeps a file for a day, and never unpacks one.
+until `⏎`. Any type goes, 8 MiB each. The host knows nine kinds, PNG,
+JPEG, GIF and WebP images, PDF, plain text, Markdown, JSON and zip
+archives: the phone names such a file by the resolver's type or the
+name's extension and the host checks the bytes agree. Anything else, a
+`.pcap`, a `.py`, a `.csv`, a binary, goes as bytes
+(`application/octet-stream`) and lands under the extension the
+phone's name for it ends in, when that is one word of one to eight
+lowercase letters or digits (`capture.PCAP` lands as `.pcap`; the
+host lowercases), else `.bin`; of the phone's name only that word is
+sent, as `file.<ext>`. The agent keeps a file for a day, and never
+unpacks one. A hub older than 2026-11-04 refuses an unknown type with
+`415`, shown as before.
 
 `⇪` shows only when the pane is writable and the hub answered `204` to
 `GET /v1/panes/{address}/files`, asked when the pane opens and kept for
@@ -55,7 +64,8 @@ a minute, as the browser does. On a host whose agent runs without
 and pastes nothing.
 
 Refusals land in the status line like a refused send, one per file:
-`shot.svg: not a type the host takes`, `big.pdf: too large, 8 MiB at
+`shot.svg: not a type the host takes` (a hub older than any type),
+`big.pdf: too large, 8 MiB at
 most`, `x.png: cannot be read`, `x.png: read only`, `x.png: no inbox on
 this host`, `x.png: the host's inbox is full`, `x.png: host offline`.
 The hub takes one file every two seconds per token; a batch waits its
@@ -99,10 +109,10 @@ the keyboard's image insertion and a pasted clip reach a listener that
 takes every item with a `content://` URI and leaves the rest to paste as
 text. `Attachments.read` turns a URI into bytes in memory through the
 `ContentResolver`, with the grant the sender gave; `Files` in the
-protocol module holds the list of types, the cap, the progress label,
-the path's landing on the line and the multipart body, built by hand:
-one part named `file`, called `file` whatever the phone calls it, with
-the file's type. `AppModel.sendFiles` runs one queue per pane: read,
+protocol module holds the known types, the extension rule, the cap,
+the progress label, the path's landing on the line and the multipart
+body, built by hand: one part named `file`, called `file` or
+`file.<ext>` whatever the phone calls it, with the file's type. `AppModel.sendFiles` runs one queue per pane: read,
 check, upload, the path to the line, the next. A share arrives at
 `MainActivity` as `ACTION_SEND` or `ACTION_SEND_MULTIPLE` with the
 files' content URIs; `AppModel.share` holds them while the chooser
@@ -125,8 +135,14 @@ as above once the view is up.
   name is always `file`, so no `../` or shell character from a name
   comes near a path on the host.
 - The type sent is the resolver's, when it is one of the eight, else the
-  one the name's extension names; anything else is refused before a
-  request. The hub sniffs the bytes and refuses a mismatch.
+  one the name's extension names; anything else goes as bytes. The hub
+  sniffs a known type's bytes and refuses a mismatch. Of the phone's
+  own name only an extension of one to eight lowercase letters or
+  digits travels (`Files.ext`), so no slash, dot, space or shell
+  character comes near a path on the host, which checks it again and
+  falls back to `bin`; whoever may write a pane may already run
+  anything in it, so a file of any kind on disk adds no right (the
+  core's decision of 2026-11-04).
 - The path the hub answers is cleaned of control characters as
   everything shown is, and lands on a line the person reads before
   `⏎`. A file never types itself into the pane; a path on the line is
@@ -138,7 +154,7 @@ as above once the view is up.
   the sharing app grant this app a read of the one file, for the one
   time.
 - `MainActivity` is exported already (the launcher, `muxway://open`);
-  the share filters admit `SEND` and `SEND_MULTIPLE` for the eight
-  types, ten files at most. Any app can start a share; nothing is read
+  the share filters admit `SEND` and `SEND_MULTIPLE` for any type,
+  ten files at most. Any app can start a share; nothing is read
   or sent until the person taps a pane, and only the panes the hub says
   take files can be tapped.

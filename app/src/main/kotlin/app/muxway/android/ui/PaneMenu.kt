@@ -56,8 +56,8 @@ fun PaneMenu(
                 item("⇆ beside ${partner.tab}", null, "menu-partner:${Keys.address(partner.key)}") { onClose(); onPartner(partner.key) }
             }
             if (onAcross != null) {
-                item("↔ across the width", if (acrossNow(false)) "already" else null, "menu-across-width") { onClose(); onAcross(false) }
-                item("↕ across the height", if (acrossNow(true)) "already" else null, "menu-across-height") { onClose(); onAcross(true) }
+                item("⬌ across the width", if (acrossNow(false)) "already" else null, "menu-across-width") { onClose(); onAcross(false) }
+                item("⬍ across the height", if (acrossNow(true)) "already" else null, "menu-across-height") { onClose(); onAcross(true) }
             }
             val parked = pane?.later == true
             val reason = when {

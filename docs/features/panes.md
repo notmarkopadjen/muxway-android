@@ -54,8 +54,12 @@ grouped by hub (with more than one) and by host.
   [notifications](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/notifications.md).
   A pane running an AI agent the lens names shows `⟳ working` while it
   is busy (see [lenses](lenses.md)). A pane its owner parked shows
-  `☾ later`, dim, in its place; a tap opens it and wakes it (see
-  [notifications](notifications.md#later)).
+  `☾ later`, dim, in its place, with what waits underneath dimmed after
+  the word (`☾ later · ! permission`), as the header and the inbox show
+  it; a tap opens it and wakes it (see
+  [notifications](notifications.md#later)). A pane its owner named
+  shows the alias in bold wherever it is the name: here, in the strip,
+  the headers and the inbox.
 - Hosts from `GET /v1/hosts` that are online with nothing exposed, and
   hosts that are offline, are listed after the panes.
 - **tap** opens one pane. **hold** selects a pane; with a selection, taps

@@ -1414,18 +1414,23 @@ class E2ETest {
     fun s38_aFilesOwnNameGivesAnExtensionAndNothingElseAndAReaderSendsNoFile() {
         val (api, tok) = setup(inbox = true)
         val address = "$HOST/work/0.0"
-        // A name with a path in it: the extension is not a word, so the host names the file .bin, under its inbox.
+        // A name with a path in it: only its last word reaches the file's name, under the host's inbox.
+        val stamped = Regex("""\d{8}-\d{6}-[a-z0-9]{6}\.[a-z0-9]{1,8}""")
         val (status, body) = postFile(tok, address, "../../etc/x.sh/", Files.OCTET, "not a script\n".toByteArray())
-        assertEquals(body, 200, status)
+        assertEquals(body, 201, status)
         val path = Json.sent(body).path
-        assertTrue(path, path.endsWith(".bin"))
         assertEquals(path, core.inbox.absolutePath, File(path).parentFile!!.absolutePath)
+        assertTrue(path, stamped.matches(File(path).name))
         assertTrue(inboxFiles().any { it.name == File(path).name })
         Thread.sleep(2_100)
-        // An extension in capitals lands lowercased, as one word.
-        val (s2, b2) = postFile(tok, address, "x.ABC", Files.OCTET, byteArrayOf(1, 2, 3))
-        assertEquals(b2, 200, s2)
-        assertTrue(b2, Json.sent(b2).path.endsWith(".abc"))
+        // An extension that is no word gives .bin; one in capitals lands lowercased.
+        val (s2, b2) = postFile(tok, address, "x.a b", Files.OCTET, byteArrayOf(1, 2, 3))
+        assertEquals(b2, 201, s2)
+        assertTrue(b2, Json.sent(b2).path.endsWith(".bin"))
+        Thread.sleep(2_100)
+        val (s3, b3) = postFile(tok, address, "x.ABC", Files.OCTET, byteArrayOf(1, 2, 3))
+        assertEquals(b3, 201, s3)
+        assertTrue(b3, Json.sent(b3).path.endsWith(".abc"))
         // A reader is refused whatever the type; the client refuses an extension that is no word before any request.
         val reader = Api(relay.url, core.token(write = null), "muxway-android-e2e")
         assertEquals("read_only", assertThrows(ApiException::class.java) { reader.sendFile(address, byteArrayOf(1), Files.OCTET, "pcap") }.code)
@@ -1433,7 +1438,7 @@ class E2ETest {
         assertThrows(IllegalArgumentException::class.java) { api.sendFile(address, byteArrayOf(1), Files.OCTET, "a/b") }
         assertThrows(IllegalArgumentException::class.java) { api.sendFile(address, byteArrayOf(1), "text/html") }
         assertEquals(before, relay.seen.size)
-        assertEquals(2, inboxFiles().size)
+        assertEquals(3, inboxFiles().size)
     }
 
     @Test
