@@ -4,15 +4,35 @@ package app.muxway.android.protocol
  * [sessions]: the host's agent lets clients start sessions; [close]: and close writable panes;
  * [preview]: it serves files under roots its owner named, to writers, when a pane prints their paths;
  * [dir]: and lists a shell pane's directory under them, so its names on the screen are links;
- * [rename]: and names panes for a writer; [later]: and parks panes for later.
+ * [rename]: and names panes for a writer; [later]: and parks panes for later; [mail]: and holds
+ * mail for its panes' processes.
  */
-data class Host(val name: String, val online: Boolean, val sessions: Boolean = false, val close: Boolean = false, val keys: Int = 0, val preview: Boolean = false, val hub: String = "", val ask: Boolean = false, val dir: Boolean = false, val rename: Boolean = false, val later: Boolean = false)
+data class Host(val name: String, val online: Boolean, val sessions: Boolean = false, val close: Boolean = false, val keys: Int = 0, val preview: Boolean = false, val hub: String = "", val ask: Boolean = false, val dir: Boolean = false, val rename: Boolean = false, val later: Boolean = false, val mail: Boolean = false)
 
 /** A pane this one wrote or mailed to, or was written to by, in the last ten minutes; [way] is `to`, `from` or `both`. */
 data class Talk(val address: String, val paneId: String, val at: Long, val way: String)
 
 /** Unread mail held for the pane's process: how much, and when the newest came. */
 data class Mail(val unread: Int, val at: Long)
+
+/** One end of a write or a mail: the pane as it was addressed then, with the id to follow when it moves. */
+data class End(val host: String, val address: String, val paneId: String, val alias: String = "")
+
+/**
+ * One mail of a pane's mailbox, as `GET /v1/panes/{address}/mail` lists it. [from] is null for a
+ * client that is not a pane, and for an origin the token may not read; [readAt] is 0 until the
+ * process read it; [replyTo] names the mail this one answers, [replied] says the pane answered it.
+ */
+data class Letter(val id: Long, val at: Long, val actor: String, val from: End?, val text: String, val readAt: Long = 0, val replyTo: Long = 0, val replied: Boolean = false) {
+    val unread get() = readAt == 0L
+}
+
+/**
+ * One entry of the talk feed, `GET /v1/talk`: a write that named its origin, or a mail, from one
+ * pane to another. [text] is the first 200 characters, [bytes] the whole length; [from] is null
+ * for a mail from a client that is not a pane; [hub] is the app's id for the hub that listed it.
+ */
+data class TalkEntry(val seq: Long, val at: Long, val actor: String, val from: End?, val to: End, val kind: String, val bytes: Int, val text: String, val id: Long = 0, val replyTo: Long = 0, val hub: String = "")
 
 /** [choices]: the fixed answers of a question asked with `muxway ask`, empty for any other notification. */
 data class Attention(val kind: String, val at: Long, val text: String, val choices: List<String> = emptyList())
@@ -51,6 +71,8 @@ data class Pane(
     /** Whether the owner parked the pane for later, and when; the attention stays underneath. */
     val later: Boolean = false,
     val laterAt: Long = 0,
+    /** How many live read-only shares this token made of the pane; 0 for everyone else. */
+    val shared: Int = 0,
 ) {
     val writable get() = mode == "write"
 

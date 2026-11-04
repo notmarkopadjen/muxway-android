@@ -2,8 +2,11 @@ package app.muxway.android
 
 import android.app.Application
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.net.Uri
+import android.os.Build
+import android.os.PersistableBundle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -20,6 +23,7 @@ import app.muxway.android.protocol.ApiException
 import app.muxway.android.files.Attachment
 import app.muxway.android.files.Attachments
 import app.muxway.android.protocol.Commands
+import app.muxway.android.protocol.Feed
 import app.muxway.android.protocol.Files
 import app.muxway.android.protocol.Host
 import app.muxway.android.protocol.Inbox
@@ -27,12 +31,15 @@ import app.muxway.android.protocol.HubUrl
 import app.muxway.android.protocol.Input
 import app.muxway.android.protocol.Keys
 import app.muxway.android.protocol.Lens
+import app.muxway.android.protocol.Letter
 import app.muxway.android.protocol.LogLine
 import app.muxway.android.protocol.ChangeSet
 import app.muxway.android.protocol.Listing
 import app.muxway.android.protocol.Diff
 import app.muxway.android.protocol.Pane
 import app.muxway.android.protocol.Setup
+import app.muxway.android.protocol.Share
+import app.muxway.android.protocol.TalkEntry
 import app.muxway.android.protocol.Wheel
 import app.muxway.android.protocol.WheelQueue
 import app.muxway.android.store.Hub
@@ -61,6 +68,9 @@ sealed class Screen {
 
 /** The host a session is being named for, in its dialog; [into] is the view that asked, if one did. */
 data class Naming(val hub: String, val host: String, val into: List<String>? = null)
+
+/** The pane whose mail sheet is open; [mailId] frames one mail, [line] opens with the line focused. */
+data class MailTarget(val key: String, val mailId: Long = 0, val line: Boolean = false)
 
 /** One open pane, by its key: what was last read and how it went. */
 class PaneState(val key: String) {
@@ -158,6 +168,13 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         /** Whether the hub takes a wheel count; a hub from before the field says no once, then it is sent one notch at a time. */
         var wheelCounts = true
 
+        /** What panes said to panes on this hub, the last hundred entries, oldest first. */
+        var talk by mutableStateOf(listOf<TalkEntry>())
+
+        /** Whether the hub shares panes: null until asked, false on a hub older than shares; and the token's live shares. */
+        var sharing by mutableStateOf<Boolean?>(null)
+        var shares by mutableStateOf(listOf<Share>())
+
         val id get() = hub.id
         val name get() = hub.name
 
@@ -178,6 +195,9 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             adminClients = emptyList()
             panes = emptyList()
             hosts = emptyList()
+            talk = emptyList()
+            sharing = null
+            shares = emptyList()
             listError = null
             cursor = null
         }
@@ -244,6 +264,173 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     /** The panes that wait for you, on every hub, oldest first, from the listings held here. */
     val waiting: List<Pane> get() = Inbox.waiting(panes)
 
+    /** Every hub's talk feed as one list, oldest first, as the listings brought it. */
+    val talk: List<TalkEntry> get() = Feed.merge(connections.map { it.talk })
+
+    /** The newest entry looked at, per hub; the header counts what came after it. */
+    private var talkSeen by mutableStateOf(store.talkSeen())
+    val unseen: Int get() = Feed.unseen(talk, talkSeen)
+
+    /** Whether the messages sheet is open, and which pane's mail sheet is. */
+    var messagesOpen by mutableStateOf(false)
+    var mailOpen by mutableStateOf<MailTarget?>(null)
+
+    /** The messages sheet opened: everything held now has been looked at. */
+    fun markTalkSeen() {
+        talkSeen = Feed.seen(talk, talkSeen)
+        store.saveTalkSeen(talkSeen)
+    }
+
+    /** Asks the hub for its feed, or every hub; a hub that fails, or has none, keeps its last entries. */
+    suspend fun fetchTalk(hub: String? = null) {
+        for (c in connections) if (hub == null || c.id == hub) fetchTalk(c)
+    }
+
+    private suspend fun fetchTalk(c: Conn) {
+        try {
+            c.talk = withContext(Dispatchers.IO) { c.api().talk() }.map { it.copy(hub = c.id) }
+        } catch (e: ApiException) {
+            if (e.code == "unauthorized") tokenRefused(c)
+        }
+    }
+
+    /** The mailboxes read for the mail sheet, by key; a pane whose mail the token may not read, or a host without mail, has the reason. */
+    val mailboxes = mutableStateMapOf<String, List<Letter>>()
+    val mailboxErrors = mutableStateMapOf<String, String>()
+
+    suspend fun fetchMailbox(key: String) {
+        try {
+            mailboxes[key] = withContext(Dispatchers.IO) { api(key).mailbox(Keys.address(key)) }
+            mailboxErrors.remove(key)
+        } catch (e: ApiException) {
+            if (e.code == "unauthorized") tokenRefused(conn(key))
+            if (e.code == "not_found") {
+                mailboxes[key] = emptyList()
+                mailboxErrors[key] = "this pane holds no mail you may read"
+            }
+        }
+    }
+
+    /** The mail sheet's line: a send on its way, and the hub's refusal of the last one. */
+    var mailing by mutableStateOf(false)
+        private set
+    var mailError by mutableStateOf<String?>(null)
+
+    /** A message for the pane's process, never typed; the feed, the mailbox and the listing are asked again. */
+    fun mail(key: String, text: String, done: () -> Unit) {
+        if (mailing) return
+        val c = conn(key)
+        viewModelScope.launch {
+            mailing = true
+            mailError = null
+            try {
+                withContext(Dispatchers.IO) { api(key).mail(Keys.address(key), text) }
+                done()
+                fetchTalk(c)
+                fetchMailbox(key)
+                refreshList(c)
+            } catch (e: ApiException) {
+                mailError = e.message
+                if (e.code == "unauthorized") tokenRefused(c)
+            } catch (e: IllegalArgumentException) {
+                mailError = "Nothing to send"
+            } finally {
+                mailing = false
+            }
+        }
+    }
+
+    /** Which pane's share sheet is open, by key. */
+    var shareOpen by mutableStateOf<String?>(null)
+
+    /** Whether the pane's hub shares panes; null until it answered, false on a hub older than shares. */
+    fun hubShares(key: String): Boolean? = connections.firstOrNull { it.id == Keys.hub(key) }?.sharing
+
+    /** The token's live shares on the hub, asked while the sheet is open and after each change. */
+    suspend fun fetchShares(hub: String) {
+        connections.firstOrNull { it.id == hub }?.let { fetchShares(it) }
+    }
+
+    private suspend fun fetchShares(c: Conn) {
+        try {
+            c.shares = withContext(Dispatchers.IO) { c.api().shares() }
+            c.sharing = true
+        } catch (e: ApiException) {
+            if (e.code == "unauthorized") tokenRefused(c)
+            if (e.code == "not_found") c.sharing = false
+        }
+    }
+
+    /** The share sheet's state: a create on its way, and the hub's refusal of the last one. */
+    var shareBusy by mutableStateOf(false)
+        private set
+    var shareError by mutableStateOf<String?>(null)
+
+    /**
+     * Shares the pane read-only for [ttl] seconds behind [password]. The answer, with its password
+     * this once, goes to the sheet alone, which forgets it with done; the hub keeps only the hash.
+     */
+    fun share(key: String, ttl: Int, password: String, made: (Share) -> Unit) {
+        if (shareBusy) return
+        val c = conn(key)
+        viewModelScope.launch {
+            shareBusy = true
+            shareError = null
+            try {
+                made(withContext(Dispatchers.IO) { api(key).share(Keys.address(key), ttl, password) })
+                fetchShares(c)
+                refreshList(c)
+            } catch (e: ApiException) {
+                shareError = when (e.code) {
+                    "too_many" -> "twenty shares already: revoke one first"
+                    "bad_input" -> "the password needs 8 to 64 characters"
+                    "read_only" -> "only a writer of the pane may share it"
+                    else -> e.message
+                }
+                if (e.code == "unauthorized") tokenRefused(c)
+            } catch (e: IllegalArgumentException) {
+                shareError = "the password needs 8 to 64 characters"
+            } finally {
+                shareBusy = false
+            }
+        }
+    }
+
+    /** Ends a share, and every observer's session with it; the list and the listing follow. */
+    fun revokeShare(key: String, id: String) {
+        val c = conn(key)
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { api(key).revokeShare(id) }
+            } catch (e: ApiException) {
+                shareError = e.message
+                if (e.code == "unauthorized") tokenRefused(c)
+            } catch (e: IllegalArgumentException) {
+                return@launch
+            }
+            fetchShares(c)
+            refreshList(c)
+        }
+    }
+
+    /** Text onto the clipboard; a [sensitive] clip is not previewed by the system. */
+    fun copyText(text: String, sensitive: Boolean) {
+        val clipboard = getApplication<Application>().getSystemService(ClipboardManager::class.java)
+        val clip = ClipData.newPlainText("muxway", text)
+        if (sensitive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            clip.description.extras = PersistableBundle().apply { putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true) }
+        }
+        clipboard?.setPrimaryClip(clip)
+    }
+
+    /** The panes of a feed entry side by side: both, or the one a client wrote to; only panes the listing has, each woken. */
+    fun openBeside(e: TalkEntry) {
+        val keys = Feed.panesOf(e).map { Keys.make(e.hub, it) }.filter { k -> panes.any { it.key == k } }
+        if (keys.isEmpty()) return
+        for (k in keys) wake(k)
+        open(Screen.View(keys))
+    }
+
     /** Asks every hub for its inbox and keeps the union, oldest first; a hub that fails keeps its last rows. */
     suspend fun fetchInbox() {
         val rows = ArrayList<Pane>()
@@ -291,6 +478,9 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     fun open(s: Screen) {
         inboxOpen = false
+        messagesOpen = false
+        mailOpen = null
+        shareOpen = null
         if (s is Screen.Panes) { selected.clear(); refreshList() }
         if (s !is Screen.Share) sharing = emptyList()
         screen = s
@@ -386,6 +576,9 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         for (k in views.keys.toList()) if (Keys.hub(k) == id) views.remove(k)
         for (k in lastKind.keys.toList()) if (Keys.hub(k) == id) lastKind.remove(k)
         for (k in inbox.keys.toList()) if (Keys.hub(k) == id) { inbox.remove(k); inboxAt.remove(k) }
+        for (k in mailboxes.keys.toList()) if (Keys.hub(k) == id) { mailboxes.remove(k); mailboxErrors.remove(k) }
+        if (mailOpen?.let { Keys.hub(it.key) } == id) mailOpen = null
+        if (shareOpen?.let { Keys.hub(it) } == id) shareOpen = null
         selected.removeAll { Keys.hub(it) == id }
         (screen as? Screen.View)?.let { v ->
             val rest = v.addresses.filter { Keys.hub(it) != id }
@@ -470,6 +663,10 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 c.hosts = h.map { it.copy(hub = c.id) }
                 c.panes = p.map { it.copy(hub = c.id) }
                 c.listError = null
+                // The feed comes with the listing, so the messages count is as live as the list.
+                fetchTalk(c)
+                // Whether the hub shares panes, until it answered either way.
+                if (c.sharing == null) fetchShares(c)
                 if (!c.probed) {
                     c.transcriber = withContext(Dispatchers.IO) { c.api().hasTranscriber() }
                     c.admin = withContext(Dispatchers.IO) { c.api().isAdmin() }

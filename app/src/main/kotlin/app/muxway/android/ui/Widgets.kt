@@ -72,8 +72,11 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
@@ -462,10 +465,11 @@ fun AgentMark(agent: Lens.Agent?, modifier: Modifier = Modifier) {
  * The pane's name, the agent's mark before it, and its status after it in italics and dimmer;
  * as a [tab], an agent's status alone (Claude's codename). `✉ n` after the name while the pane's
  * process has unread mail, in [mail]: the talk hue on plain ground, the surface's ink where the
- * state paints it.
+ * state paints it; with [onMail] the count is a link that opens the pane's mail, the rest of the
+ * name keeping its own tap.
  */
 @Composable
-fun PaneName(pane: Pane, ink: Color, dim: Color, bold: Boolean = false, tab: Boolean = false, mail: Color? = null, folder: String? = null, italic: Boolean = false, modifier: Modifier = Modifier) {
+fun PaneName(pane: Pane, ink: Color, dim: Color, bold: Boolean = false, tab: Boolean = false, mail: Color? = null, folder: String? = null, italic: Boolean = false, onMail: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     val d = Lens.describe(pane)
     val weight = if (bold) FontWeight.Bold else FontWeight.Normal
     // A parked pane's header name leans, so the sleep shows in the name itself.
@@ -476,7 +480,10 @@ fun PaneName(pane: Pane, ink: Color, dim: Color, bold: Boolean = false, tab: Boo
     val text = buildAnnotatedString {
         withStyle(SpanStyle(fontWeight = weight, fontStyle = slant)) { append(if (short) d.status.ifEmpty { d.name } else d.name) }
         if (folder != null) withStyle(SpanStyle(color = dim, fontStyle = FontStyle.Italic)) { append(" · $folder") }
-        pane.mail?.let { withStyle(SpanStyle(color = hue)) { append(" ✉ ${it.unread}") } }
+        pane.mail?.let {
+            if (onMail != null) withLink(LinkAnnotation.Clickable("mail", TextLinkStyles(SpanStyle(color = hue))) { onMail() }) { append(" ✉ ${it.unread}") }
+            else withStyle(SpanStyle(color = hue)) { append(" ✉ ${it.unread}") }
+        }
         if (!short && d.status.isNotEmpty()) withStyle(SpanStyle(color = dim, fontStyle = FontStyle.Italic)) { append(" · ${d.status}") }
     }
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {

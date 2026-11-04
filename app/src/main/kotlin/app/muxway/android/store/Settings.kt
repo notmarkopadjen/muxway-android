@@ -101,4 +101,12 @@ class SettingsStore(context: Context) {
     fun saveRecent(lines: List<String>) {
         prefs.edit().putString("recent", lines.joinToString("\n")).apply()
     }
+
+    /** The newest talk entry looked at, per hub id, so the messages count survives a restart. */
+    fun talkSeen(): Map<String, Long> = prefs.getString("talk_seen", "")!!.split('\n').filter { '=' in it }
+        .associate { it.substringBefore('=') to (it.substringAfter('=').toLongOrNull() ?: 0L) }
+
+    fun saveTalkSeen(seen: Map<String, Long>) {
+        prefs.edit().putString("talk_seen", seen.entries.joinToString("\n") { "${it.key}=${it.value}" }).apply()
+    }
 }

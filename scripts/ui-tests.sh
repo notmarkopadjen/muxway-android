@@ -65,6 +65,11 @@ codexpane=$(tmux -L "$tmuxname" display-message -p -t codex:0.0 '#{pane_id}')
 work_pid=$!
 token=$("$bin" hub token create --dir "$tmp/hub" --name phone --read 'alice-laptop/*' --write 'alice-laptop/*')
 admin=$("$bin" hub token create --dir "$tmp/hub" --name owner --read 'alice-laptop/*' --write 'alice-laptop/*' --admin)
+# A mail from the first pane to the asking one, for the envelope on its row and the mail sheet.
+workpane=$(tmux -L "$tmuxname" display-message -p -t work:0.0 '#{pane_id}')
+curl -sS -o /dev/null -X POST -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+    -d "{\"text\":\"read the branch and say what fails\",\"from\":{\"host\":\"alice-laptop\",\"pane_id\":\"$workpane\"}}" \
+    "http://127.0.0.1:$port/v1/panes/alice-laptop/ask/0.0/mail"
 
 # A second hub with its own host, for the list that shows every hub.
 tmux -L "$tmuxname2" -f /dev/null new-session -d -s ops -n shell -x 80 -y 24 \

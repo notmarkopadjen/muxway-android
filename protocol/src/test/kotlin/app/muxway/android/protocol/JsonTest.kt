@@ -176,4 +176,83 @@ class JsonTest {
         assertEquals("""{"later":true}""", Json.later(true))
         assertEquals("""{"later":false}""", Json.later(false))
     }
+
+    @Test
+    fun aMailboxKeepsLinesSpacesTabsDropsAnOriginTheProtocolDoesNotSpellAndReadsTheMarks() {
+        val box = Json.mailbox("""{"mail":[
+            {"id":7,"at":100,"actor":{"id":"0ddba4b5","name":"re\u0007viewer"},"from":{"host":"alice-laptop","address":"alice-laptop/work/1.0","pane_id":"%3","alias":"review"},"text":"run\tthe tests\non the branch\u001b[1m","read_at":160,"replied":true},
+            {"id":8,"at":200,"actor":{"name":"alice"},"from":null,"text":"ok","reply_to":7},
+            {"id":9,"at":300,"actor":{"name":"x"},"from":{"host":"alice-laptop","address":"../../etc","pane_id":"%4"},"text":"bad origin"}
+        ]}""")
+        assertEquals(3, box.size)
+        assertEquals("reviewer", box[0].actor)
+        assertEquals("alice-laptop/work/1.0", box[0].from?.address)
+        assertEquals("%3", box[0].from?.paneId)
+        assertEquals("run     the tests\non the branch", box[0].text)
+        assertFalse(box[0].unread)
+        assertTrue(box[0].replied)
+        assertNull(box[1].from)
+        assertTrue(box[1].unread)
+        assertEquals(7L, box[1].replyTo)
+        assertNull(box[2].from)
+        assertEquals(0L, box[2].replyTo)
+        assertTrue(Json.mailbox("""{"mail":null}""").isEmpty())
+        assertEquals(7L, Json.mailed("""{"mail":{"id":7,"at":1767225600}}"""))
+        assertThrows(ApiException::class.java) { Json.mailed("""{"ok":true}""") }
+    }
+
+    @Test
+    fun theFeedLeavesOutAnEntryWithoutADestinationAndCutsTextsAndNames() {
+        val talk = Json.talk("""{"talk":[
+            {"seq":42,"at":1,"actor":{"name":"reviewer"},"from":{"host":"alice-laptop","address":"alice-laptop/work/1.0","pane_id":"%3"},"to":{"host":"bob-desktop","address":"bob-desktop/work/0.0","pane_id":"%5"},"kind":"text","bytes":13,"text":"run the tests"},
+            {"seq":43,"at":2,"actor":{"name":"alice"},"from":null,"to":{"host":"alice-laptop","address":"alice-laptop/@review","pane_id":"%3"},"kind":"mail","bytes":500,"text":"${"m".repeat(300)}","id":7,"reply_to":3},
+            {"seq":44,"at":3,"actor":{"name":"x"},"from":null,"to":{"address":"nowhere"},"kind":"mail","text":"lost"},
+            {"seq":45,"at":4,"actor":{"name":"${"n".repeat(80)}"},"to":{"host":"alice-laptop","address":"alice-laptop/work/1.0","pane_id":"%3"},"kind":"an\u0007swer\u0000${"k".repeat(20)}","text":"yes"}
+        ],"next":45}""")
+        assertEquals(listOf(42L, 43L, 45L), talk.map { it.seq })
+        assertEquals("alice-laptop/work/1.0", talk[0].from?.address)
+        assertEquals("bob-desktop/work/0.0", talk[0].to.address)
+        assertEquals(13, talk[0].bytes)
+        assertNull(talk[1].from)
+        assertEquals(200, talk[1].text.length)
+        assertEquals(7L, talk[1].id)
+        assertEquals(3L, talk[1].replyTo)
+        assertEquals(64, talk[2].actor.length)
+        assertEquals(16, talk[2].kind.length)
+        assertTrue(talk[2].kind.startsWith("answer"))
+        assertNull(talk[2].from)
+        assertTrue(Json.talk("""{"talk":null,"next":0}""").isEmpty())
+        assertEquals(true, Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true,"mail":true}]}""").single().mail)
+        assertEquals(false, Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true}]}""").single().mail)
+    }
+
+    @Test
+    fun aShareIsReadWithItsPasswordOnceAndOnlyWithAnIdAndALinkTheProtocolSpells() {
+        val s = Json.share("""{"share":{"id":"3nK_abc","url":"https://hub.example.com/s/3nK_abc","password":"aaaa-bbbb-2222","expires":1767225600,"host":"alice-laptop","pane_id":"%3","address":"alice-laptop/work/0.0","watching":2}}""")
+        assertEquals("3nK_abc", s.id)
+        assertEquals("https://hub.example.com/s/3nK_abc", s.url)
+        assertEquals("aaaa-bbbb-2222", s.password)
+        assertEquals(1767225600L, s.expires)
+        assertEquals("%3", s.paneId)
+        assertEquals(2, s.watching)
+        val list = Json.shares("""{"shares":[
+            {"id":"ok-1","url":"javascript:alert(1)","expires":1},
+            {"id":"../x","url":"https://hub.example.com/s/x","expires":2},
+            {"id":"two","url":"http://hub.example.com/s/two","expires":-5,"watching":-1}
+        ]}""")
+        assertEquals(listOf("ok-1", "two"), list.map { it.id })
+        assertEquals("", list[0].url)
+        assertEquals("", list[0].password)
+        assertEquals(0L, list[1].expires)
+        assertEquals(0, list[1].watching)
+        assertTrue(Json.shares("""{"shares":null}""").isEmpty())
+        assertThrows(ApiException::class.java) { Json.share("""{"share":{"id":"bad id","url":"https://hub.example.com/s/x"}}""") }
+        assertEquals(1, Json.panes("""{"panes":[{"session":"work","shared":1}]}""").single().shared)
+        assertEquals(0, Json.panes("""{"panes":[{"session":"work"}]}""").single().shared)
+        assertEquals(0, Json.panes("""{"panes":[{"session":"work","shared":-3}]}""").single().shared)
+        val body = org.json.JSONObject(Json.shareBody(3600, "aaaa-bbbb-2222"))
+        assertEquals(3600, body.getInt("ttl"))
+        assertEquals("aaaa-bbbb-2222", body.getString("password"))
+        assertEquals(2, body.length())
+    }
 }

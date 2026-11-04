@@ -341,4 +341,53 @@ class ApiTest {
         assertThrows(IllegalArgumentException::class.java) { api().transcribe(ByteArray(10)) }
         assertThrows(IllegalArgumentException::class.java) { api().transcribe(ByteArray(5 shl 20)) }
     }
+
+    @Test
+    fun mailPostsTheTextAloneAndTheMailboxAndTheFeedAreRead() {
+        answer = { r ->
+            when {
+                r.method == "POST" -> json(201, """{"mail":{"id":7,"at":1767225600}}""")
+                r.path == "/v1/talk" -> json(200, """{"talk":[],"next":0}""")
+                else -> json(200, """{"mail":[{"id":7,"at":1,"actor":{"name":"phone"},"from":null,"text":"hi"}]}""")
+            }
+        }
+        assertEquals(7L, api().mail("alice-laptop/@review", "run the tests\u0007 now"))
+        assertEquals("/v1/panes/alice-laptop/@review/mail", seen[0].path)
+        assertEquals("""{"text":"run the tests now"}""", String(seen[0].body))
+        assertEquals(1, api().mailbox("alice-laptop/work/0.0").size)
+        assertEquals("/v1/panes/alice-laptop/work/0.0/mail", seen[1].path)
+        assertTrue(api().talk().isEmpty())
+        assertEquals("/v1/talk", seen[2].path)
+        assertEquals("limit=100", seen[2].uri.substringAfter('?'))
+        for (bad in listOf("", "\u0007", "x".repeat(4001))) assertThrows(IllegalArgumentException::class.java) { api().mail("alice-laptop/work/0.0", bad) }
+        assertEquals(3, seen.size)
+    }
+
+    @Test
+    fun aShareIsMadeListedAndRevokedWithTheHubsChecksRepeatedHere() {
+        answer = { r ->
+            when {
+                r.method == "POST" -> json(201, """{"share":{"id":"3nK_abc","url":"https://hub.example.com/s/3nK_abc","password":"aaaa-bbbb-2222","expires":1767225600,"host":"alice-laptop","pane_id":"%3","address":"alice-laptop/work/0.0","watching":0}}""")
+                r.method == "DELETE" -> Response(204)
+                else -> json(200, """{"shares":[]}""")
+            }
+        }
+        val s = api().share("alice-laptop/work/0.0", 3600, "aaaa-bbbb-2222")
+        assertEquals("3nK_abc", s.id)
+        assertEquals("aaaa-bbbb-2222", s.password)
+        assertEquals("/v1/panes/alice-laptop/work/0.0/shares", seen[0].path)
+        val sent = org.json.JSONObject(String(seen[0].body))
+        assertEquals(3600, sent.getInt("ttl"))
+        assertEquals("aaaa-bbbb-2222", sent.getString("password"))
+        assertTrue(api().shares().isEmpty())
+        assertEquals("/v1/shares", seen[1].path)
+        api().revokeShare("3nK_abc")
+        assertEquals("DELETE", seen[2].method)
+        assertEquals("/v1/shares/3nK_abc", seen[2].path)
+        for ((ttl, pw) in listOf(59 to "aaaa-bbbb-2222", 604801 to "aaaa-bbbb-2222", 3600 to "seven77", 3600 to "with\tab-in-it", 3600 to "x".repeat(65))) {
+            assertThrows(IllegalArgumentException::class.java) { api().share("alice-laptop/work/0.0", ttl, pw) }
+        }
+        for (bad in listOf("", "../admin", "a b", "x".repeat(65))) assertThrows(IllegalArgumentException::class.java) { api().revokeShare(bad) }
+        assertEquals(3, seen.size)
+    }
 }

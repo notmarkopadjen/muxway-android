@@ -130,6 +130,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import app.muxway.android.AppModel
+import app.muxway.android.MailTarget
 import app.muxway.android.Naming
 import app.muxway.android.PaneState
 import app.muxway.android.Screen
@@ -430,9 +431,13 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             Btn("⤢", { if (fit) fitAgain++ else fit = true }, selected = fit, enabled = writable, onLongClick = { fit = false })
             if (hardware) Btn("abc", { ime = !ime; if (ime) { fieldFocus.request(); keyboard?.show() } else keyboard?.hide() }, selected = ime)
             InboxCount(model)
+            MessagesCount(model)
             Btn("⚙", { model.open(Screen.Connect) })
         }
         if (model.inboxOpen) InboxSheet(model, now) { model.inboxOpen = false }
+        if (model.messagesOpen) MessagesSheet(model) { model.messagesOpen = false }
+        model.mailOpen?.let { MailSheet(model, it) { model.mailOpen = null } }
+        model.shareOpen?.let { ShareSheet(model, it) { model.shareOpen = null } }
         Rule()
         Box(Modifier.weight(1f)) {
             val held = if (ids != null) emptySet() else TileFit.held(tiles, focused, windowOf)
@@ -501,6 +506,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
                         onFile = { shown = it },
                         onChanges = { changesOf = tiles[i] },
                         onName = { namingPane = tiles[i] },
+                        onShare = { model.shareOpen = tiles[i] },
                         onPrompt = { focusedIndex = i; fieldFocus.request() },
                         ghost = if (i == index) ghost else null,
                         menu = headerMenu == tiles[i],
@@ -720,7 +726,7 @@ private fun Tabs(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (status != null && status != Lens.Status.QUIET) { Mark(status, pane?.attention?.kind, ink); Text(" ", maxLines = 1) }
-                        if (pane != null) PaneName(pane, ink, dimOf(status, ink), bold = isFocused, tab = true, mail = mailOf(status, ink))
+                        if (pane != null) PaneName(pane, ink, dimOf(status, ink), bold = isFocused, tab = true, mail = mailOf(status, ink), onMail = { model.mailOpen = MailTarget(address) })
                         else Text(Keys.address(address).substringAfter('/'), color = ink, maxLines = 1, style = LocalTextStyle.current.copy(fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal, shadow = null))
                         if (menu == address) PaneMenu(model, address, onBeside = { onBeside(address) }, onClose = onMenuClose)
                     }
@@ -758,7 +764,7 @@ private fun MinimisedRow(model: AppModel, keys: List<String>, now: Long, onTap: 
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (status != null && status != Lens.Status.QUIET) { Mark(status, pane?.attention?.kind, ink); Text(" ", maxLines = 1) }
-                if (pane != null) PaneName(pane, ink, dimOf(status, ink), tab = true, mail = mailOf(status, ink))
+                if (pane != null) PaneName(pane, ink, dimOf(status, ink), tab = true, mail = mailOf(status, ink), onMail = { model.mailOpen = MailTarget(k) })
                 else Text(Keys.address(k).substringAfter('/'), color = ink, maxLines = 1, style = LocalTextStyle.current.copy(shadow = null))
             }
         }
@@ -1051,7 +1057,7 @@ private fun PaneTile(
     model: AppModel, address: String, focused: Boolean, several: Boolean, grouped: Boolean, fitAsked: Boolean, shared: Boolean, siblings: Boolean,
     windowFit: Boolean, expected: WindowLayout.Size?, fitAgain: Int, now: Long, slackPx: Int, modifier: Modifier,
     onMeasured: (WindowLayout.Size) -> Unit, onDrop: (String, Tiles.Zone) -> Unit, onZoom: () -> Unit, onClose: () -> Unit, onCloseTile: () -> Unit,
-    onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onChanges: () -> Unit, onName: () -> Unit, onPrompt: () -> Unit, ghost: String? = null,
+    onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onChanges: () -> Unit, onName: () -> Unit, onShare: () -> Unit, onPrompt: () -> Unit, ghost: String? = null,
     menu: Boolean = false, onMenu: () -> Unit = {}, onMenuClose: () -> Unit = {}, onFocus: () -> Unit,
 ) {
     // Another tile of this window carries the fit: this one is held. With the window fitted as
@@ -1153,7 +1159,7 @@ private fun PaneTile(
                     val name = Modifier.weight(1f, fill = false).pointerInput(address, focused) {
                         detectTapGestures(onDoubleTap = { onZoom() }, onTap = { if (focused) onName() else onFocus() })
                     }.testTag("name")
-                    PaneName(pane, ink, dimOf(status, ink), bold = several && focused, mail = mailOf(status, ink), folder = Lens.folder(pane), italic = status == Lens.Status.LATER, modifier = name)
+                    PaneName(pane, ink, dimOf(status, ink), bold = several && focused, mail = mailOf(status, ink), folder = Lens.folder(pane), italic = status == Lens.Status.LATER, onMail = { model.mailOpen = MailTarget(address) }, modifier = name)
                     if (!pane.writable) Text(" · read-only", color = ink, maxLines = 1, style = LocalTextStyle.current.copy(shadow = null))
                 } else Text(address, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(shadow = null))
             }
@@ -1177,6 +1183,10 @@ private fun PaneTile(
                     else -> state.fitKey.isNotEmpty() && state.fitKey != "${pane.width}x${pane.height}"
                 }
                 Text(" ${pane.width}×${pane.height}${if (held) " held" else ""} ", color = if (held) p.alert else ink, maxLines = 1)
+            }
+            // The pane's live shares made by this token, counted and dim; a tap opens the share sheet.
+            if (pane != null && pane.shared > 0) {
+                Text(" ⇗ ${pane.shared} ", color = dimOf(status, ink), maxLines = 1, modifier = Modifier.clickable(onClick = onShare).testTag("share-count"))
             }
             // The repository's changes, counted, where the host shows one; a tap opens the sheet.
             state.changes?.let { c ->

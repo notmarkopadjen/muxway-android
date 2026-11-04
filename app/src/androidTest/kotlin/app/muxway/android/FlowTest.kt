@@ -8,6 +8,7 @@ import android.view.ViewConfiguration
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -18,6 +19,8 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasParent
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -364,6 +367,72 @@ class FlowTest {
         rule.waitUntil(15_000) { val w = leftOf(work); val a = leftOf(ask); w != null && a != null && w < a }
         rule.onAllNodesWithTag("name-sheet").assertCountEquals(0)
         shot("woken")
+    }
+
+    /** A node whose test tag starts with [prefix]. */
+    private fun tagged(prefix: String) = SemanticsMatcher("tag starts with $prefix") { it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith(prefix) == true }
+
+    @Test
+    fun theEnvelopeOpensTheMailSheetAndMailBackAnswersTheSender() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("ask/0.0")
+        // The seeded mail from the first pane counts on the asking pane's row; the envelope alone opens the sheet.
+        await("✉ 1")
+        rule.onNode(hasClickAction() and hasParent(hasText("✉ 1", substring = true)), useUnmergedTree = true).performClick()
+        rule.onNodeWithTag("mail-sheet").assertExists()
+        await("read the branch and say what fails")
+        rule.onNodeWithTag("mail-unread").assertExists()
+        shot("mail-sheet")
+        // mail back aims the line at the sender; the sent mail appears as → at the bottom, nothing typed.
+        rule.onNodeWithTag("mail-back").performClick()
+        rule.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("mail-sheet"))).performTextInput("tests green")
+        rule.onNodeWithTag("mail-send").performClick()
+        rule.waitUntil(15_000) { rule.onAllNodes(tagged("mail-row:out:")).fetchSemanticsNodes().isNotEmpty() }
+        await("tests green")
+        shot("mail-back")
+        Espresso.pressBack()
+        rule.onAllNodesWithTag("mail-sheet").assertCountEquals(0)
+        // The header's envelope opens the messages sheet; a mail row there opens the sheet on that mail.
+        rule.onNodeWithTag("messages-count").performClick()
+        rule.onNodeWithTag("messages").assertExists()
+        await("read the branch")
+        shot("messages")
+        rule.onAllNodes(tagged("talk-row:")).onFirst().performClick()
+        rule.onNodeWithTag("mail-sheet").assertExists()
+        await("read the branch and say what fails")
+    }
+
+    @Test
+    fun theShareSheetMakesALinkOnceCountsItOnTheHeaderAndRevokesIt() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        // The header held opens the pane menu; share opens the sheet, not shared yet.
+        rule.onNodeWithTag("header").performTouchInput { longClick() }
+        rule.onNodeWithTag("menu-share").performClick()
+        rule.onNodeWithTag("share-sheet").assertExists()
+        await("not shared")
+        shot("share-sheet")
+        // create: the link, the password once, the code.
+        rule.onNodeWithTag("share-create").performClick()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("share-url").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("share-url").assert(hasText("/s/", substring = true))
+        val password = rule.onNodeWithTag("share-password").fetchSemanticsNode().config[SemanticsProperties.Text].joinToString("") { it.text }
+        assertTrue(password.length >= 8)
+        await("until")
+        shot("share-made")
+        // done: the password is nowhere; the header counts the share; revoke ends it.
+        rule.onNodeWithTag("share-done").performClick()
+        rule.onAllNodesWithTag("share-password").assertCountEquals(0)
+        rule.onAllNodes(hasText(password, substring = true)).assertCountEquals(0)
+        Espresso.pressBack()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("share-count").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("share-count").assert(hasText("⇗ 1", substring = true))
+        rule.onNodeWithTag("share-count").performClick()
+        rule.onNodeWithTag("share-revoke").performClick()
+        await("not shared")
+        Espresso.pressBack()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("share-count").fetchSemanticsNodes().isEmpty() }
     }
 
     @Test

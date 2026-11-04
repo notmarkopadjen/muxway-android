@@ -11,7 +11,7 @@ phone connects only apps with the same package name and signing key.
 ```mermaid
 flowchart LR
     subgraph protocol[protocol: pure Kotlin]
-        P[Api, Json, Models, Lens, Board, Input, Ansi, Setup, HubUrl]
+        P[Api, Json, Models, Lens, Board, Input, Ansi, Setup, HubUrl, MailRows, Feed, Shares]
     end
     subgraph app[app: the phone]
         UI[ui: Connect, Scan, Panes, Share, View] --> M[AppModel]
@@ -159,6 +159,9 @@ client's side of it.
 | events | `GET /v1/events?after=cursor&wait=30&limit=50`, a long poll; a `question` may carry `choices` | pane list, watch service, the lens |
 | answers | `POST /v1/panes/{address}/answer` with `{"choice"}`, one of the choices the listing's `attention` carries; a host says `ask` in `/v1/hosts` when its agent takes them | the tile header, the inbox, a notification's actions, the watch's reply menu |
 | inbox | `GET /v1/inbox`, every waiting pane the token may read, oldest first, asked of each hub every five seconds while the sheet is open | the inbox sheet |
+| mail | `GET /v1/panes/{address}/mail`, a pane's mailbox, for the pane the sheet shows and each partner the token reads, every five seconds while the mail sheet is open; `POST /v1/panes/{address}/mail` with `{"text"}` alone (1 to 4000 characters, no origin), for a writable pane the token may write; the rows are built by `protocol/.../MailRows.kt` | the mail sheet, its line |
+| talk | `GET /v1/talk?limit=100`, every hub's feed, with each listing and every five seconds while a sheet is open; `protocol/.../Feed.kt` merges, names and counts it | the messages sheet, the `✉ n` count in the headers |
+| shares | `GET /v1/shares` (a `404` says the hub is older than shares and hides the entry), with the listing until answered and every ten seconds while the sheet is open; `POST /v1/panes/{address}/shares` with `{"ttl", "password"}` (60 to 604800 seconds, 8 to 64 printable characters, checked here first) for a writable pane; `DELETE /v1/shares/{id}`; a pane's `shared` is the header's `⇗ n` (`protocol/.../Shares.kt`) | the share sheet, the pane menu, the tile header |
 | transcription | `GET /v1/transcribe` (`204` or `404`) to know there is one, `POST /v1/transcribe` with `audio/wav` | microphone button, the watch's clip |
 | files | `GET /v1/panes/{address}/files` (`204` or a refusal) to know the pane takes them, `POST` the same as `multipart/form-data` with one part `file` of a listed type, 8 MiB at most; the path answered lands on the input line | `⇪`, a paste into the line, a share from another app |
 | admin | `GET /v1/me` for the grant, `GET /v1/admin/log?limit=200`, `GET /v1/admin/overview`, `DELETE /v1/admin/sessions/{id}` | the admin section of Settings |
