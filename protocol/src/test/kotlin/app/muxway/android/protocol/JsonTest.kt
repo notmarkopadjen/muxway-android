@@ -225,4 +225,34 @@ class JsonTest {
         assertEquals(true, Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true,"mail":true}]}""").single().mail)
         assertEquals(false, Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true}]}""").single().mail)
     }
+
+    @Test
+    fun aShareIsReadWithItsPasswordOnceAndOnlyWithAnIdAndALinkTheProtocolSpells() {
+        val s = Json.share("""{"share":{"id":"3nK_abc","url":"https://hub.example.com/s/3nK_abc","password":"aaaa-bbbb-2222","expires":1767225600,"host":"alice-laptop","pane_id":"%3","address":"alice-laptop/work/0.0","watching":2}}""")
+        assertEquals("3nK_abc", s.id)
+        assertEquals("https://hub.example.com/s/3nK_abc", s.url)
+        assertEquals("aaaa-bbbb-2222", s.password)
+        assertEquals(1767225600L, s.expires)
+        assertEquals("%3", s.paneId)
+        assertEquals(2, s.watching)
+        val list = Json.shares("""{"shares":[
+            {"id":"ok-1","url":"javascript:alert(1)","expires":1},
+            {"id":"../x","url":"https://hub.example.com/s/x","expires":2},
+            {"id":"two","url":"http://hub.example.com/s/two","expires":-5,"watching":-1}
+        ]}""")
+        assertEquals(listOf("ok-1", "two"), list.map { it.id })
+        assertEquals("", list[0].url)
+        assertEquals("", list[0].password)
+        assertEquals(0L, list[1].expires)
+        assertEquals(0, list[1].watching)
+        assertTrue(Json.shares("""{"shares":null}""").isEmpty())
+        assertThrows(ApiException::class.java) { Json.share("""{"share":{"id":"bad id","url":"https://hub.example.com/s/x"}}""") }
+        assertEquals(1, Json.panes("""{"panes":[{"session":"work","shared":1}]}""").single().shared)
+        assertEquals(0, Json.panes("""{"panes":[{"session":"work"}]}""").single().shared)
+        assertEquals(0, Json.panes("""{"panes":[{"session":"work","shared":-3}]}""").single().shared)
+        val body = org.json.JSONObject(Json.shareBody(3600, "aaaa-bbbb-2222"))
+        assertEquals(3600, body.getInt("ttl"))
+        assertEquals("aaaa-bbbb-2222", body.getString("password"))
+        assertEquals(2, body.length())
+    }
 }

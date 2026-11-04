@@ -63,6 +63,25 @@ object Json {
         }.filterNotNull().take(MailRows.MAX_ENTRIES)
     }
 
+    /** The share the hub made, with its password, this once. */
+    fun share(body: String): Share = parse(body) { o -> shareOf(o.getJSONObject("share")) ?: throw JSONException("share") }
+
+    /** The token's live shares, soonest to end first; one with an id the protocol does not spell is left out. */
+    fun shares(body: String): List<Share> = parse(body) { o -> list(o.optJSONArray("shares")) { shareOf(it) }.filterNotNull().take(200) }
+
+    /** A share as the hub lists it: an id in the protocol's alphabet, a link only when it is a web address. */
+    private fun shareOf(o: JSONObject): Share? {
+        val id = o.optString("id")
+        if (!Shares.ID.matches(id)) return null
+        val url = Input.printable(o.optString("url")).take(Shares.MAX_URL).let { if (it.startsWith("https://") || it.startsWith("http://")) it else "" }
+        return Share(
+            id, url, Input.printable(o.optString("password")).take(Shares.MAX_PASSWORD), o.optLong("expires").coerceAtLeast(0),
+            o.optString("host").take(32), o.optString("pane_id").take(16), o.optString("address").take(200), o.optInt("watching").coerceAtLeast(0),
+        )
+    }
+
+    fun shareBody(ttl: Int, password: String): String = JSONObject().put("ttl", ttl).put("password", password).toString()
+
     /** The id of a mail the hub took. */
     fun mailed(body: String): Long = parse(body) { o -> o.getJSONObject("mail").optLong("id").coerceAtLeast(0) }
 
@@ -207,6 +226,7 @@ object Json {
             cwd = o.optString("cwd").takeIf { it.isNotEmpty() && it.length <= Names.MAX_PATH && it.none { c -> c < ' ' || c == '\u007f' } },
             later = o.optBoolean("later"),
             laterAt = o.optLong("later_at").coerceAtLeast(0),
+            shared = o.optInt("shared").coerceAtLeast(0),
         )
     }
 

@@ -82,6 +82,25 @@ class Api(private val baseUrl: String, private val token: String, private val us
     }
 
     /**
+     * Shares the pane read-only: a link and a password for one person, for [ttl] seconds; a
+     * writer's call on a writable pane. The share, with its password this once.
+     */
+    fun share(address: String, ttl: Int, password: String): Share {
+        require(ttl in Shares.MIN_TTL..Shares.MAX_TTL) { "ttl" }
+        require(Shares.validPassword(password)) { "password" }
+        return Json.share(post("panes/${encode(address)}/shares", Json.shareBody(ttl, password)).body)
+    }
+
+    /** The token's live shares, soonest to end first; 404 on a hub older than shares. */
+    fun shares(): List<Share> = Json.shares(get("shares").body)
+
+    /** Ends a share, and every observer's session with it. */
+    fun revokeShare(id: String) {
+        require(Shares.ID.matches(id)) { "share id" }
+        call("DELETE", "shares/$id", null, null, null)
+    }
+
+    /**
      * A mouse button at a cell (1-based) of the pane, the wheel turned [count] notches; a hub
      * without mouse input answers bad_json, one from before the count bad_input to a count.
      */
