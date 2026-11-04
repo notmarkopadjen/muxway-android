@@ -18,6 +18,7 @@ import app.muxway.android.protocol.Keyboard
 import app.muxway.android.protocol.Feed
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.MailRows
+import app.muxway.android.protocol.Shares
 import app.muxway.android.protocol.WatchGate
 import app.muxway.android.protocol.WindowLayout
 import app.muxway.android.protocol.Wire
@@ -98,6 +99,22 @@ class E2ETest {
         c.setRequestProperty("Content-Type", "application/json")
         c.outputStream.use { it.write(body.toByteArray()) }
         return c.responseCode
+    }
+
+    /** A request without a token, as an observer's browser sends it: the status, and the share cookie it set. */
+    private fun observer(method: String, path: String, body: String? = null, cookie: String? = null): Pair<Int, String?> {
+        val c = java.net.URL("${core.url}$path").openConnection() as java.net.HttpURLConnection
+        c.requestMethod = method
+        c.setRequestProperty("X-Muxway-Client", "e2e")
+        cookie?.let { c.setRequestProperty("Cookie", "muxway_share=$it") }
+        if (body != null) {
+            c.doOutput = true
+            c.setRequestProperty("Content-Type", "application/json")
+            c.outputStream.use { it.write(body.toByteArray()) }
+        }
+        val status = c.responseCode
+        val set = c.getHeaderField("Set-Cookie")?.substringAfter("muxway_share=", "")?.substringBefore(';')?.takeIf { it.isNotEmpty() }
+        return status to set
     }
 
     /** Runs `cat -v` with mouse reporting on, so every mouse byte shows as text. */
@@ -1296,6 +1313,83 @@ class E2ETest {
         // The messages count: everything is new until looked at, nothing after.
         assertEquals(2, Feed.unseen(feed2, emptyMap()))
         assertEquals(0, Feed.unseen(feed2, Feed.seen(feed2, emptyMap())))
+    }
+
+    @Test
+    fun s36_sharingNeedsAWriteGrantAndSaneInput() {
+        val (api, tok) = setup()
+        val address = "$HOST/work/0.0"
+        val reader = Api(relay.url, core.token(write = null), "muxway-android-e2e")
+        val refused = assertThrows(ApiException::class.java) { reader.share(address, 3600, "aaaa-bbbb-2222") }
+        assertEquals(403, refused.status)
+        assertEquals("read_only", refused.code)
+        // A raw client with a lifetime outside the range or a password the hub does not take.
+        for (bad in listOf("""{"ttl":59}""", """{"ttl":604801}""", """{"password":"seven77"}""", """{"password":"with\tab-in-it"}""")) {
+            assertEquals(bad, 400, post(tok, address, bad, op = "shares"))
+        }
+        // The client refuses the same before anything leaves the phone, and a path only in the id's alphabet.
+        assertThrows(IllegalArgumentException::class.java) { api.share(address, 59, "aaaa-bbbb-2222") }
+        assertThrows(IllegalArgumentException::class.java) { api.share(address, 604801, "aaaa-bbbb-2222") }
+        assertThrows(IllegalArgumentException::class.java) { api.share(address, 3600, "seven77") }
+        assertThrows(IllegalArgumentException::class.java) { api.share(address, 3600, "with\tab-in-it") }
+        assertThrows(IllegalArgumentException::class.java) { api.revokeShare("../admin") }
+        assertTrue(api.shares().isEmpty())
+        assertEquals(0, api.panes().single().shared)
+        // A share that is not this token's is not found, as a wrong id is.
+        val gone = assertThrows(ApiException::class.java) { api.revokeShare("nothing-here") }
+        assertEquals(404, gone.status)
+    }
+
+    @Test
+    fun s36b_aReadOnlyPaneIsNotSharedEvenWithAWriteGrant() {
+        val (api, _) = setup(expose = null)
+        val refused = assertThrows(ApiException::class.java) { api.share("$HOST/work/0.0", 3600, "aaaa-bbbb-2222") }
+        assertEquals(403, refused.status)
+        assertEquals("read_only", refused.code)
+        assertTrue(api.shares().isEmpty())
+    }
+
+    @Test
+    fun f37_aShareIsMadeOnceCountedForTheSharerAloneOpenedWithItsPasswordAndRevoked() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        val password = Shares.suggest()
+        Env.secrets.add(password)
+        assertTrue(password, Regex("^[a-z2-7]{4}-[a-z2-7]{4}-[a-z2-7]{4}$").matches(password))
+        val before = System.currentTimeMillis() / 1000
+        val s = api.share(address, 3600, password)
+        assertTrue(s.url, s.url.startsWith("${core.url}/s/"))
+        assertEquals(password, s.password)
+        assertTrue(s.expires in before + 3500..before + 3700)
+        assertEquals(HOST, s.host)
+        assertEquals(core.paneId(), s.paneId)
+        assertEquals(address, s.address)
+        // The sharer's listing counts it; another writer's does not, nor does it see the share.
+        waitFor("shared in the listing") { api.panes().single().shared == 1 }
+        val other = Api(relay.url, core.token(), "muxway-android-e2e")
+        assertEquals(0, other.panes().single().shared)
+        assertTrue(other.shares().isEmpty())
+        val listed = api.shares()
+        assertEquals(listOf(s.id), listed.map { it.id })
+        assertEquals("", listed[0].password)
+        assertEquals(0, listed[0].watching)
+        assertEquals(listOf(s.id), Shares.of(listed, api.panes().single()).map { it.id })
+        // The link is live; the password opens it for an observer, a wrong one does not; a watcher is counted.
+        assertEquals(200, observer("GET", "/v1/share/${s.id}").first)
+        assertEquals(401, observer("POST", "/v1/share/${s.id}/open", """{"password":"wrong-password-1"}""").first)
+        val (opened, cookie) = observer("POST", "/v1/share/${s.id}/open", """{"password":"$password"}""")
+        assertEquals(204, opened)
+        assertNotNull(cookie)
+        assertEquals(200, observer("GET", "/v1/share/${s.id}/pane?lines=50", cookie = cookie).first)
+        waitFor("one watching") { api.shares().single().watching == 1 }
+        // Revoked: gone for the sharer, the listing, the observer and a second revoke.
+        api.revokeShare(s.id)
+        assertTrue(api.shares().isEmpty())
+        waitFor("the count gone") { api.panes().single().shared == 0 }
+        assertEquals(404, observer("GET", "/v1/share/${s.id}").first)
+        assertTrue(observer("GET", "/v1/share/${s.id}/pane?lines=50", cookie = cookie).first in setOf(401, 404))
+        val gone = assertThrows(ApiException::class.java) { api.revokeShare(s.id) }
+        assertEquals(404, gone.status)
     }
 
     @Test
