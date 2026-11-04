@@ -41,6 +41,14 @@ class TilesTest {
         assertEquals(Split(true, listOf(Leaf(0), Split(false, listOf(Leaf(1), Leaf(3)), "r.1"), Leaf(2)), "r"), Tiles.dropOn(row, 3, 1, Tiles.Zone.BOTTOM))
         assertEquals(Split(false, listOf(Split(true, listOf(Leaf(0), Leaf(1), Leaf(2)), "r.0"), Leaf(3)), "r"), Tiles.across(row, 3, "r", false, false))
         assertEquals(Split(true, listOf(Leaf(3), Leaf(0), Leaf(1), Leaf(2)), "r"), Tiles.across(row, 3, "r", true, true))
+        // Across the whole view: a leaf of the root split, which runs the other way; laid again, nothing moves.
+        val wide = Tiles.across(row, 3, "r", false, false)
+        assertTrue(Tiles.isAcross(wide, 3, false))
+        assertFalse(Tiles.isAcross(wide, 3, true))
+        assertFalse(Tiles.isAcross(wide, 0, false))
+        assertTrue(Tiles.isAcross(row, 0, true))
+        assertFalse(Tiles.isAcross(Leaf(0), 0, true))
+        assertEquals(wide, Tiles.across(wide, 3, "r", false, false))
         assertEquals(4, Tiles.leaves(Tiles.dropOn(row, 3, 1, Tiles.Zone.BOTTOM)).size)
     }
 

@@ -3,8 +3,10 @@ package app.muxway.android.protocol
 import java.security.SecureRandom
 
 /**
- * A file for the program in a pane, as the host's inbox takes it: one of a few types, 8 MiB at
- * most, one multipart part. The browser's rules, so the two clients refuse the same files.
+ * A file for the program in a pane, as the host's inbox takes it: any type, 8 MiB at most, one
+ * multipart part. A known type is named by its mime or the name's extension and checked by the
+ * host; anything else goes as bytes under the extension the name ends in, when that is one
+ * short lowercase word, which is all of the phone's name that travels. The browser's rules.
  */
 object Files {
     const val MAX_BYTES = 8 shl 20
@@ -12,24 +14,35 @@ object Files {
     /** What the status line shows of a file's name. */
     const val MAX_NAME = 60
 
-    /** The types the inbox takes, by the name's extension. */
+    /** What any other file goes as. */
+    const val OCTET = "application/octet-stream"
+
+    /** The types the host knows, by the name's extension. */
     val TYPES: Map<String, String> = linkedMapOf(
         "png" to "image/png", "jpg" to "image/jpeg", "jpeg" to "image/jpeg", "gif" to "image/gif", "webp" to "image/webp",
         "pdf" to "application/pdf", "txt" to "text/plain", "md" to "text/markdown", "json" to "application/json",
         "zip" to "application/zip",
     )
 
-    /** The types, each once, for the picker. */
+    /** The known types, each once. */
     val MIMES: List<String> = TYPES.values.distinct()
 
-    /** The type to send: [mime] when it is one of the list, else the one [name]'s extension names, else null. */
-    fun type(mime: String?, name: String?): String? {
+    /** The extension a host takes from a name: one short lowercase word. */
+    val EXT = Regex("[a-z0-9]{1,8}")
+
+    /** The type to send: [mime] when it is a known one, else the one [name]'s extension names, else bytes. */
+    fun type(mime: String?, name: String?): String {
         val m = mime?.substringBefore(';')?.trim()?.lowercase()
         if (m != null && m in MIMES) return m
+        return ext(name)?.let { TYPES[it] } ?: OCTET
+    }
+
+    /** The extension [name] ends in, lowercased, when it is a word the host takes; null otherwise. */
+    fun ext(name: String?): String? {
         val n = name ?: return null
         val dot = n.lastIndexOf('.')
-        if (dot < 0 || dot == n.lastIndex) return null
-        return TYPES[n.substring(dot + 1).lowercase()]
+        if (dot < 1 || dot == n.lastIndex) return null
+        return n.substring(dot + 1).lowercase().takeIf { EXT.matches(it) }
     }
 
     fun fits(bytes: Long): Boolean = bytes in 0..MAX_BYTES.toLong()
@@ -57,12 +70,17 @@ object Files {
 
     class Multipart(val contentType: String, val body: ByteArray)
 
-    /** The request body: one part named `file`, called `file` whatever the phone calls it, of [type]. */
-    fun multipart(data: ByteArray, type: String, boundary: String = boundary()): Multipart {
-        require(type in MIMES) { "type" }
+    /**
+     * The request body: one part named `file` of [type], called `file`, or `file.<ext>` for the
+     * host to name a file of a kind it does not know; the phone's own name goes no further.
+     */
+    fun multipart(data: ByteArray, type: String, ext: String? = null, boundary: String = boundary()): Multipart {
+        require(type in MIMES || type == OCTET) { "type" }
+        require(ext == null || EXT.matches(ext)) { "ext" }
         require(data.size <= MAX_BYTES) { "too large" }
         require(boundary.length in 16..70 && boundary.all { it.isLetterOrDigit() }) { "boundary" }
-        val head = "--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"file\"\r\nContent-Type: $type\r\n\r\n".toByteArray(Charsets.US_ASCII)
+        val name = if (ext == null) "file" else "file.$ext"
+        val head = "--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"$name\"\r\nContent-Type: $type\r\n\r\n".toByteArray(Charsets.US_ASCII)
         val tail = "\r\n--$boundary--\r\n".toByteArray(Charsets.US_ASCII)
         val body = ByteArray(head.size + data.size + tail.size)
         head.copyInto(body)

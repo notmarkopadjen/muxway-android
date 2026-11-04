@@ -74,7 +74,12 @@ class LinksTest {
         assertEquals(listOf(name), Links.findFiles("what is wrong in /home/alice/.config/muxway/agent/inbox/$name ?").map { it.name })
         assertEquals(listOf(name), Links.findFiles("see /tmp/$name.").map { it.name })
         assertEquals(listOf("20261025-102235-d4e5f6.zip"), Links.findFiles("/i/20261025-102235-d4e5f6.zip").map { it.name })
-        for (s in listOf(name, "/tmp/$name.exe", "/tmp/${name}x", "/tmp/x$name", "/tmp/20261025-102235-56fwge.PNG", "/tmp/20261025-102235-56fwge.svg")) {
+        // Any type since the host takes any: the extension is one short lowercase word.
+        assertEquals(
+            listOf("20261104-203000-k3m9ab.pcap", "20261104-203001-k3m9ac.py", "20261104-203002-k3m9ad.abcdefgh", "20261104-203003-k3m9ae.bin"),
+            Links.findFiles("/i/20261104-203000-k3m9ab.pcap /i/20261104-203001-k3m9ac.py /i/20261104-203002-k3m9ad.abcdefgh /i/20261104-203003-k3m9ae.bin").map { it.name },
+        )
+        for (s in listOf(name, "/tmp/$name.exe", "/tmp/x$name", "/tmp/20261025-102235-56fwge.PNG", "/tmp/20261025-102235-56fwge.abcdefghi", "/tmp/20261025-102235-56fwge.a_b", "/tmp/20261025-102235-56fwge.")) {
             assertEquals(s, emptyList<Links.FileLink>(), Links.findFiles(s))
         }
         assertEquals(
