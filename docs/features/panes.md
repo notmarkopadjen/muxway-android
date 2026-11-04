@@ -26,7 +26,8 @@ grouped by hub (with more than one) and by host.
   [connect](connect.md)), so a pick of several can span hubs.
 
 - A row is `*` for a pane this token may write, the lens's glyph, the
-  pane's name (its command and what the program says of itself, or an
+  pane's name (its alias when its owner named it, see [pane
+  names](pane-names.md); else its command and what the program says of itself, or an
   AI agent's name with its mark and its status, see [lenses](lenses.md)), its place
   `host/session/window.pane` dimmed, and the lens's word. A host with
   panes says `online` on its line; a hub whose listing failed shows the

@@ -145,7 +145,7 @@ client's side of it.
 
 | Feature | Request | Used by |
 |---|---|---|
-| hosts and panes | `GET /v1/hosts`, `GET /v1/panes`; a host's `sessions`, `close` and `keys` flags decide what the UI offers; a pane's `talk` partners draw the groups and its `mail` the `✉ n` count (`protocol/.../Groups.kt`) | pane list, strip, tiles, watch service |
+| hosts and panes | `GET /v1/hosts`, `GET /v1/panes`; a host's `sessions`, `close`, `keys` and `rename` flags decide what the UI offers; a pane's `alias` is its name first, its `cwd` the folder in the tile header, its `talk` partners draw the groups and its `mail` the `✉ n` count (`protocol/.../Groups.kt`, `Lens.kt`) | pane list, strip, tiles, watch service |
 | reading a pane | `GET /v1/panes/{address}?lines=N&ansi=1` with `If-None-Match`; `304` when unchanged; colour kept, every other escape dropped | pane view, the watch's tail |
 | typing | `POST /v1/panes/{address}/input` with `{"text"}` (control characters removed, 4096 bytes at most) | input bar, watch |
 | keys | the same with `{"key"}`; the grammar (`C-`, `M-`, `S-` on any key, chords) where the host says `keys: 2`, the old names elsewhere | key row, keyboard, hardware keyboard, watch |
@@ -153,6 +153,7 @@ client's side of it.
 | fit | `POST /v1/panes/{address}/resize` with `{cols, rows}`, `scope: window` and `zoom` for a pane alone, `scope: window` and a `layout` naming the window's panes when the tiles are every one of them (`protocol/.../WindowLayout.kt`), `{"fit": "auto"}` to give it back | tiles |
 | split, new session, close | `POST /v1/windows/{host}/{session}/{window}/panes`, `POST /v1/hosts/{host}/sessions`, `POST /v1/panes/{address}/close`, where the host allows them | pane view, pane list |
 | changes | `GET /v1/panes/{address}/git` every ten seconds for a writable tile on a host with `preview` (every five while its sheet is open; a `404` is asked again after a minute), `GET /v1/panes/{address}/git/diff?path=` for a path the status listed, drawn as text | the count in a tile's header, the changes sheet, the file sheet's diff |
+| naming a pane | `POST /v1/panes/{address}/alias` with `{"alias"}` (`[a-z0-9-]{0,32}`, empty clears), for a writable pane on a host with `rename`; the answer's pane replaces the tile's until the listing is asked again | the name sheet |
 | names | `GET /v1/panes/{address}/dir` with `If-None-Match`, every two seconds for the focused tile and five for the others while it shows a shell pane that carries `cwd` on a host with `dir`, and at once when `cwd` changes; a `404` is asked again after a minute; the entries make the names on the screen links (`protocol/.../Names.kt`) | the pane's rows, a tap on a name |
 | events | `GET /v1/events?after=cursor&wait=30&limit=50`, a long poll; a `question` may carry `choices` | pane list, watch service, the lens |
 | answers | `POST /v1/panes/{address}/answer` with `{"choice"}`, one of the choices the listing's `attention` carries; a host says `ask` in `/v1/hosts` when its agent takes them | the tile header, the inbox, a notification's actions, the watch's reply menu |

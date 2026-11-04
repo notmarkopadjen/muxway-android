@@ -57,7 +57,10 @@ name, with its mark before it where it has one and the status it writes
 into the title (Claude's codename) after a dot, in italics and dimmer:
 `✳ Claude · fixing the build`; a tab shows the status alone. Any other
 pane is its command, then the title when that adds something: `vim ·
-notes.md`, `bash`.
+notes.md`, `bash`. A pane its owner named goes by its alias first, in
+bold with the agent's mark, and what the program says becomes the
+status: `✳ review · fixing the build`, `notes · vim · notes.md`; its tab
+is the alias (see [pane names](pane-names.md)).
 
 Tabs and headers are painted with the state: the theme's ink, inverted, while
 the pane waits for you; plain while it works and when quiet, the turning
