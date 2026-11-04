@@ -34,7 +34,11 @@ focused pane.
   talked lately, see [the list](panes.md)) sit side by side inside one
   frame in the talk hue, pulled next to the group's first tab; `✉ n`
   after a tab's name while the pane's process has unread mail, in the
-  hue on a plain tab and in the tab's ink on a painted one.
+  hue on a plain tab and in the tab's ink on a painted one. The panes
+  parked for later (`☾`, see [notifications](notifications.md#later))
+  come after every other, in the order they would otherwise have and
+  outside any frame; a tap on a parked tab focuses it and wakes it, and
+  its tab goes back to its place.
 - **`+`** after the last tab opens the **add menu**, built from the
   listing the app holds, in this order: `+ pane` (one more pane beside
   the focused one on its host, where the token may type there), `+
@@ -71,9 +75,13 @@ focused pane.
 - A **swipe** left or right across the page moves the focus to the next
   or previous tile, or with one tile open swaps the strip's next or
   previous pane into it, coming round at either end as `]` and `[` do
-  in the browser. A tab **held** opens its pane beside the focused one,
-  as the browser's Shift+click does; held and **moved**, it drags as a
-  header does, and dropped on a tile or on the bar between two it lays
+  in the browser. A tab **held still** opens the **pane menu**: *open
+  beside* opens its pane beside the focused one, as the browser's
+  Shift+click does; *☾ later* parks the pane and *☾ wake* wakes it (dim,
+  with the reason, on a read-only pane or a host without `later`; see
+  [notifications](notifications.md#later)). A tile's header held still
+  opens the same menu without *open beside*. A tab held and **moved**
+  drags as a header does, and dropped on a tile or on the bar between two it lays
   its pane out there (see the tree of splits below): with one tile open,
   a drop on the right part of the screen makes two columns, on the
   lower part two rows.
@@ -119,7 +127,8 @@ focused pane.
   names](pane-names.md)), its mail
   count `✉ n` when it has one, `read-only` when the token cannot write
   (nothing for write), the
-  lens's word (`! permission`, `⟳ working`) and, with fit on, the size;
+  lens's word (`! permission`, `⟳ working`; `☾ later` with what waits
+  underneath dimmed after it, for a parked pane) and, with fit on, the size;
   the focused one has the thick border and bold name; a waiting tile
   glows in the ink around its box; a tile of a group that is not focused
   has its edge in the talk hue, thin and dimmed. A question asked with fixed answers

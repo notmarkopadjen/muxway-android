@@ -239,8 +239,13 @@ were read, `Esc`, `Ctrl-C`, `Tab`, `Shift-Tab`, `Up`, `Down`. Last,
 *type…* opens the watch's own input method through Wear OS remote input
 (the keyboard, handwriting or voice as the watch offers); the line comes
 back as a draft under the top row with *send* (the line, then Enter),
-*type* (the line alone) and *drop*. Last of all, *phone* leaves the watch
-and opens the pane on the phone.
+*type* (the line alone) and *drop*. Then *☾ later* parks the pane for
+later, or *☾ wake* wakes it when the board says it is parked: the
+owner's mark on the host, sent through the phone's gate like an answer
+(see [notifications](notifications.md#later)); a parked pane is a quiet
+row with the moon on the board, the face and the complications, and
+never alerts. Last of all, *phone* leaves the watch and opens the pane
+on the phone.
 
 `Enter` takes the default or says yes to Claude Code, `Esc` refuses or
 cancels, `y` and `n` answer a shell's prompts, `Ctrl-C` stops a command.

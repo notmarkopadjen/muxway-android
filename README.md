@@ -41,7 +41,9 @@ waiting panes, and a tap lands on the pane behind the lock screen. A
 question asked with fixed answers (<code>muxway ask</code>) is answered
 from the notification, the tile, the inbox or the wrist, nothing typed.
 <code>⚑ n</code> in the header opens the inbox: everything that waits,
-on every hub, oldest first. Agents that talk to each other are framed as
+on every hub, oldest first. A pane that can wait is parked for
+<em>later</em> from a held tab, header or the watch's menu: its tab goes
+last with <code>☾</code>, nothing calls for it, and a tap wakes it. Agents that talk to each other are framed as
 one group, like browser tabs, and a pane with unread mail from another
 agent says <code>✉ n</code>; nothing pops up for a message. Claude Code,
 Codex, Gemini, Antigravity, OpenCode, Copilot and the rest are named,

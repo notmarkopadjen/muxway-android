@@ -36,10 +36,11 @@ notification the same way and never shows *working*.
 
 ## The states
 
-The lens answers one of three states:
+The lens answers one of four states:
 
 | State | When | Glyph |
 |---|---|---|
+| later | the listing carries `later`: the owner parked the pane (see [notifications](notifications.md#later)); wins over the other three; what waits underneath shows after the word in the header, dimmed (`☾ later · ! permission`) | `☾`, plain: no inversion, no pulse, no glow, no ring |
 | waiting for you | the listing carries a notification: `permission`, `question`, `idle`, `done`; except an `idle` one on an agent's pane whose screen moved in the last 10 s, which is the agent's own background work and counts as working | `!` `?` `z` `✓`, the theme's ink inverted and pulsing; a waiting tile also glows in the ink, a shadow outside its box that moves no neighbour |
 | working | the last event the hub sent for the pane was `working` (the agent's hook on a submitted prompt, or the host's watcher), or the app is reading the pane and its screen changed in the last 10 s by itself | a turning ring, drawn, not typed, so it is the same in every font; still with effects off; the tab and header stay plain, the ring and the word carry the state |
 | quiet | anything else | nothing |
@@ -77,6 +78,11 @@ stateDiagram-v2
     Quiet --> Waiting: notification arrives
     Working --> Waiting: notification arrives
     Waiting --> Quiet: notification cleared (working hook, or input from a client)
+    Quiet --> Later: the owner parks the pane
+    Waiting --> Later: the owner parks the pane
+    Working --> Later: the owner parks the pane
+    Later --> Quiet: woken, nothing underneath
+    Later --> Waiting: woken, a notification underneath
 ```
 
 Why not the listing's `activity`: it is tmux's window activity, shared by

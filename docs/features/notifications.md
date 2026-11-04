@@ -69,6 +69,51 @@ own poll as well; two held requests cost the hub nothing it minds.
 Android 13 and later ask for permission to post notifications when the
 setting is switched on.
 
+## Later
+
+Several agents call at once, and some of them can wait. **Later** is the
+owner's own mark on a pane, kept by the host's agent beside the pane's
+attention, so every client sees it (the core's
+[notifications](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/notifications.md#later)).
+On the phone a parked pane is the lens's fourth state, [later](lenses.md):
+`☾` and the word, painted plain; its tab goes after every other in the
+strip, outside its group's frame; the pane list keeps its row in place
+with the mark; the [inbox](inbox.md) lists it last and counts it with the
+rest. Nothing calls for it: no notification is posted, the watch shows a
+quiet row with the moon, the face and the complications count it as done.
+A notification that arrives while the pane is parked leaves it parked;
+the tile's header shows the kind under the word, dimmed
+(`☾ later · ! permission`), and the inbox row says `later · permission`.
+
+```
+┌ ✳ Claude · fixing the build        ☾ later · ! permission    _  × ┐
+```
+
+- **Parking.** A tab or a tile's header **held still** opens the pane
+  menu; *☾ later* parks the pane with `POST
+  /v1/panes/{address}/later {"later": true}`, *☾ wake* wakes it. The row
+  is dim with `read only` on a pane the token cannot write and `host
+  without later` where the host's agent is older than the mark
+  (`hosts[].later` false). On the watch the reply menu's *☾ later* /
+  *☾ wake* sends the same through the phone's gate, as an answer goes.
+- **Waking.** Coming back to the pane wakes it: a tap on its parked tab
+  focuses it and sends `{"later": false}`; opening it from the pane list,
+  the inbox, the add menu, a selection or a `muxway://open` link does the
+  same, for a writable pane on a host that parks. Typing into it, an
+  answer and a mail wake it on the host, as they clear the attention. A
+  reader sees the mark and cannot move it.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Awake
+    Awake --> Later: later in the tab's, the header's or the watch's menu
+    Later --> Awake: a tap on the parked tab
+    Later --> Awake: opened from the list, the inbox, the add menu, a link
+    Later --> Awake: wake in a menu
+    Later --> Awake: typing, an answer, a mail (the host clears it)
+    Later --> Later: a notification arrives, the kind shows under the word
+```
+
 ## Questions with fixed answers
 
 A process in a pane can ask its owner something with `muxway ask --text
@@ -110,6 +155,13 @@ sequenceDiagram
 
 - The service uses the app's `Api` and the token from the Keystore vault,
   and logs nothing: no text, no address, no token.
+- The later mark is a write with the rules of an answer: the hub checks
+  the write grant and the pane's mark, the host checks them again. The
+  body is one boolean the app builds itself; nothing is typed and nothing
+  reaches the pane's process. The watch's request passes the phone's gate
+  (listed, writable, the owner's permission, the rate limit) before the
+  hub sees it. The app shows a parked pane as the hub lists it, never on
+  its own guess, so a refused parking changes nothing.
 - An answer is a write with the rules of input: the hub checks the write
   grant and the pane's mark, the host checks the choice against the list
   it gave. The app offers a button only on a writable pane and sends the

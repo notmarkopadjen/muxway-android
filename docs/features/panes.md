@@ -50,7 +50,9 @@ grouped by hub (with more than one) and by host.
   colour: `question`, `permission`, `idle` or `done`, see the core's
   [notifications](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/notifications.md).
   A pane running an AI agent the lens names shows `⟳ working` while it
-  is busy (see [lenses](lenses.md)).
+  is busy (see [lenses](lenses.md)). A pane its owner parked shows
+  `☾ later`, dim, in its place; a tap opens it and wakes it (see
+  [notifications](notifications.md#later)).
 - Hosts from `GET /v1/hosts` that are online with nothing exposed, and
   hosts that are offline, are listed after the panes.
 - **tap** opens one pane. **hold** selects a pane; with a selection, taps
