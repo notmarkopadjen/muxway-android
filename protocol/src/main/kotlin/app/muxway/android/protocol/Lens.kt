@@ -57,9 +57,14 @@ object Lens {
 
     /**
      * An agent is named, with the status it writes into the title (Claude's "codename") after;
-     * anything else is its command, with the title when that adds something.
+     * anything else is its command, with the title when that adds something. A pane its owner
+     * named goes by the alias, and what the program says about itself becomes the status.
      */
     fun describe(p: Pane): Description {
+        if (p.alias.isNotEmpty()) {
+            val d = describe(p.copy(alias = ""))
+            return Description(d.agent, p.alias, if (d.agent != null) d.status else said(d))
+        }
         val title = p.title.trim()
         val agent = agent(p)
         if (agent == Agent.CLAUDE) {
@@ -113,9 +118,20 @@ object Lens {
         Status.QUIET -> null
     }
 
-    /** The name with the status after it: `Claude · fixing the build`, `vim · notes.md`. */
-    fun name(p: Pane): String = describe(p).let { if (it.status.isEmpty()) it.name else "${it.name} · ${it.status}" }
+    private fun said(d: Description): String = if (d.status.isEmpty()) d.name else "${d.name} · ${d.status}"
 
-    /** A tab's name: an agent's status alone (Claude's codename), else the name. */
-    fun tab(p: Pane): String = describe(p).let { if (it.agent != null) it.status.ifEmpty { it.name } else name(p) }
+    /** The name with the status after it: `Claude · fixing the build`, `vim · notes.md`, `review · fixing the build`. */
+    fun name(p: Pane): String = said(describe(p))
+
+    /** A tab's name: the alias; else an agent's status alone (Claude's codename); else the name. */
+    fun tab(p: Pane): String = p.alias.ifEmpty { describe(p).let { if (it.agent != null) it.status.ifEmpty { it.name } else name(p) } }
+
+    /** An alias as the hub takes it; empty takes the name away. */
+    val ALIAS = Regex("^[a-z0-9-]{0,32}$")
+
+    /** What a typed name becomes: lower case, a space or `_` to `-`, the rest dropped, 32 at most. */
+    fun aliasOf(typed: String): String = typed.lowercase().replace(Regex("[\\s_]+"), "-").replace(Regex("[^a-z0-9-]"), "").take(32)
+
+    /** The last segment of the directory the pane works in, for the header; null when the host gave none. */
+    fun folder(p: Pane): String? = p.cwd?.trimEnd('/')?.substringAfterLast('/')?.ifEmpty { "/" }
 }

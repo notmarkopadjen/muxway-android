@@ -57,8 +57,12 @@ class JsonTest {
     fun theNameIsTheCleanedTitleWhenThereIsOne() {
         val p = Json.panes("""{"panes":[{"session":"work","window_index":0,"pane_index":1,"alias":"logs","title":"\u001b]0;x\u0007\u2733 build \u001b[1mserver\u0007"}]}""").single()
         assertEquals("logs", p.label)
-        assertEquals("Claude · build server", p.name)
-        assertEquals("build server", p.tab)
+        // The alias is the name; Claude's codename follows as the status, and the tab is the alias.
+        assertEquals("logs · build server", p.name)
+        assertEquals("logs", p.tab)
+        val unnamed = Json.panes("""{"panes":[{"session":"work","title":"\u2733 build server"}]}""").single()
+        assertEquals("Claude · build server", unnamed.name)
+        assertEquals("build server", unnamed.tab)
     }
 
     @Test
@@ -95,6 +99,15 @@ class JsonTest {
         assertEquals(true, Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true,"ask":true}]}""").single().ask)
         assertEquals(false, Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true}]}""").single().ask)
         assertEquals("""{"choice":"yes"}""", Json.choice("yes"))
+    }
+
+    @Test
+    fun theRenameFlagIsReadWhenGivenAndAnAliasGoesOutAsOne() {
+        assertEquals(true, Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true,"rename":true}]}""").single().rename)
+        assertEquals(false, Json.hosts("""{"hosts":[{"name":"alice-laptop","online":true}]}""").single().rename)
+        assertEquals("""{"alias":"review"}""", Json.alias("review"))
+        assertEquals("""{"alias":""}""", Json.alias(""))
+        assertEquals("review", Json.resized("""{"pane":{"session":"work","alias":"review"}}""").pane.alias)
     }
 
     @Test
