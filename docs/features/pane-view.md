@@ -21,9 +21,10 @@ focused pane.
 
 - `‹` at the top left goes back to the pane list.
 - The **tab strip** lists every pane the token may read, in listing order,
-  by name: an AI agent's status behind its mark (Claude's codename behind
-  the spark), else the command and what the program says of itself (see
-  [lenses](lenses.md)). Each tab is **painted with its state** from
+  by name: the pane's alias when its owner named it (see [pane
+  names](pane-names.md)), else an AI agent's status behind its mark
+  (Claude's codename behind the spark), else the command and what the
+  program says of itself (see [lenses](lenses.md)). Each tab is **painted with its state** from
   the [lens](lenses.md): the attention colour when the pane waits
   for you (`!` `?` `z` `✓`, pulsing), plain otherwise, with the turning
   ring (`⟳`) while it works. Selection never changes the colour: the open pane has a thick
@@ -50,6 +51,12 @@ focused pane.
   `+ session` ask the hub (the session through the same dialog as the
   list's); a pick asks nothing. Back closes the menu. The rows are
   `AddMenu.rows` in the protocol module, unit-tested.
+- A tap on the **focused pane's tab**, or on the **name in its header**,
+  opens the **name sheet**: the program and its status, the address with
+  the size and the mode, the folder's whole path, and for a writer on a
+  host that names panes a field for the name; see [pane
+  names](pane-names.md). A tap on another tile's name focuses it, and the
+  header's double tap still zooms.
 - **`_`** on a tile's header **minimises** it: the tile leaves the
   arrangement and its tab moves to the **minimised row** right above the
   key row, painted like a tab and still read every `every` seconds, so
@@ -107,8 +114,11 @@ focused pane.
   without a size). Moving them needs every pane of the window writable:
   otherwise `▦`, the bars and the drops are off and the tiles only
   follow, a drop saying so. Each header is painted like its
-  tab, with the pane's name (its status in italics, dimmer), its mail
-  count `✉ n` when it has one, and mode, the
+  tab, with the pane's name (the alias when it has one; the folder it
+  works in and its status after it in italics, dimmer; see [pane
+  names](pane-names.md)), its mail
+  count `✉ n` when it has one, `read-only` when the token cannot write
+  (nothing for write), the
   lens's word (`! permission`, `⟳ working`) and, with fit on, the size;
   the focused one has the thick border and bold name; a waiting tile
   glows in the ink around its box; a tile of a group that is not focused

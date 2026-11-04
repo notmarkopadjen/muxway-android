@@ -3,9 +3,10 @@ package app.muxway.android.protocol
 /**
  * [sessions]: the host's agent lets clients start sessions; [close]: and close writable panes;
  * [preview]: it serves files under roots its owner named, to writers, when a pane prints their paths;
- * [dir]: and lists a shell pane's directory under them, so its names on the screen are links.
+ * [dir]: and lists a shell pane's directory under them, so its names on the screen are links;
+ * [rename]: and names panes for a writer.
  */
-data class Host(val name: String, val online: Boolean, val sessions: Boolean = false, val close: Boolean = false, val keys: Int = 0, val preview: Boolean = false, val hub: String = "", val ask: Boolean = false, val dir: Boolean = false)
+data class Host(val name: String, val online: Boolean, val sessions: Boolean = false, val close: Boolean = false, val keys: Int = 0, val preview: Boolean = false, val hub: String = "", val ask: Boolean = false, val dir: Boolean = false, val rename: Boolean = false)
 
 /** A pane this one wrote or mailed to, or was written to by, in the last ten minutes; [way] is `to`, `from` or `both`. */
 data class Talk(val address: String, val paneId: String, val at: Long, val way: String)
@@ -45,7 +46,7 @@ data class Pane(
     val talk: List<Talk> = emptyList(),
     /** Unread mail for the pane's process; null while there is none. */
     val mail: Mail? = null,
-    /** A shell pane's directory under a preview root, for a writer; null otherwise. Compared, never shown. */
+    /** The pane's directory under a preview root, for a writer; null otherwise. The header shows its last segment. */
     val cwd: String? = null,
 ) {
     val writable get() = mode == "write"
@@ -115,6 +116,8 @@ class ApiException(val status: Int, val code: String) : Exception(messageFor(sta
             "rate_limited" -> "Too many requests, slow down"
             "host_offline" -> "Host offline"
             "exists" -> "That name is taken"
+            "alias_taken" -> "Another pane on the host has that name"
+            "bad_alias" -> "A name is a-z, 0-9 and -, up to 32"
             "too_many" -> "Too many already: 8 panes a window, 32 sessions"
             "provider_unavailable" -> "Transcriber unavailable"
             "unsupported" -> "Not a type the host takes"

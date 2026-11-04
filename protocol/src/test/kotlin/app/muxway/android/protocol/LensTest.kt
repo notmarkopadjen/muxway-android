@@ -107,4 +107,37 @@ class LensTest {
         assertEquals("vim · notes.md", Lens.tab(pane("vim", "notes.md")))
         assertEquals("alice-laptop/work/0.0", pane("vim", "notes.md").place)
     }
+
+    @Test
+    fun anAliasIsTheNameAndWhatTheProgramSaysBecomesTheStatus() {
+        val claude = pane("claude", "✳ fixing the build").copy(alias = "review")
+        assertEquals(Lens.Description(Lens.Agent.CLAUDE, "review", "fixing the build"), Lens.describe(claude))
+        assertEquals("review · fixing the build", Lens.name(claude))
+        assertEquals("review", Lens.tab(claude))
+        assertEquals(Lens.Description(Lens.Agent.CODEX, "codex-1", ""), Lens.describe(pane("codex", "codex").copy(alias = "codex-1")))
+        val vim = pane("vim", "notes.md").copy(alias = "notes")
+        assertEquals(Lens.Description(null, "notes", "vim · notes.md"), Lens.describe(vim))
+        assertEquals("notes · vim · notes.md", Lens.name(vim))
+        assertEquals("notes", Lens.tab(vim))
+        assertEquals(Lens.Description(null, "build", "bash"), Lens.describe(pane("bash", "bash").copy(alias = "build")))
+        assertEquals("build", Lens.tab(pane("bash", "bash").copy(alias = "build")))
+    }
+
+    @Test
+    fun aTypedNameBecomesAnAliasAndTheFolderIsThePathsLastSegment() {
+        assertEquals("fix-tests", Lens.aliasOf("Fix Tests"))
+        assertEquals("a-b", Lens.aliasOf("a_b"))
+        assertEquals("rview", Lens.aliasOf("réview"))
+        assertEquals("a".repeat(32), Lens.aliasOf("a".repeat(40)))
+        assertEquals("id", Lens.aliasOf("\$(id)"))
+        assertTrue(Lens.ALIAS.matches(""))
+        assertTrue(Lens.ALIAS.matches("fix-tests"))
+        assertFalse(Lens.ALIAS.matches("Review"))
+        assertFalse(Lens.ALIAS.matches("a b"))
+        assertFalse(Lens.ALIAS.matches("a".repeat(33)))
+        assertEquals("work", Lens.folder(pane("claude", "✳ x").copy(cwd = "/home/alice/work")))
+        assertEquals("work", Lens.folder(pane("bash", "").copy(cwd = "/home/alice/work/")))
+        assertEquals("/", Lens.folder(pane("bash", "").copy(cwd = "/")))
+        assertNull(Lens.folder(pane("bash", "")))
+    }
 }

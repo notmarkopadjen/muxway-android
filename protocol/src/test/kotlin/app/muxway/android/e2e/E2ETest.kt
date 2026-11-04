@@ -1034,6 +1034,72 @@ class E2ETest {
     }
 
     @Test
+    fun s30_namingNeedsAWriteGrantAndAWellFormedNameNoOtherPaneHas() {
+        val (api, tok) = setup()
+        val address = "$HOST/work/0.0"
+        assertTrue("the agent names panes", api.hosts().single().rename)
+        val reader = Api(relay.url, core.token(write = null), "muxway-android-e2e")
+        val readOnly = assertThrows(ApiException::class.java) { reader.rename(address, "review") }
+        assertEquals(403, readOnly.status)
+        assertEquals("read_only", readOnly.code)
+        // The phone refuses what the hub would before any request leaves it.
+        for (bad in listOf("Review", "a b", "a".repeat(33), "../x", "\$(id)")) {
+            assertThrows(bad, IllegalArgumentException::class.java) { api.rename(address, bad) }
+        }
+        // A raw client sending them gets the hub's refusal, and nothing reaches tmux.
+        for (bad in listOf("\"Review\"", "\"a b\"", "\"\$(id)\"", "\"${"a".repeat(33)}\"", "1")) {
+            assertEquals(bad, 400, post(tok, address, "{\"alias\":$bad}", op = "alias"))
+        }
+        assertEquals("", api.panes().single().alias)
+        // A name another pane of the host has is refused, so a grant by alias cannot be shadowed.
+        val made = api.split(HOST, "work", 0, "v")
+        waitFor("two panes") { api.panes().size == 2 }
+        assertEquals("review", api.rename(made.address, "review").alias)
+        val taken = assertThrows(ApiException::class.java) { api.rename(address, "review") }
+        assertEquals(409, taken.status)
+        assertEquals("alias_taken", taken.code)
+        assertEquals("", api.panes().first { it.address == address }.alias)
+    }
+
+    @Test
+    fun s30b_aReadOnlyPaneIsNotNamedEvenWithAWriteGrant() {
+        val (api, _) = setup(expose = null)
+        val refused = assertThrows(ApiException::class.java) { api.rename("$HOST/work/0.0", "review") }
+        assertEquals(403, refused.status)
+        assertEquals("read_only", refused.code)
+        assertEquals("", api.panes().single().alias)
+    }
+
+    @Test
+    fun f31_aNamedPaneGoesByItsAliasAndAnyProgramUnderARootCarriesItsFolder() {
+        val (root, repo) = repoUnderRoot()
+        val (api, _) = setup(preview = root)
+        val address = "$HOST/work/0.0"
+        assertEquals("review", api.rename(address, "review").alias)
+        waitFor("the listing names it") { api.panes().single().alias == "review" }
+        val listed = api.panes().single()
+        assertEquals("review", listed.tab)
+        assertTrue(listed.name, listed.name.startsWith("review · bash"))
+        // The alias is an address.
+        assertEquals(address, api.read("$HOST/@review", 24, null)!!.pane.address)
+        // A program that is no shell keeps the folder for a writer, as the header shows it.
+        core.cdTo("work:0.0", repo)
+        api.type(address, "cat")
+        api.key(address, "Enter")
+        waitFor("cat running") { core.command() == "cat" }
+        waitFor("cwd listed") { api.panes().single().cwd != null }
+        val inCat = api.panes().single()
+        assertEquals("cat", inCat.command)
+        assertEquals(repo.canonicalPath, File(inCat.cwd!!).canonicalPath)
+        assertEquals("repo", Lens.folder(inCat))
+        api.key(address, "C-c")
+        // Empty takes the name away.
+        assertEquals("", api.rename(address, "").alias)
+        waitFor("unnamed") { api.panes().single().alias.isEmpty() }
+        assertEquals("bash · test-pane", api.panes().single().tab)
+    }
+
+    @Test
     fun z99_noSecretInAnyLogOfTheRun() {
         val logs = File(Env.runDir, "logs")
         val found = ArrayList<String>()

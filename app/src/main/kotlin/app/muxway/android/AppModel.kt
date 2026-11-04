@@ -939,8 +939,37 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     /** Whether the pane's host lists a shell pane's directory for writers. */
     fun hostLists(key: String): Boolean = hostOf(key)?.dir == true
 
-    /** A writer's shell pane's directory under a root, from the listing or the last read; null otherwise. */
+    /** Whether the pane's host names panes for writers. */
+    fun hostRenames(key: String): Boolean = hostOf(key)?.rename == true
+
+    /** A writer's pane's directory under a root, from the listing or the last read; null otherwise. */
     fun cwdOf(key: String): String? = panes.firstOrNull { it.key == key }?.cwd ?: view(key).pane?.cwd
+
+    /** The name sheet's state: a rename on its way, and the hub's refusal of the last one. */
+    var renaming by mutableStateOf(false)
+    var renameError by mutableStateOf<String?>(null)
+
+    /** Names the pane, or with [alias] empty takes the name away; the tile and the listing show the answer. */
+    fun rename(key: String, alias: String, done: () -> Unit) {
+        if (renaming) return
+        viewModelScope.launch {
+            renaming = true
+            renameError = null
+            try {
+                val pane = withContext(Dispatchers.IO) { api(key).rename(Keys.address(key), alias) }
+                view(key).pane = pane.copy(hub = Keys.hub(key))
+                refreshList(conn(key))
+                done()
+            } catch (e: ApiException) {
+                renameError = e.message
+                if (e.code == "unauthorized") tokenRefused(conn(key))
+            } catch (e: IllegalArgumentException) {
+                renameError = ApiException.messageFor(400, "bad_alias")
+            } finally {
+                renaming = false
+            }
+        }
+    }
 
     /**
      * The entries of the pane's directory, asked with the tag so an unchanged listing is no body;

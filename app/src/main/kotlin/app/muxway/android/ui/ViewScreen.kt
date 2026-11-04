@@ -283,9 +283,12 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     var shown by remember { mutableStateOf<Shown?>(null) }
     var slackPx by remember { mutableIntStateOf(0) }
     shown?.let { FileSheet(model, it, onOpen = { next -> shown = next }) { shown = null } }
+    // The name sheet, for one pane: the whole path, the address, the size and a field for a name.
+    var namingPane by remember { mutableStateOf<String?>(null) }
     // The changes sheet, for one tile's repository; a file picked there opens over it.
     var changesOf by remember { mutableStateOf<String?>(null) }
     changesOf?.let { ChangesSheet(model, it, onOpen = { next -> shown = next }) { changesOf = null } }
+    namingPane?.let { NameSheet(model, it) { namingPane = null } }
 
     // Direct typing: with the hardware keyboard setting on and the text line not focused, every
     // key of a hardware keyboard goes to the focused writable pane as pressed; a named key goes by
@@ -328,6 +331,8 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     fun show(key: String) {
         val at = tiles.indexOf(key)
         when {
+            // The focused tab, tapped once more, names its pane.
+            key == focused && at >= 0 -> namingPane = key
             at >= 0 -> focusedIndex = at
             key in minimised -> {
                 parked = minimised - key
@@ -487,6 +492,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
                         onMinimise = if (tiles.size > 1) ({ minimise(tiles[i]) }) else null,
                         onFile = { shown = it },
                         onChanges = { changesOf = tiles[i] },
+                        onName = { namingPane = tiles[i] },
                         onPrompt = { focusedIndex = i; fieldFocus.request() },
                         ghost = if (i == index) ghost else null,
                     ) {
@@ -1028,7 +1034,7 @@ private fun PaneTile(
     model: AppModel, address: String, focused: Boolean, several: Boolean, grouped: Boolean, fitAsked: Boolean, shared: Boolean, siblings: Boolean,
     windowFit: Boolean, expected: WindowLayout.Size?, fitAgain: Int, now: Long, slackPx: Int, modifier: Modifier,
     onMeasured: (WindowLayout.Size) -> Unit, onDrop: (String, Tiles.Zone) -> Unit, onZoom: () -> Unit, onClose: () -> Unit, onCloseTile: () -> Unit,
-    onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onChanges: () -> Unit, onPrompt: () -> Unit, ghost: String? = null, onFocus: () -> Unit,
+    onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onChanges: () -> Unit, onName: () -> Unit, onPrompt: () -> Unit, ghost: String? = null, onFocus: () -> Unit,
 ) {
     // Another tile of this window carries the fit: this one is held. With the window fitted as
     // one ([windowFit]) the view sends the size and this tile is [expected] to be its share.
@@ -1116,8 +1122,12 @@ private fun PaneTile(
         Row(header, verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 if (pane != null) {
-                    PaneName(pane, ink, dimOf(status, ink), bold = several && focused, mail = mailOf(status, ink), modifier = Modifier.weight(1f, fill = false))
-                    Text(" · ${pane.mode}", color = ink, maxLines = 1, style = LocalTextStyle.current.copy(shadow = null))
+                    // The name, tapped on the focused tile, opens the name sheet; it keeps the header's double tap.
+                    val name = Modifier.weight(1f, fill = false).pointerInput(address, focused) {
+                        detectTapGestures(onDoubleTap = { onZoom() }, onTap = { if (focused) onName() else onFocus() })
+                    }.testTag("name")
+                    PaneName(pane, ink, dimOf(status, ink), bold = several && focused, mail = mailOf(status, ink), folder = Lens.folder(pane), modifier = name)
+                    if (!pane.writable) Text(" · read-only", color = ink, maxLines = 1, style = LocalTextStyle.current.copy(shadow = null))
                 } else Text(address, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(shadow = null))
             }
             if (status != null && status != Lens.Status.QUIET) {

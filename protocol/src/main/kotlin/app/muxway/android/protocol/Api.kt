@@ -102,6 +102,12 @@ class Api(private val baseUrl: String, private val token: String, private val us
         return Json.resized(post("hosts/${encode(host)}/sessions", Json.name(name)).body).pane
     }
 
+    /** Names the pane, for a writer on a host that renames; empty takes the name away. The pane as listed after. */
+    fun rename(address: String, alias: String): Pane {
+        require(Lens.ALIAS.matches(alias)) { "alias" }
+        return Json.resized(post("panes/${encode(address)}/alias", Json.alias(alias)).body).pane
+    }
+
     /** Closes the pane on its host, ending what runs in it; where the agent allows it. */
     fun closePane(address: String) {
         post("panes/${encode(address)}/close", "{}")

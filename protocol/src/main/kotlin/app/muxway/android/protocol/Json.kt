@@ -7,7 +7,7 @@ import org.json.JSONObject
 /** The hub's JSON, read defensively: a missing field is a default, a wrong type is an error. */
 object Json {
     fun hosts(body: String): List<Host> = parse(body) { o ->
-        list(o.optJSONArray("hosts")) { Host(it.optString("name"), it.optBoolean("online"), it.optBoolean("sessions"), it.optBoolean("close"), it.optInt("keys"), it.optBoolean("preview"), ask = it.optBoolean("ask"), dir = it.optBoolean("dir")) }
+        list(o.optJSONArray("hosts")) { Host(it.optString("name"), it.optBoolean("online"), it.optBoolean("sessions"), it.optBoolean("close"), it.optInt("keys"), it.optBoolean("preview"), ask = it.optBoolean("ask"), dir = it.optBoolean("dir"), rename = it.optBoolean("rename")) }
     }
 
     fun panes(body: String): List<Pane> = parse(body) { o -> list(o.optJSONArray("panes")) { pane(it) } }
@@ -129,6 +129,8 @@ object Json {
     fun direction(d: String): String = JSONObject().put("direction", d).toString()
 
     fun name(n: String): String = JSONObject().put("name", n).toString()
+
+    fun alias(a: String): String = JSONObject().put("alias", a).toString()
 
     /** The pane an answer carries, after a resize, a split or a new session, and the window's panes when it lists them. */
     fun resized(body: String): Resized = parse(body) { o -> Resized(pane(o.getJSONObject("pane")), list(o.optJSONArray("panes")) { pane(it) }) }
