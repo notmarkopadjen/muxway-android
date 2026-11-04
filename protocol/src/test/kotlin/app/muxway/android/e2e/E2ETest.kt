@@ -15,7 +15,9 @@ import app.muxway.android.protocol.Clip
 import app.muxway.android.protocol.Files
 import app.muxway.android.protocol.Inbox
 import app.muxway.android.protocol.Keyboard
+import app.muxway.android.protocol.Feed
 import app.muxway.android.protocol.Lens
+import app.muxway.android.protocol.MailRows
 import app.muxway.android.protocol.WatchGate
 import app.muxway.android.protocol.WindowLayout
 import app.muxway.android.protocol.Wire
@@ -1177,6 +1179,123 @@ class E2ETest {
         waitFor("woken by input") { !api.panes().first { it.address == address }.later }
         assertNull(api.panes().first { it.address == address }.attention)
         assertEquals(0, Inbox.waiting(api.panes()).count { it.address == address })
+    }
+
+    @Test
+    fun s34_mailNeedsAWriteGrantSaneTextAndAMailboxOneMayRead() {
+        val (api, tok) = setup()
+        val address = "$HOST/work/0.0"
+        assertTrue("the agent holds mail", api.hosts().single().mail)
+        val reader = Api(relay.url, core.token(write = null), "muxway-android-e2e")
+        val readOnly = assertThrows(ApiException::class.java) { reader.mail(address, "hello") }
+        assertEquals(403, readOnly.status)
+        assertEquals("read_only", readOnly.code)
+        // A raw client sending nothing, a control character, too much, or no text gets the hub's refusal.
+        for (bad in listOf("""{"text":""}""", """{"text":"a\u0007b"}""", """{"text":"${"x".repeat(4001)}"}""", "{}")) {
+            assertEquals(bad.take(24), 400, post(tok, address, bad, op = "mail"))
+        }
+        // The client refuses the same before anything leaves the phone.
+        for (bad in listOf("", "\u0007", "x".repeat(4001))) assertThrows(IllegalArgumentException::class.java) { api.mail(address, bad) }
+        assertNull(api.panes().single().mail)
+        assertTrue(api.mailbox(address).isEmpty())
+        assertTrue(api.talk().isEmpty())
+        // A reader whose grant names another pane: this pane's mailbox is not found, as the pane itself is not.
+        val other = Api(relay.url, core.token(read = "$HOST/other/*", write = null), "muxway-android-e2e")
+        assertTrue(other.panes().isEmpty())
+        val missing = assertThrows(ApiException::class.java) { other.mailbox(address) }
+        assertEquals(404, missing.status)
+        assertEquals("not_found", missing.code)
+    }
+
+    @Test
+    fun s34b_aReadOnlyPaneTakesNoMailEvenWithAWriteGrant() {
+        val (api, _) = setup(expose = null)
+        val refused = assertThrows(ApiException::class.java) { api.mail("$HOST/work/0.0", "hello") }
+        assertEquals(403, refused.status)
+        assertEquals("read_only", refused.code)
+        assertNull(api.panes().single().mail)
+    }
+
+    @Test
+    fun f35_theMailSheetsRowsMergeTheMailboxAndTheFeedAndTheProcessReadsItsMail() {
+        val (api, tok) = setup()
+        val a = "$HOST/work/0.0"
+        core.tmux("split-window", "-t", "work:0", "-h")
+        core.cli("expose", "--tmux-name", core.tmux, "-t", "work:0.1", "--write")
+        waitFor("two panes listed") { api.panes().size == 2 }
+        val b = "$HOST/work/0.1"
+        val idA = core.paneId()
+        val idB = core.tmux("display-message", "-p", "-t", "work:0.1", "#{pane_id}").trim()
+        // The owner mails A from the phone: no origin, so the letter is from you, and nothing is typed.
+        val id = api.mail(a, "run the tests on the branch")
+        assertTrue(id > 0)
+        waitFor("the count listed") { api.panes().first { it.address == a }.mail?.unread == 1 }
+        val box = api.mailbox(a)
+        assertEquals(1, box.size)
+        assertEquals(id, box[0].id)
+        assertNull(box[0].from)
+        assertEquals("phone", box[0].actor)
+        assertTrue(box[0].unread)
+        assertEquals("run the tests on the branch", box[0].text)
+        assertFalse(core.pane().contains("run the tests"))
+        val feed = api.talk()
+        assertEquals(1, feed.size)
+        assertEquals("mail", feed[0].kind)
+        assertNull(feed[0].from)
+        assertEquals(a, feed[0].to.address)
+        assertEquals(id, feed[0].id)
+        val paneA = api.panes().first { it.address == a }
+        val paneB = api.panes().first { it.address == b }
+        var rows = MailRows.rows(paneA, box, feed, emptyMap())
+        assertEquals(1, rows.size)
+        assertFalse(rows[0].out)
+        assertNull(rows[0].who)
+        assertEquals(true, rows[0].unread)
+        assertFalse(rows[0].yours)
+        // B mails A from its shell, as an agent would: the origin is B.
+        val out = core.client(tok, idB, "mail", a, "tests green, two warnings", "--agent-dir", core.agentDir.path)
+        assertTrue(out, out.startsWith("mail "))
+        waitFor("two letters") { api.mailbox(a).size == 2 }
+        val boxA = api.mailbox(a)
+        assertEquals(b, boxA[1].from?.address)
+        assertEquals(idB, boxA[1].from?.paneId)
+        waitFor("two entries") { api.talk().size == 2 }
+        val feed2 = api.talk()
+        assertEquals(b, feed2[1].from?.address)
+        // A's rows: two in, the second from B. B's rows: the owner's mail to A, since A is of the
+        // conversation, then B's own to A, whole from A's box and unread there.
+        rows = MailRows.rows(paneA, boxA, feed2, emptyMap())
+        assertEquals(listOf(false, false), rows.map { it.out })
+        assertEquals(b, rows[1].who?.address)
+        assertEquals(listOf(a), MailRows.sentTo(paneB, api.mailbox(b), feed2, api.panes()))
+        val rowsB = MailRows.rows(paneB, api.mailbox(b), feed2, mapOf(a to boxA))
+        assertEquals(2, rowsB.size)
+        assertTrue(rowsB[0].yours)
+        assertEquals(a, rowsB[0].who?.address)
+        assertTrue(rowsB[1].out)
+        assertFalse(rowsB[1].yours)
+        assertEquals(a, rowsB[1].who?.address)
+        assertEquals("tests green, two warnings", rowsB[1].text)
+        assertFalse(rowsB[1].cut)
+        assertEquals(true, rowsB[1].unread)
+        assertEquals(listOf(a), MailRows.partners(rowsB, b))
+        // Without A's box the excerpt stands and nobody knows whether it was read.
+        assertNull(MailRows.rows(paneB, api.mailbox(b), feed2, emptyMap())[1].unread)
+        // A token that reads A alone sees B's letter without its origin, and no feed entry for it.
+        val narrow = Api(relay.url, core.token(read = a, write = null), "muxway-android-e2e")
+        val seen = narrow.mailbox(a)
+        assertEquals(2, seen.size)
+        assertNull(seen[1].from)
+        assertEquals(listOf(id), narrow.talk().map { it.id })
+        // The process in A reads its mail: the count clears, the letters say read, the rows too.
+        val read = core.readMail(idA)
+        assertTrue(read, read.contains("run the tests on the branch") && read.contains("tests green"))
+        waitFor("the count cleared") { api.panes().first { it.address == a }.mail == null }
+        assertTrue(api.mailbox(a).none { it.unread })
+        assertEquals(listOf(false, false), MailRows.rows(paneA, api.mailbox(a), api.talk(), emptyMap()).map { it.unread })
+        // The messages count: everything is new until looked at, nothing after.
+        assertEquals(2, Feed.unseen(feed2, emptyMap()))
+        assertEquals(0, Feed.unseen(feed2, Feed.seen(feed2, emptyMap())))
     }
 
     @Test

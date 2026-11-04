@@ -98,6 +98,20 @@ class Core(private val logs: File) {
         waitFor("agent online") { cli("hub", "agents", "--dir", hubDir.path).contains("$HOST\tonline") }
     }
 
+    /** The command-line client as a pane's process runs it: the hub and the token in the environment, the pane's id as tmux sets it. */
+    fun client(tok: String, pane: String, vararg args: String): String {
+        val pb = ProcessBuilder(bin, "client", *args)
+        pb.environment().apply { put("MUXWAY_HUB", url); put("MUXWAY_TOKEN", tok); put("TMUX_PANE", pane); put("MUXWAY_DIR", "") }
+        val p = pb.start()
+        val out = p.inputStream.bufferedReader().readText()
+        val err = p.errorStream.bufferedReader().readText()
+        if (!p.waitFor(30, TimeUnit.SECONDS) || p.exitValue() != 0) throw IllegalStateException("muxway client ${args.take(2).joinToString(" ")}: ${err.trim()}")
+        return out.trim()
+    }
+
+    /** `muxway mail` as the process in [pane] reads it, over the agent's socket; what it printed. */
+    fun readMail(pane: String, vararg args: String): String = cli("mail", *args, "--dir", agentDir.path, "--pane", pane)
+
     fun token(read: String = "$HOST/*", write: String? = "$HOST/*"): String {
         val args = arrayListOf("hub", "token", "create", "--dir", hubDir.path, "--name", "phone", "--read", read)
         if (write != null) { args.add("--write"); args.add(write) }
