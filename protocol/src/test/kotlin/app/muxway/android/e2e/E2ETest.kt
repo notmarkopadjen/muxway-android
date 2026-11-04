@@ -1100,6 +1100,86 @@ class E2ETest {
     }
 
     @Test
+    fun s32_parkingNeedsAWriteGrantAndOneBoolean() {
+        val (api, tok) = setup()
+        val address = "$HOST/work/0.0"
+        assertTrue("the agent parks panes", api.hosts().single().later)
+        val reader = Api(relay.url, core.token(write = null), "muxway-android-e2e")
+        val readOnly = assertThrows(ApiException::class.java) { reader.later(address, true) }
+        assertEquals(403, readOnly.status)
+        assertEquals("read_only", readOnly.code)
+        // A raw client sending anything but one boolean gets the hub's refusal.
+        for (bad in listOf("""{"later":"yes"}""", """{"later":true,"text":"x"}""", "{}", "[]")) {
+            assertEquals(bad, 400, post(tok, address, bad, op = "later"))
+        }
+        val listed = api.panes().single()
+        assertFalse(listed.later)
+        assertEquals(0L, listed.laterAt)
+        assertEquals(Lens.Status.QUIET, Lens.status(listed, null, false))
+    }
+
+    @Test
+    fun s32b_aReadOnlyPaneIsNotParkedEvenWithAWriteGrant() {
+        val (api, _) = setup(expose = null)
+        val refused = assertThrows(ApiException::class.java) { api.later("$HOST/work/0.0", true) }
+        assertEquals(403, refused.status)
+        assertEquals("read_only", refused.code)
+        assertFalse(api.panes().single().later)
+    }
+
+    @Test
+    fun f33_aParkedPaneIsLaterEverywhereComesLastInTheInboxAndWakesWhenItsOwnerComesBack() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        core.notify("done", "finished")
+        waitFor("attention listed") { api.panes().single().attention?.kind == "done" }
+        val before = System.currentTimeMillis() / 1000 - 1
+        api.later(address, true)
+        waitFor("parked in the listing") { api.panes().single().later }
+        val parked = api.panes().single()
+        assertTrue(parked.laterAt >= before)
+        assertEquals("done", parked.attention?.kind)
+        // The lens says later over the notification; the board counts it as done, with the mark.
+        assertEquals(Lens.Status.LATER, Lens.status(parked, "working", true))
+        assertEquals("☾", Lens.glyph(Lens.Status.LATER, "done"))
+        val board = Board.rank(listOf(parked), 1, true) { Lens.status(it, null, false) }
+        assertEquals(Board.QUIET, board.rows.single().state)
+        assertTrue(board.rows.single().later)
+        assertEquals("☾", board.rows.single().glyph)
+        assertEquals("", board.rows.single().text)
+        assertEquals(0, board.waiting)
+        assertEquals(board, Board.parse(board.json()))
+        // A second pane with a question comes before the parked one in the inbox, whatever their ages.
+        core.tmux("split-window", "-t", "work:0", "-h")
+        core.cli("expose", "--tmux-name", core.tmux, "-t", "work:0.1", "--write")
+        waitFor("two panes listed") { api.panes().size == 2 }
+        val second = core.tmux("display-message", "-p", "-t", "work:0.1", "#{pane_id}").trim()
+        core.notify("question", "deploy to staging?", pane = second)
+        waitFor("both in the inbox") { api.inbox().size == 2 }
+        val inbox = api.inbox()
+        assertEquals(listOf("$HOST/work/0.1", address), inbox.map { it.address })
+        assertTrue(inbox[1].later)
+        assertEquals(inbox.map { it.address }, Inbox.waiting(api.panes()).map { it.address })
+        assertEquals("$HOST/work/0.1", Inbox.oldest(inbox)?.address)
+        // A notification arriving while parked leaves it parked, with the new kind underneath.
+        core.notify("permission", "Claude needs your permission")
+        waitFor("the new kind listed") { api.panes().first { it.address == address }.attention?.kind == "permission" }
+        assertTrue(api.panes().first { it.address == address }.later)
+        // The watch wakes it through the gate; typing into it wakes it again after a second parking.
+        val gate = WatchGate({ api }, { api.panes() }, { true })
+        assertTrue(gate.later(Wire.Later("l1", address, false)).ok)
+        waitFor("awake") { !api.panes().first { it.address == address }.later }
+        assertEquals(Lens.Status.WAITING, Lens.status(api.panes().first { it.address == address }, null, false))
+        api.later(address, true)
+        waitFor("parked again") { api.panes().first { it.address == address }.later }
+        api.type(address, "echo back")
+        api.key(address, "Enter")
+        waitFor("woken by input") { !api.panes().first { it.address == address }.later }
+        assertNull(api.panes().first { it.address == address }.attention)
+        assertEquals(0, Inbox.waiting(api.panes()).count { it.address == address })
+    }
+
+    @Test
     fun z99_noSecretInAnyLogOfTheRun() {
         val logs = File(Env.runDir, "logs")
         val found = ArrayList<String>()

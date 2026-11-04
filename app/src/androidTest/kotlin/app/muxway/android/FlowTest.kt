@@ -325,10 +325,45 @@ class FlowTest {
         rule.waitUntil(5_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 1 }
         rule.onNodeWithTag("tab:alice-laptop/work/0.1").assertExists()
         shot("tile-closed")
-        // The second pane's tab, held, opens it beside the first.
+        // The second pane's tab, held still, opens its menu; *open beside* opens it beside the first.
         rule.onNodeWithTag("tab:alice-laptop/work/0.1").performTouchInput { longClick() }
+        rule.onNodeWithTag("pane-menu").assertExists()
+        shot("pane-menu")
+        rule.onNodeWithTag("menu-beside").performClick()
         rule.waitUntil(5_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 2 }
         shot("beside")
+    }
+
+    /** The left edge of a tab in the strip, or null while it is not on screen. */
+    private fun leftOf(tag: String): Float? = rule.onAllNodesWithTag(tag).fetchSemanticsNodes().firstOrNull()?.boundsInWindow?.left
+
+    @Test
+    fun theHeaderHeldParksThePaneForLaterAndItsTabTappedWakesIt() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        val work = "tab:alice-laptop/work/0.0"
+        val ask = "tab:alice-laptop/ask/0.0"
+        rule.waitUntil(15_000) { val w = leftOf(work); val a = leftOf(ask); w != null && a != null && w < a }
+        // The header held still opens the pane menu; *later* parks the pane on the host.
+        rule.onNodeWithTag("header").performTouchInput { longClick() }
+        rule.onNodeWithTag("menu-later").assertExists()
+        rule.onNodeWithTag("menu-later").performClick()
+        await("later")
+        // The tab goes after every other with the moon; the header says later and nothing pulses.
+        rule.waitUntil(15_000) { val w = leftOf(work); val a = leftOf(ask); w != null && a != null && w > a }
+        rule.onNodeWithTag(work).assert(hasAnyDescendant(hasText("☾")))
+        shot("later-tab")
+        // Hold again: the menu now offers wake. Back closes it.
+        rule.onNodeWithTag("header").performTouchInput { longClick() }
+        await("☾ wake")
+        Espresso.pressBack()
+        // The parked tab, tapped, wakes the pane: the word goes and the tab takes its place back.
+        rule.onNodeWithTag(work).performClick()
+        rule.waitUntil(15_000) { rule.onAllNodes(hasText("later", substring = true)).fetchSemanticsNodes().isEmpty() }
+        rule.waitUntil(15_000) { val w = leftOf(work); val a = leftOf(ask); w != null && a != null && w < a }
+        rule.onAllNodesWithTag("name-sheet").assertCountEquals(0)
+        shot("woken")
     }
 
     @Test
