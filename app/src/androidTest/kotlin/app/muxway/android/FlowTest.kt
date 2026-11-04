@@ -403,6 +403,39 @@ class FlowTest {
     }
 
     @Test
+    fun theShareSheetMakesALinkOnceCountsItOnTheHeaderAndRevokesIt() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        // The header held opens the pane menu; share opens the sheet, not shared yet.
+        rule.onNodeWithTag("header").performTouchInput { longClick() }
+        rule.onNodeWithTag("menu-share").performClick()
+        rule.onNodeWithTag("share-sheet").assertExists()
+        await("not shared")
+        shot("share-sheet")
+        // create: the link, the password once, the code.
+        rule.onNodeWithTag("share-create").performClick()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("share-url").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("share-url").assert(hasText("/s/", substring = true))
+        val password = rule.onNodeWithTag("share-password").fetchSemanticsNode().config[SemanticsProperties.Text].joinToString("") { it.text }
+        assertTrue(password.length >= 8)
+        await("until")
+        shot("share-made")
+        // done: the password is nowhere; the header counts the share; revoke ends it.
+        rule.onNodeWithTag("share-done").performClick()
+        rule.onAllNodesWithTag("share-password").assertCountEquals(0)
+        rule.onAllNodes(hasText(password, substring = true)).assertCountEquals(0)
+        Espresso.pressBack()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("share-count").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("share-count").assert(hasText("⇗ 1", substring = true))
+        rule.onNodeWithTag("share-count").performClick()
+        rule.onNodeWithTag("share-revoke").performClick()
+        await("not shared")
+        Espresso.pressBack()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("share-count").fetchSemanticsNodes().isEmpty() }
+    }
+
+    @Test
     fun aTabDroppedOnATileLaysItsPaneOut() {
         seedSecondHub()
         scenario = ActivityScenario.launch(MainActivity::class.java)

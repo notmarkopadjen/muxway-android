@@ -83,7 +83,9 @@ focused pane.
   Shift+click does; *☾ later* parks the pane and *☾ wake* wakes it (dim,
   with the reason, on a read-only pane or a host without `later`; see
   [notifications](notifications.md#later)); *✉ mail* opens the pane's
-  [mail sheet](mail.md) with its line focused. A tile's header held and let
+  [mail sheet](mail.md) with its line focused; *⇗ share* opens the
+  [share sheet](share.md) for a writable pane, on a hub that shares
+  panes. A tile's header held and let
   go in place opens the same menu without *open beside*. A tab held and **moved**
   drags as a header does, and dropped on a tile or on the bar between two it lays
   its pane out there (see the tree of splits below): with one tile open,
@@ -134,7 +136,9 @@ focused pane.
   (nothing for write), the
   lens's word (`! permission`, `⟳ working`; `☾ later` with what waits
   underneath dimmed after it, for a parked pane, whose name in the
-  header is in italics) and, with fit on, the size;
+  header is in italics), with fit on the size, and `⇗ n`, dim, while
+  the pane has live [shares](share.md) made by this token (a tap opens
+  the share sheet);
   the focused one has the thick border and bold name; a waiting tile
   glows in the ink around its box; a tile of a group that is not focused
   has its edge in the talk hue, thin and dimmed. A question asked with fixed answers

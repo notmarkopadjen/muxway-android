@@ -25,8 +25,8 @@ import app.muxway.android.MailTarget
  * The pane menu, under a tab or a tile's header held and let go in place (the drag-and-drop
  * long press without a move): *open beside* for a tab, then
  * *later* or *wake*, the owner's mark on the host (see the notifications page), then *mail*, the
- * pane's mail sheet with its line focused. The mark's row is dim with the reason on a read-only
- * pane or a host that does not park panes.
+ * pane's mail sheet with its line focused, and *share*, the share sheet, on a hub that shares
+ * panes. A row is dim with the reason on a read-only pane or a host that does not park panes.
  */
 @Composable
 fun PaneMenu(model: AppModel, key: String, onBeside: (() -> Unit)?, onClose: () -> Unit) {
@@ -54,6 +54,16 @@ fun PaneMenu(model: AppModel, key: String, onBeside: (() -> Unit)?, onClose: () 
             }
             item(if (parked) "☾ wake" else "☾ later", reason, "menu-later") { onClose(); model.later(key, !parked) }
             item("✉ mail", if (pane == null) "not listed" else null, "menu-mail") { onClose(); model.mailOpen = MailTarget(key, line = true) }
+            val shares = model.hubShares(key)
+            if (shares != false) {
+                val why = when {
+                    pane == null -> "not listed"
+                    !pane.writable -> "read only"
+                    shares == null -> "asking the hub"
+                    else -> null
+                }
+                item("⇗ share", why, "menu-share") { onClose(); model.shareOpen = key }
+            }
         }
     }
 }

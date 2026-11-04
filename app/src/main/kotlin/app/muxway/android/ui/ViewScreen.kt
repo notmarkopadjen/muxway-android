@@ -437,6 +437,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         if (model.inboxOpen) InboxSheet(model, now) { model.inboxOpen = false }
         if (model.messagesOpen) MessagesSheet(model) { model.messagesOpen = false }
         model.mailOpen?.let { MailSheet(model, it) { model.mailOpen = null } }
+        model.shareOpen?.let { ShareSheet(model, it) { model.shareOpen = null } }
         Rule()
         Box(Modifier.weight(1f)) {
             val held = if (ids != null) emptySet() else TileFit.held(tiles, focused, windowOf)
@@ -505,6 +506,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
                         onFile = { shown = it },
                         onChanges = { changesOf = tiles[i] },
                         onName = { namingPane = tiles[i] },
+                        onShare = { model.shareOpen = tiles[i] },
                         onPrompt = { focusedIndex = i; fieldFocus.request() },
                         ghost = if (i == index) ghost else null,
                         menu = headerMenu == tiles[i],
@@ -1055,7 +1057,7 @@ private fun PaneTile(
     model: AppModel, address: String, focused: Boolean, several: Boolean, grouped: Boolean, fitAsked: Boolean, shared: Boolean, siblings: Boolean,
     windowFit: Boolean, expected: WindowLayout.Size?, fitAgain: Int, now: Long, slackPx: Int, modifier: Modifier,
     onMeasured: (WindowLayout.Size) -> Unit, onDrop: (String, Tiles.Zone) -> Unit, onZoom: () -> Unit, onClose: () -> Unit, onCloseTile: () -> Unit,
-    onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onChanges: () -> Unit, onName: () -> Unit, onPrompt: () -> Unit, ghost: String? = null,
+    onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onChanges: () -> Unit, onName: () -> Unit, onShare: () -> Unit, onPrompt: () -> Unit, ghost: String? = null,
     menu: Boolean = false, onMenu: () -> Unit = {}, onMenuClose: () -> Unit = {}, onFocus: () -> Unit,
 ) {
     // Another tile of this window carries the fit: this one is held. With the window fitted as
@@ -1181,6 +1183,10 @@ private fun PaneTile(
                     else -> state.fitKey.isNotEmpty() && state.fitKey != "${pane.width}x${pane.height}"
                 }
                 Text(" ${pane.width}×${pane.height}${if (held) " held" else ""} ", color = if (held) p.alert else ink, maxLines = 1)
+            }
+            // The pane's live shares made by this token, counted and dim; a tap opens the share sheet.
+            if (pane != null && pane.shared > 0) {
+                Text(" ⇗ ${pane.shared} ", color = dimOf(status, ink), maxLines = 1, modifier = Modifier.clickable(onClick = onShare).testTag("share-count"))
             }
             // The repository's changes, counted, where the host shows one; a tap opens the sheet.
             state.changes?.let { c ->

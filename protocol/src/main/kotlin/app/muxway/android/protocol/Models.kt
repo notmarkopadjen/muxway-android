@@ -71,6 +71,8 @@ data class Pane(
     /** Whether the owner parked the pane for later, and when; the attention stays underneath. */
     val later: Boolean = false,
     val laterAt: Long = 0,
+    /** How many live read-only shares this token made of the pane; 0 for everyone else. */
+    val shared: Int = 0,
 ) {
     val writable get() = mode == "write"
 

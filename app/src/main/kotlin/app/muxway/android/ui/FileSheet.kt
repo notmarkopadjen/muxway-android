@@ -117,7 +117,7 @@ fun FileSheet(model: AppModel, shown: Shown, onOpen: (Shown) -> Unit = {}, onClo
                 if (f != null) Text(" ${Files.size(f.bytes.size.toLong())} ", color = p.dim, maxLines = 1)
                 if (views.size > 1) for (v in views) Btn(v, { side = v }, selected = side == v, modifier = Modifier.testTag("side:$v"))
                 if (f != null && text && markdown) Btn("plain", { rendered = !rendered }, selected = !rendered)
-                if (f != null) Btn("⤓", { model.told = save(context, shown.fileName, f) })
+                if (f != null) Btn("⤓", { model.told = saveDownload(context, shown.fileName, f) })
                 if (f != null && !text && !image && !pdf) Btn("open", { open(context, shown.fileName, f) })
                 Btn("×", onClose)
             }
@@ -283,7 +283,7 @@ private fun inline(text: String, p: Palette, onPath: (String) -> Unit): Annotate
 }
 
 /** The bytes into Downloads under the file's own name; what the notice says. */
-private fun save(context: android.content.Context, name: String, f: Api.Fetched): String = try {
+internal fun saveDownload(context: android.content.Context, name: String, f: Api.Fetched): String = try {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, name)
