@@ -47,7 +47,9 @@ last with <code>☾</code>, nothing calls for it, and a tap wakes it. Agents tha
 one group, like browser tabs, and a pane with unread mail from another
 agent says <code>✉ n</code>: a tap on the envelope opens the mail in
 full, with a line to answer it, never typed; <code>✉</code> in the header
-lists what panes said to panes. Nothing pops up for a message. Claude Code,
+lists what panes said to panes. Nothing pops up for a message. A pane
+is shared read-only from its menu: a link and a password, shown once,
+the link as a code to send. Claude Code,
 Codex, Gemini, Antigravity, OpenCode, Copilot and the rest are named,
 Codex and Antigravity with marks of their own.</td>
 </tr>
