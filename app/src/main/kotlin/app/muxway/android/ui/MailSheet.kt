@@ -173,9 +173,10 @@ fun MailSheet(model: AppModel, target: MailTarget, onClose: () -> Unit) {
 
 /**
  * The messages sheet, the browser's messages window: what panes said to panes, mail and typed,
- * on every hub, oldest at the top, two lines a row. A tap on a mail row opens the mail sheet of
- * the pane it went to with that mail framed; a tap on a typed row, and `⇆` on any, lays the two
- * panes side by side. Opening it clears the count in the header.
+ * on every hub, oldest at the top, a reply indented under what it answers and the text's first
+ * 200 characters wrapping under the names. A tap on a mail row opens the mail sheet of the pane
+ * it went to with that mail framed; a tap on a typed row, and `⇆` on any, lays the two panes
+ * side by side. Opening it clears the count in the header.
  */
 @Composable
 fun MessagesSheet(model: AppModel, onClose: () -> Unit) {
@@ -213,7 +214,7 @@ fun MessagesSheet(model: AppModel, onClose: () -> Unit) {
                         val beside = { onClose(); model.openBeside(e) }
                         // A mail is read where it went; a typed write has nothing to read, so it lays the two beside.
                         val open = { if (e.kind == "mail" && e.id > 0) { onClose(); model.mailOpen = MailTarget(Keys.make(e.hub, e.to.address), e.id) } else beside() }
-                        Column(Modifier.fillMaxWidth().clickable(onClick = open).padding(horizontal = 4.dp, vertical = 6.dp).testTag("talk-row:${e.hub}:${e.seq}")) {
+                        Column(Modifier.fillMaxWidth().clickable(onClick = open).padding(start = if (e.replyTo > 0) 20.dp else 4.dp, end = 4.dp, top = 6.dp, bottom = 6.dp).testTag("talk-row:${e.hub}:${e.seq}")) {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 Text(if (e.kind == "mail") "✉ " else "⇄ ", color = p.talk, maxLines = 1)
                                 Text(from, color = p.talk, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
@@ -222,7 +223,7 @@ fun MessagesSheet(model: AppModel, onClose: () -> Unit) {
                                 Text(" ${Inbox.ago(e.at, now)} · ${e.actor}", color = p.dim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                                 Text(" ⇆ ", color = p.ink, maxLines = 1, modifier = Modifier.border(1.dp, p.dim).clickable(onClick = beside).testTag("talk-beside"))
                             }
-                            Text("  " + Feed.excerpt(e), color = p.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text("  " + Feed.shown(e), color = p.ink)
                         }
                         Rule()
                     }
