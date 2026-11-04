@@ -234,11 +234,35 @@ owner's phone or the emulator.
 
 ## Review (after implementation)
 
-- [ ] Diff matches the plan, deviations explained here
-- [ ] Security rules (AGENTS.md section 2) hold
-- [ ] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
-- [ ] Docs and diagrams updated
+- [x] Diff matches the plan. Deviations: the core's guideline change
+  (§1.6 *share the pane read-only*, Android column) is committed on the
+  branch `guideline-android-share` (bafdfd3, from origin/main 1b2a71a)
+  in a worktree of the core checkout on the build machine and waits for
+  the owner to push it, since this session may not push to the core;
+  the hub is asked for `GET /v1/shares` with each listing until it has
+  answered either way, not only with the first probes, so a hub that
+  was offline at the first listing is asked again; the sheet's note
+  says the observer sees the screen and the web links, since the phone
+  relays no *showing*.
+- [x] Security rules (AGENTS.md section 2) hold: the write grant on a
+  writable pane is the hub's to check and the phone offers the row only
+  where it holds, the password comes from `SecureRandom` or the owner
+  and lives in the sheet's state alone until *done*, the clip is flagged
+  sensitive, the code and the image carry the link alone, the lifetime
+  and the password are checked before they leave the phone, the
+  answer's link and id are bounded on parse, and nothing is logged or
+  stored.
+- [x] Privacy check passed: the secret scan and the deny-list grep over
+  the branch's commits are clean, and the diff read.
+- [x] Docs and diagrams updated: the share page with its sequence
+  diagram, the pane view, the architecture table and diagram, the
+  testing page, the README.
 
 ## Test run
 
-(filled in after the run)
+The full suite without the UI run, 319 tests, 0 failed, at `b5f5e38`
+against the core's `1b2a71a`:
+https://github.com/notmarkopadjen/muxway-android/issues/83
+(`20261104-142010-b5f5e38`). The UI step
+`theShareSheetMakesALinkOnceCountsItOnTheHeaderAndRevokesIt` waits for
+a device.
