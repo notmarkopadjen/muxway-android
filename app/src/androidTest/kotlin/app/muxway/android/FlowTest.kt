@@ -651,6 +651,44 @@ class FlowTest {
     }
 
     @Test
+    fun thePartnerIsLaidBesideWithTheChainFitIsPerTileAndHelpListsTheGestures() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        // The seeded mail made the first pane and the asking one a group.
+        await("work/0.0").performClick()
+        await("$ ")
+        rule.onNodeWithTag("header").performTouchInput { longClick() }
+        rule.onNodeWithTag("pane-menu").assertExists()
+        shot("pane-menu-partner")
+        rule.onNodeWithTag("menu-partner:alice-laptop/ask/0.0").performClick()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 2 }
+        // Two grouped tiles side by side: the chain sits on the divider between them.
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("divider-chain").fetchSemanticsNodes().isNotEmpty() }
+        shot("beside-chain")
+        // Fit per tile: ⤢ held turns the focused tile's fit off and its size leaves the header; the other keeps its size.
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("size").fetchSemanticsNodes().size == 2 }
+        rule.onNodeWithText("⤢").performTouchInput { longClick() }
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("size").fetchSemanticsNodes().size == 1 }
+        shot("fit-per-tile")
+        rule.onNodeWithText("⤢").performClick()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("size").fetchSemanticsNodes().size == 2 }
+        // Across the width from the header's menu: the focused tile takes the whole width.
+        val before = rule.onAllNodesWithTag("header").fetchSemanticsNodes()[0].boundsInWindow.width
+        rule.onAllNodesWithTag("header")[0].performTouchInput { longClick() }
+        rule.onNodeWithTag("menu-across-width").performClick()
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("header").fetchSemanticsNodes()[0].boundsInWindow.width > before * 1.5f }
+        shot("across")
+        // help from Settings lists the gestures.
+        rule.onNodeWithText("‹").performClick()
+        await("work/0.0")
+        rule.onNodeWithText("settings").performClick()
+        await("save settings")
+        rule.onNodeWithTag("help").performClick()
+        rule.onNodeWithTag("help-sheet").assertExists()
+        await("lay the pane a tile talks with beside it")
+        shot("help-sheet")
+    }
+
+    @Test
     fun theGhostWordIsOffBySetting() {
         SettingsStore(context).save(SettingsStore(context).load().copy(suggest = false))
         scenario = ActivityScenario.launch(MainActivity::class.java)

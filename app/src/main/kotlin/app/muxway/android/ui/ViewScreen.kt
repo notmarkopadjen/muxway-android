@@ -1228,7 +1228,7 @@ private fun PaneTile(
                     windowFit -> expected != null && (pane.width != expected.cols || pane.height != expected.rows)
                     else -> state.fitKey.isNotEmpty() && state.fitKey != "${pane.width}x${pane.height}"
                 }
-                Text(" ${pane.width}×${pane.height}${if (held) " held" else ""} ", color = if (held) p.alert else ink, maxLines = 1)
+                Text(" ${pane.width}×${pane.height}${if (held) " held" else ""} ", color = if (held) p.alert else ink, maxLines = 1, modifier = Modifier.testTag("size"))
             }
             // The pane's live shares made by this token, counted and dim; a tap opens the share sheet.
             if (pane != null && pane.shared > 0) {
