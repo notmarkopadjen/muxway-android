@@ -1096,7 +1096,7 @@ class E2ETest {
         // Empty takes the name away.
         assertEquals("", api.rename(address, "").alias)
         waitFor("unnamed") { api.panes().single().alias.isEmpty() }
-        assertEquals("bash", api.panes().single().tab)
+        assertEquals("bash · test-pane", api.panes().single().tab)
     }
 
     @Test

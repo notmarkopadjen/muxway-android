@@ -193,10 +193,20 @@ owner's phone or the emulator, as the last plans' did.
 
 ## Review (after implementation)
 
-- [ ] Diff matches the plan, deviations explained here
-- [ ] Security rules (AGENTS.md section 2) hold
-- [ ] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
-- [ ] Docs and diagrams updated
+- [x] Diff matches the plan. Deviations: the core's guideline change
+  (§1.1, §1.4, §1.6) is committed on the branch `guideline-android-names`
+  of the core checkout on the build machine and waits for the owner to
+  push it, since this session may not push to the core; `JsonTest`'s
+  older expectation that a pane with the alias `logs` is named `Claude`
+  changed with the rule, as the plan intends.
+- [x] Security rules (AGENTS.md section 2) hold: the write grant and a
+  writable pane are the hub's to check, the alias is matched on the
+  phone and again on the hub and the agent, the folder is shown only as
+  the hub sent it, nothing is logged.
+- [x] Privacy check passed: the deny-list grep over the diff is clean,
+  `scripts/prepush-check.sh` before the push, and the diff read.
+- [x] Docs and diagrams updated: the feature page, pane-view, panes,
+  lenses, the architecture table, the README's list.
 
 ## Test run
 
