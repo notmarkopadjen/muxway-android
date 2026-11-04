@@ -101,7 +101,8 @@ the tile's header shows the kind under the word, dimmed
   the inbox, the add menu, a selection or a `muxway://open` link does the
   same, for a writable pane on a host that parks. Typing into it, an
   answer and a mail wake it on the host, as they clear the attention. A
-  reader sees the mark and cannot move it.
+  reader sees the mark and cannot move it. A swipe across the pane view
+  skips parked panes, so it never wakes one by passing through.
 
 ```mermaid
 stateDiagram-v2

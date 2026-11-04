@@ -273,7 +273,8 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     val now = ticker()
-    val order = model.panes.map { it.key }.ifEmpty { addresses }
+    // The swipe's order: the listing without the parked panes, which a swipe would only wake.
+    val order = model.panes.filter { !it.later || it.key == focused }.map { it.key }.ifEmpty { addresses }
     DisposableEffect(Unit) { onDispose { model.releaseFits() } }
     // The `+` menu after the tabs, and the session dialog it may open; the pane menu under a tab
     // or a header held and let go in place, by the pane's key.
@@ -391,8 +392,8 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         model.open(Screen.View(model.panes.map { it.key }.filter { it == focused || it in mates }))
     }
 
-    // With several tiles the focus moves to the next one; with one, the strip's neighbour takes
-    // the tile. Either comes round at the end, as ] and [ do in the browser.
+    // With several tiles the focus moves to the next one; with one, the strip's next awake pane
+    // takes the tile. Either comes round at the end, as ] and [ do in the browser.
     fun neighbour(step: Int) {
         if (tiles.size > 1) {
             focusedIndex = (index + step + tiles.size) % tiles.size

@@ -75,7 +75,8 @@ focused pane.
 - A **swipe** left or right across the page moves the focus to the next
   or previous tile, or with one tile open swaps the strip's next or
   previous pane into it, coming round at either end as `]` and `[` do
-  in the browser. A tab **held and let go in place** (the drag's long
+  in the browser; the panes parked for later are skipped, since a swipe
+  that landed on one would only wake it. A tab **held and let go in place** (the drag's long
   press without a move) opens the **pane menu**: *open
   beside* opens its pane beside the focused one, as the browser's
   Shift+click does; *☾ later* parks the pane and *☾ wake* wakes it (dim,
