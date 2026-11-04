@@ -2,8 +2,11 @@ package app.muxway.android
 
 import android.app.Application
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.net.Uri
+import android.os.Build
+import android.os.PersistableBundle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -35,6 +38,7 @@ import app.muxway.android.protocol.Listing
 import app.muxway.android.protocol.Diff
 import app.muxway.android.protocol.Pane
 import app.muxway.android.protocol.Setup
+import app.muxway.android.protocol.Share
 import app.muxway.android.protocol.TalkEntry
 import app.muxway.android.protocol.Wheel
 import app.muxway.android.protocol.WheelQueue
@@ -167,6 +171,10 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         /** What panes said to panes on this hub, the last hundred entries, oldest first. */
         var talk by mutableStateOf(listOf<TalkEntry>())
 
+        /** Whether the hub shares panes: null until asked, false on a hub older than shares; and the token's live shares. */
+        var sharing by mutableStateOf<Boolean?>(null)
+        var shares by mutableStateOf(listOf<Share>())
+
         val id get() = hub.id
         val name get() = hub.name
 
@@ -188,6 +196,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             panes = emptyList()
             hosts = emptyList()
             talk = emptyList()
+            sharing = null
+            shares = emptyList()
             listError = null
             cursor = null
         }
@@ -330,6 +340,89 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Which pane's share sheet is open, by key. */
+    var shareOpen by mutableStateOf<String?>(null)
+
+    /** Whether the pane's hub shares panes; null until it answered, false on a hub older than shares. */
+    fun hubShares(key: String): Boolean? = connections.firstOrNull { it.id == Keys.hub(key) }?.sharing
+
+    /** The token's live shares on the hub, asked while the sheet is open and after each change. */
+    suspend fun fetchShares(hub: String) {
+        connections.firstOrNull { it.id == hub }?.let { fetchShares(it) }
+    }
+
+    private suspend fun fetchShares(c: Conn) {
+        try {
+            c.shares = withContext(Dispatchers.IO) { c.api().shares() }
+            c.sharing = true
+        } catch (e: ApiException) {
+            if (e.code == "unauthorized") tokenRefused(c)
+            if (e.code == "not_found") c.sharing = false
+        }
+    }
+
+    /** The share sheet's state: a create on its way, and the hub's refusal of the last one. */
+    var shareBusy by mutableStateOf(false)
+        private set
+    var shareError by mutableStateOf<String?>(null)
+
+    /**
+     * Shares the pane read-only for [ttl] seconds behind [password]. The answer, with its password
+     * this once, goes to the sheet alone, which forgets it with done; the hub keeps only the hash.
+     */
+    fun share(key: String, ttl: Int, password: String, made: (Share) -> Unit) {
+        if (shareBusy) return
+        val c = conn(key)
+        viewModelScope.launch {
+            shareBusy = true
+            shareError = null
+            try {
+                made(withContext(Dispatchers.IO) { api(key).share(Keys.address(key), ttl, password) })
+                fetchShares(c)
+                refreshList(c)
+            } catch (e: ApiException) {
+                shareError = when (e.code) {
+                    "too_many" -> "twenty shares already: revoke one first"
+                    "bad_input" -> "the password needs 8 to 64 characters"
+                    "read_only" -> "only a writer of the pane may share it"
+                    else -> e.message
+                }
+                if (e.code == "unauthorized") tokenRefused(c)
+            } catch (e: IllegalArgumentException) {
+                shareError = "the password needs 8 to 64 characters"
+            } finally {
+                shareBusy = false
+            }
+        }
+    }
+
+    /** Ends a share, and every observer's session with it; the list and the listing follow. */
+    fun revokeShare(key: String, id: String) {
+        val c = conn(key)
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { api(key).revokeShare(id) }
+            } catch (e: ApiException) {
+                shareError = e.message
+                if (e.code == "unauthorized") tokenRefused(c)
+            } catch (e: IllegalArgumentException) {
+                return@launch
+            }
+            fetchShares(c)
+            refreshList(c)
+        }
+    }
+
+    /** Text onto the clipboard; a [sensitive] clip is not previewed by the system. */
+    fun copyText(text: String, sensitive: Boolean) {
+        val clipboard = getApplication<Application>().getSystemService(ClipboardManager::class.java)
+        val clip = ClipData.newPlainText("muxway", text)
+        if (sensitive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            clip.description.extras = PersistableBundle().apply { putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true) }
+        }
+        clipboard?.setPrimaryClip(clip)
+    }
+
     /** The panes of a feed entry side by side: both, or the one a client wrote to; only panes the listing has, each woken. */
     fun openBeside(e: TalkEntry) {
         val keys = Feed.panesOf(e).map { Keys.make(e.hub, it) }.filter { k -> panes.any { it.key == k } }
@@ -387,6 +480,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         inboxOpen = false
         messagesOpen = false
         mailOpen = null
+        shareOpen = null
         if (s is Screen.Panes) { selected.clear(); refreshList() }
         if (s !is Screen.Share) sharing = emptyList()
         screen = s
@@ -484,6 +578,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         for (k in inbox.keys.toList()) if (Keys.hub(k) == id) { inbox.remove(k); inboxAt.remove(k) }
         for (k in mailboxes.keys.toList()) if (Keys.hub(k) == id) { mailboxes.remove(k); mailboxErrors.remove(k) }
         if (mailOpen?.let { Keys.hub(it.key) } == id) mailOpen = null
+        if (shareOpen?.let { Keys.hub(it) } == id) shareOpen = null
         selected.removeAll { Keys.hub(it) == id }
         (screen as? Screen.View)?.let { v ->
             val rest = v.addresses.filter { Keys.hub(it) != id }
@@ -570,6 +665,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 c.listError = null
                 // The feed comes with the listing, so the messages count is as live as the list.
                 fetchTalk(c)
+                // Whether the hub shares panes, until it answered either way.
+                if (c.sharing == null) fetchShares(c)
                 if (!c.probed) {
                     c.transcriber = withContext(Dispatchers.IO) { c.api().hasTranscriber() }
                     c.admin = withContext(Dispatchers.IO) { c.api().isAdmin() }
