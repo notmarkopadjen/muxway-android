@@ -44,8 +44,11 @@ grouped by hub (with more than one) and by host.
   notification. A pane whose process holds unread
   [mail](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/mail.md)
   carries `✉ n` after its name, in the hue (the row's ink when the row is
-  selected). The messages themselves, and mailing a pane, are not on the
-  phone yet.
+  selected); a tap on the envelope opens the pane's [mail
+  sheet](mail.md), the rest of the row opens the pane. `✉` beside `⚑ n`
+  in the header opens the [messages sheet](mail.md#the-messages-sheet),
+  what panes said to panes on every hub, with the count of entries not
+  looked at yet.
 - A pane with a pending notification shows `! <kind>` in the attention
   colour: `question`, `permission`, `idle` or `done`, see the core's
   [notifications](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/notifications.md).

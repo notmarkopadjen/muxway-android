@@ -21,7 +21,8 @@ first". The inbox is that list, the browser's inbox window as a sheet.
 ```
 
 - **The count.** While anything waits, `⚑ n` sits in the header of the
-  pane list and of the pane view, before *refresh* and `⚙`. It counts the
+  pane list and of the pane view, before *refresh* and `⚙` (and before
+  `✉`, the [messages sheet](mail.md#the-messages-sheet)'s). It counts the
   panes with attention, and the panes parked for later, in the listings
   the app already holds, for every hub, so it costs no request of its
   own; it is gone when nothing waits. A tap opens the sheet.

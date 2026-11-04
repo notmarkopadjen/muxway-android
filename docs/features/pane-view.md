@@ -34,7 +34,8 @@ focused pane.
   talked lately, see [the list](panes.md)) sit side by side inside one
   frame in the talk hue, pulled next to the group's first tab; `✉ n`
   after a tab's name while the pane's process has unread mail, in the
-  hue on a plain tab and in the tab's ink on a painted one. The panes
+  hue on a plain tab and in the tab's ink on a painted one, and a tap on
+  the envelope alone opens the pane's [mail sheet](mail.md). The panes
   parked for later (`☾`, see [notifications](notifications.md#later))
   come after every other, in the order they would otherwise have and
   outside any frame; a tap on a parked tab focuses it and wakes it, and
@@ -81,7 +82,8 @@ focused pane.
   beside* opens its pane beside the focused one, as the browser's
   Shift+click does; *☾ later* parks the pane and *☾ wake* wakes it (dim,
   with the reason, on a read-only pane or a host without `later`; see
-  [notifications](notifications.md#later)). A tile's header held and let
+  [notifications](notifications.md#later)); *✉ mail* opens the pane's
+  [mail sheet](mail.md) with its line focused. A tile's header held and let
   go in place opens the same menu without *open beside*. A tab held and **moved**
   drags as a header does, and dropped on a tile or on the bar between two it lays
   its pane out there (see the tree of splits below): with one tile open,
@@ -127,7 +129,8 @@ focused pane.
   tab, with the pane's name (the alias when it has one; the folder it
   works in and its status after it in italics, dimmer; see [pane
   names](pane-names.md)), its mail
-  count `✉ n` when it has one, `read-only` when the token cannot write
+  count `✉ n` when it has one (a tap on it opens the [mail
+  sheet](mail.md)), `read-only` when the token cannot write
   (nothing for write), the
   lens's word (`! permission`, `⟳ working`; `☾ later` with what waits
   underneath dimmed after it, for a parked pane, whose name in the
