@@ -1019,7 +1019,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     suspend fun fetchListing(key: String) {
         val v = view(key)
         val cwd = cwdOf(key)
-        if (cwd == null) { v.listing = null; v.listingCwd = null; v.listingEtag = null; return }
+        if (cwd == null) { dropListing(key); return }
         if (cwd != v.listingCwd) { v.listingEtag = null; v.noDirUntil = 0L }
         if (System.currentTimeMillis() < v.noDirUntil) return
         try {
@@ -1035,6 +1035,12 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 v.noDirUntil = System.currentTimeMillis() + 60_000
             }
         }
+    }
+
+    /** Forgets the pane's listing: it is no shell, or its directory is gone. */
+    fun dropListing(key: String) {
+        val v = view(key)
+        v.listing = null; v.listingCwd = null; v.listingEtag = null
     }
 
     /** A word for the person in the pane view that is not an error: what was copied, what was saved. */

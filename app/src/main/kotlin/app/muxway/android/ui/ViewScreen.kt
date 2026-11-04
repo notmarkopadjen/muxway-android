@@ -1092,7 +1092,7 @@ private fun PaneTile(
     // are links: every two seconds when focused, five otherwise, and at once when it changes.
     val cwd = if (model.settings.names && pane != null && Commands.isShell(pane.command) && model.hostLists(address)) model.cwdOf(address) else null
     LaunchedEffect(address, cwd, focused) {
-        if (cwd == null) { model.fetchListing(address); return@LaunchedEffect }
+        if (cwd == null) { model.dropListing(address); return@LaunchedEffect }
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) {
                 model.fetchListing(address)
