@@ -40,7 +40,7 @@ The lens answers one of four states:
 
 | State | When | Glyph |
 |---|---|---|
-| later | the listing carries `later`: the owner parked the pane (see [notifications](notifications.md#later)); wins over the other three; what waits underneath shows after the word in the header, dimmed (`☾ later · ! permission`) | `☾`, plain: no inversion, no pulse, no glow, no ring |
+| later | the listing carries `later`: the owner parked the pane (see [notifications](notifications.md#later)); wins over the other three; what waits underneath shows after the word in the header, dimmed (`☾ later · ! permission`) | `☾`, plain: no inversion, no pulse, no glow, no ring; the name in the tile's header in italics |
 | waiting for you | the listing carries a notification: `permission`, `question`, `idle`, `done`; except an `idle` one on an agent's pane whose screen moved in the last 10 s, which is the agent's own background work and counts as working | `!` `?` `z` `✓`, the theme's ink inverted and pulsing; a waiting tile also glows in the ink, a shadow outside its box that moves no neighbour |
 | working | the last event the hub sent for the pane was `working` (the agent's hook on a submitted prompt, or the host's watcher), or the app is reading the pane and its screen changed in the last 10 s by itself | a turning ring, drawn, not typed, so it is the same in every font; still with effects off; the tab and header stay plain, the ring and the word carry the state |
 | quiet | anything else | nothing |

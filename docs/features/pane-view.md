@@ -130,7 +130,8 @@ focused pane.
   count `✉ n` when it has one, `read-only` when the token cannot write
   (nothing for write), the
   lens's word (`! permission`, `⟳ working`; `☾ later` with what waits
-  underneath dimmed after it, for a parked pane) and, with fit on, the size;
+  underneath dimmed after it, for a parked pane, whose name in the
+  header is in italics) and, with fit on, the size;
   the focused one has the thick border and bold name; a waiting tile
   glows in the ink around its box; a tile of a group that is not focused
   has its edge in the talk hue, thin and dimmed. A question asked with fixed answers

@@ -12,8 +12,8 @@ android {
         applicationId = "app.muxway.android"
         minSdk = 26
         targetSdk = 35
-        versionCode = 48
-        versionName = "0.19.1"
+        versionCode = 49
+        versionName = "0.19.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

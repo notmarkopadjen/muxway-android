@@ -76,8 +76,9 @@ owner's own mark on a pane, kept by the host's agent beside the pane's
 attention, so every client sees it (the core's
 [notifications](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/notifications.md#later)).
 On the phone a parked pane is the lens's fourth state, [later](lenses.md):
-`☾` and the word, painted plain; its tab goes after every other in the
-strip, outside its group's frame; the pane list keeps its row in place
+`☾` and the word, painted plain, the name in the tile's header in
+italics; its tab goes after every other in the strip, outside its
+group's frame; the pane list keeps its row in place
 with the mark; the [inbox](inbox.md) lists it last and counts it with the
 rest. Nothing calls for it: no notification is posted, the watch shows a
 quiet row with the moon, the face and the complications count it as done.

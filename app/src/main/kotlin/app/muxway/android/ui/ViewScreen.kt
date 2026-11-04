@@ -1153,7 +1153,7 @@ private fun PaneTile(
                     val name = Modifier.weight(1f, fill = false).pointerInput(address, focused) {
                         detectTapGestures(onDoubleTap = { onZoom() }, onTap = { if (focused) onName() else onFocus() })
                     }.testTag("name")
-                    PaneName(pane, ink, dimOf(status, ink), bold = several && focused, mail = mailOf(status, ink), folder = Lens.folder(pane), modifier = name)
+                    PaneName(pane, ink, dimOf(status, ink), bold = several && focused, mail = mailOf(status, ink), folder = Lens.folder(pane), italic = status == Lens.Status.LATER, modifier = name)
                     if (!pane.writable) Text(" · read-only", color = ink, maxLines = 1, style = LocalTextStyle.current.copy(shadow = null))
                 } else Text(address, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(shadow = null))
             }
