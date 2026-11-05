@@ -4,7 +4,8 @@
 > [#92](https://github.com/notmarkopadjen/muxway-android/issues/92),
 > parity with the core's PR 296 (`docs/plans/2026-11-05-relative-paths-find-their-file.md`
 > and `docs/features/preview.md` there, merged 2026-11-05 at `7f094d3`).
-> Waits for the owner's approval in the console.
+> Approved and implemented the same day. The diff is the owner's to
+> review in the pull request.
 
 ## 1. Goal
 
@@ -141,11 +142,34 @@ owner's phone or the emulator; `scripts/ui-tests.sh` gains the worktree.
 
 ## Review (after implementation)
 
-- [ ] Diff matches the plan, deviations explained here
-- [ ] Security rules (AGENTS.md section 2) hold
-- [ ] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
-- [ ] Docs and diagrams updated
+- [x] Diff matches the plan. Deviations: the UI step opens `src/a.go`
+  as the pane's own file (a printed path, as the found one is) rather
+  than `notes.txt`, which is a name of the listing and not a path; the
+  test relay of the end-to-end harness passes `Muxway-File` through, as
+  it passes `ETag`, since a reverse proxy would and the first run showed
+  it did not; the core's guideline change (§1.6 *see a file printed in
+  a pane*, Android column) is committed on the branch
+  `guideline-android-found` (a4d5eae, from origin/main 7f094d3) in a
+  worktree of the core checkout on the build machine and waits for the
+  owner to push it, since this session may not push to the core.
+- [x] Security rules (AGENTS.md section 2) hold: the request is the
+  one the sheet sent before, the grants, the roots, the secret names and
+  the rate stay the hub's and the agent's; the header is cleaned of
+  control characters and escapes, bounded at 1024 characters, shown as
+  text and never used as a path; nothing new is logged or stored.
+- [x] Privacy check passed: the secret scan and the deny-list grep over
+  the branch's commits are clean, and the diff read; the test
+  repositories live in a temporary directory and name `alice`.
+- [x] Docs and diagrams updated: the pane view page, the architecture
+  table's new row, the testing page, the plan's sequence diagram, the
+  guideline in the core.
 
 ## Test run
 
-To come.
+The full suite without the UI run, 331 tests, 0 failed, at `e20f233`
+against the core's `7f094d3`
+(https://github.com/notmarkopadjen/muxway-android/issues/93,
+`20261105-160917-e20f233`); the secret search found nothing in 187
+logs. The UI step
+`aPrintedPathOnlyAWorktreeHoldsOpensAndTheSheetSaysWhereItWasFound`
+waits for a device.
