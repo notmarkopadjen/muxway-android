@@ -33,6 +33,9 @@ printf 'package a\n' > "$tmp/work/repo/src/a.go"
 git -C "$tmp/work/repo" init -q -b main && git -C "$tmp/work/repo" add . && git -C "$tmp/work/repo" commit -q -m first
 printf 'package a\n\nfunc A() {}\n' > "$tmp/work/repo/src/a.go"
 printf 'loose\n' > "$tmp/work/repo/notes.txt"
+# A worktree beside the checkout with a file of its own, for the file sheet's found row.
+git -C "$tmp/work/repo" worktree add -q -b side "$tmp/work/side"
+mkdir -p "$tmp/work/side/docs" && printf '# plan from the side\n' > "$tmp/work/side/docs/side.md"
 tmux -L "$tmuxname" -f /dev/null new-session -d -s work -n shell -x 80 -y 24 -c "$tmp/work/repo" \
     "env -i PATH=/usr/bin:/bin TERM=xterm LANG=C.UTF-8 PS1='$ ' bash --norc --noprofile"
 "$bin" hub serve --dir "$tmp/hub" --listen "127.0.0.1:$port" --public-url "http://127.0.0.1:$port" >> "$logs/hub.log" 2>&1 &

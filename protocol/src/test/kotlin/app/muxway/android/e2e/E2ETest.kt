@@ -1477,6 +1477,110 @@ class E2ETest {
         waitFor("one pane again, the last") { api.panes().singleOrNull()?.last == true }
     }
 
+    /**
+     * A repository under the root with two worktrees beside it and one outside, as the core's own test lays
+     * them out: `main` holds `docs/top.md` and `docs/both.md`, `feature` the plans and its own `both.md` and a
+     * secret, `fix` an older plan b, `outside` a file no root covers. The pane's shell starts in `main`.
+     */
+    private fun repoWithWorktrees(): Triple<File, File, File> {
+        val base = java.nio.file.Files.createTempDirectory("mxw-wt-").toFile()
+        val root = File(base, "work").also { it.mkdirs() }
+        val main = File(root, "main").also { it.mkdirs() }
+        fun write(p: String, s: String) { File(base, p).also { it.parentFile?.mkdirs() }.writeText(s) }
+        write("work/main/README", "a repository\n")
+        git(main, "init", "-q", "-b", "main")
+        git(main, "add", ".")
+        git(main, "commit", "-q", "-m", "first")
+        git(main, "worktree", "add", "-q", "-b", "feature", File(root, "feature").path)
+        git(main, "worktree", "add", "-q", "-b", "fix", File(root, "fix").path)
+        git(main, "worktree", "add", "-q", "-b", "outside", File(base, "outside").path)
+        write("work/main/docs/top.md", "top of main\n")
+        write("work/main/docs/both.md", "both, main's copy\n")
+        File(main, "web").mkdirs()
+        write("work/feature/docs/plans/a.md", "plan a, from feature\n")
+        write("work/feature/docs/plans/b.md", "plan b, from feature\n")
+        write("work/feature/docs/both.md", "both, feature's copy\n")
+        write("work/feature/key.pem", "not-a-key")
+        write("work/fix/docs/plans/b.md", "plan b, from fix\n")
+        write("outside/docs/out.md", "outside\n")
+        File(root, "feature/docs/plans/b.md").setLastModified(System.currentTimeMillis() - 3_600_000)
+        cleanups.add { base.deleteRecursively() }
+        return Triple(base, root, main)
+    }
+
+    /** A preview asked raw: the status and the `Muxway-File` header, so a refusal is seen to carry none. */
+    private fun rawPreview(tok: String, address: String, path: String): Pair<Int, String?> {
+        val c = java.net.URL("${core.url}/v1/panes/$address/preview?path=${java.net.URLEncoder.encode(path, "UTF-8")}").openConnection() as java.net.HttpURLConnection
+        c.setRequestProperty("Authorization", "Bearer $tok")
+        return c.responseCode to c.getHeaderField("Muxway-File")
+    }
+
+    private fun sameFile(expected: File, found: String) = assertEquals(expected.canonicalPath, File(found).canonicalPath)
+
+    @Test
+    fun s41_theFoundFileIsNamedToAWriterAloneAndNeverFromOutsideTheRoots() {
+        val (_, root, main) = repoWithWorktrees()
+        val (api, tok) = setup(preview = root)
+        val address = "$HOST/work/0.0"
+        core.cdTo("work:0.0", main)
+        // A reader is refused before any lookup; so is a writer of a read-only pane.
+        val reader = Api(relay.url, core.token(write = null), "muxway-android-e2e")
+        assertEquals("read_only", assertThrows(ApiException::class.java) { reader.previewFile(address, "docs/plans/a.md") }.code)
+        core.tmux("split-window", "-t", "work:0", "-v", "-c", main.path)
+        core.cli("expose", "--tmux-name", core.tmux, "-t", "work:0.1")
+        waitFor("two panes listed") { api.panes().size == 2 }
+        assertEquals("read_only", assertThrows(ApiException::class.java) { api.previewFile("$HOST/work/0.1", "docs/plans/a.md") }.code)
+        // One refusal for a worktree outside the roots, a secret only a worktree has, git's own file and a file nowhere; none names a path.
+        for (path in listOf("docs/out.md", "key.pem", ".git/worktrees/feature/gitdir", "docs/plans/c.md")) {
+            Thread.sleep(520)
+            assertEquals(path, "not_found", assertThrows(ApiException::class.java) { api.previewFile(address, path) }.code)
+            Thread.sleep(520)
+            val (status, found) = rawPreview(tok, address, path)
+            assertEquals(path, 404, status)
+            assertNull(path, found)
+        }
+        // The worktree's own file is still served to the writer, and the header is the path on the host.
+        Thread.sleep(520)
+        val (status, found) = rawPreview(tok, address, "docs/plans/a.md")
+        assertEquals(200, status)
+        sameFile(File(root, "feature/docs/plans/a.md"), found!!)
+        // The logs name the file, never its content.
+        val logs = Env.logs(name.methodName)
+        for (f in listOf("hub.log", "agent.log")) {
+            val text = File(logs, f).takeIf { it.exists() }?.readText() ?: ""
+            assertFalse(f, text.contains("plan a, from") || text.contains("not-a-key"))
+        }
+    }
+
+    @Test
+    fun f41_aRelativePathFindsItsFileUpTheTreeOrInAnotherWorktreeAndSaysWhere() {
+        val (_, root, main) = repoWithWorktrees()
+        val (api, _) = setup(preview = root)
+        val address = "$HOST/work/0.0"
+        core.cdTo("work:0.0", main)
+        // Only a worktree has it: its bytes, and where.
+        val a = api.previewFile(address, "docs/plans/a.md")
+        assertEquals("text/plain", a.type)
+        assertEquals("plan a, from feature\n", String(a.bytes, Charsets.UTF_8))
+        sameFile(File(root, "feature/docs/plans/a.md"), a.found)
+        // The pane's own copy wins over a worktree's, and says nothing.
+        Thread.sleep(520)
+        val both = api.previewFile(address, "docs/both.md")
+        assertEquals("both, main's copy\n", String(both.bytes, Charsets.UTF_8))
+        assertEquals("", both.found)
+        // Two worktrees have it: the newest copy.
+        Thread.sleep(520)
+        val b = api.previewFile(address, "docs/plans/b.md")
+        assertEquals("plan b, from fix\n", String(b.bytes, Charsets.UTF_8))
+        sameFile(File(root, "fix/docs/plans/b.md"), b.found)
+        // From a subdirectory, up the tree to the repository's top.
+        core.cdTo("work:0.0", File(main, "web"))
+        Thread.sleep(520)
+        val top = api.previewFile(address, "docs/top.md")
+        assertEquals("top of main\n", String(top.bytes, Charsets.UTF_8))
+        sameFile(File(main, "docs/top.md"), top.found)
+    }
+
     @Test
     fun z99_noSecretInAnyLogOfTheRun() {
         val logs = File(Env.runDir, "logs")

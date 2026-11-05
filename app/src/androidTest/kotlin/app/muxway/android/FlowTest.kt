@@ -587,6 +587,34 @@ class FlowTest {
         rule.onAllNodes(hasText("cat ", substring = true)).assertCountEquals(0)
     }
 
+    @Test
+    fun aPrintedPathOnlyAWorktreeHoldsOpensAndTheSheetSaysWhereItWasFound() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        // From the repository's top, whatever an earlier step left the shell in.
+        rule.onNode(hasSetTextAction()).performTextInput("cd \"$(git rev-parse --show-toplevel)\" && clear")
+        rule.onNodeWithText("⏎").performClick()
+        await("$ ")
+        rule.onNode(hasSetTextAction()).performTextInput("echo docs/side.md")
+        rule.onNodeWithText("⏎").performClick()
+        await("docs/side.md")
+        // The file lives only in the worktree beside the checkout: the host finds it there and the sheet says so.
+        tapCell("docs/side.md", 1)
+        await("plan from the side")
+        rule.onNodeWithTag("found").assert(hasText("/side/docs/side.md", substring = true))
+        shot("file-found")
+        Espresso.pressBack()
+        // The pane's own file opens as before, with no such row.
+        rule.onNode(hasSetTextAction()).performTextInput("echo src/a.go")
+        rule.onNodeWithText("⏎").performClick()
+        await("src/a.go")
+        tapCell("src/a.go", 1)
+        await("func A()")
+        rule.onAllNodesWithTag("found").assertCountEquals(0)
+        Espresso.pressBack()
+    }
+
     /** A pixel of a tab's ground: just left of its content, inside its padding. */
     private fun groundOf(tag: String): Int {
         val b = rule.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot

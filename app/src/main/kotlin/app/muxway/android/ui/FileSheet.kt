@@ -121,6 +121,10 @@ fun FileSheet(model: AppModel, shown: Shown, onOpen: (Shown) -> Unit = {}, onClo
                 if (f != null && !text && !image && !pdf) Btn("open", { open(context, shown.fileName, f) })
                 Btn("×", onClose)
             }
+            // Where the host found a relative path when not under the pane's directory: up the tree or in another worktree.
+            if (f != null && f.found.isNotEmpty()) {
+                Text("found ${f.found}", color = p.dim, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth().padding(start = 4.dp).testTag("found"))
+            }
             Rule()
             Box(Modifier.fillMaxWidth().heightIn(min = 80.dp, max = 480.dp).padding(top = 4.dp)) {
                 when {

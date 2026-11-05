@@ -21,6 +21,7 @@ class Api(private val baseUrl: String, private val token: String, private val us
         private const val FILE_TIMEOUT = 60_000
         /** The largest file the inbox or a preview root serves. */
         private const val MAX_FILE = 8 * 1024 * 1024
+        private const val MAX_PATH = 1024
         /** What a client may name a session it starts. */
         val SESSION_NAME = Regex("^[a-z0-9_-]{1,32}$")
 
@@ -231,7 +232,7 @@ class Api(private val baseUrl: String, private val token: String, private val us
                 }
             }
             if (out.size() > MAX_FILE) throw ApiException(0, "bad_answer")
-            return Fetched(type, out.toByteArray())
+            return Fetched(type, out.toByteArray(), foundOf(c.getHeaderField("Muxway-File")))
         } catch (e: IOException) {
             throw ApiException(0, "offline")
         } finally {
@@ -277,8 +278,8 @@ class Api(private val baseUrl: String, private val token: String, private val us
 
     private class Response(val status: Int, val body: String, val etag: String)
 
-    /** A file's bytes as the hub serves them, with the type its name says. */
-    class Fetched(val type: String, val bytes: ByteArray)
+    /** A file's bytes as the hub serves them, with the type its name says; [found] is the file's path on the host when it came from elsewhere in the pane's repository, else empty. */
+    class Fetched(val type: String, val bytes: ByteArray, val found: String = "")
 
     private fun get(path: String, etag: String? = null) = call("GET", path, null, null, etag)
 
@@ -319,6 +320,12 @@ class Api(private val baseUrl: String, private val token: String, private val us
         } finally {
             c.disconnect()
         }
+    }
+
+    /** The path a preview was found at is shown as text, so it is cleaned and bounded as a path the hub names is. */
+    private fun foundOf(raw: String?): String {
+        val p = Input.printable(raw ?: return "")
+        return if (p.length > MAX_PATH) "" else p
     }
 
     /** An ETag goes back to the hub as a header, so only printable ASCII of a sane length is kept. */
