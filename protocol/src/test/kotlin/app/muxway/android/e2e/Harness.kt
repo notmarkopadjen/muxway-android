@@ -184,19 +184,22 @@ class Ask(private val process: Process) {
     fun kill() = process.destroyForcibly()
 }
 
+/** Git in [dir] as a made-up person, with no configuration of the machine's. */
+fun git(dir: File, vararg args: String) {
+    val pb = ProcessBuilder("git", "-C", dir.path, *args).redirectErrorStream(true)
+    pb.environment().putAll(mapOf(
+        "GIT_AUTHOR_NAME" to "alice", "GIT_AUTHOR_EMAIL" to "alice@example.com", "GIT_COMMITTER_NAME" to "alice", "GIT_COMMITTER_EMAIL" to "alice@example.com",
+        "GIT_CONFIG_GLOBAL" to "/dev/null", "GIT_CONFIG_NOSYSTEM" to "1",
+    ))
+    val p = pb.start()
+    val out = p.inputStream.bufferedReader().readText()
+    if (!p.waitFor(30, TimeUnit.SECONDS) || p.exitValue() != 0) throw IllegalStateException("git ${args.joinToString(" ")}: $out")
+}
+
 /** A repository with a trail of changes, as the core's own test makes it: one of each kind, odd names included. */
 fun gitRepo(dir: File) {
     fun write(p: String, s: String) { File(dir, p).also { it.parentFile?.mkdirs() }.writeText(s) }
-    fun git(vararg args: String) {
-        val pb = ProcessBuilder("git", "-C", dir.path, *args).redirectErrorStream(true)
-        pb.environment().putAll(mapOf(
-            "GIT_AUTHOR_NAME" to "alice", "GIT_AUTHOR_EMAIL" to "alice@example.com", "GIT_COMMITTER_NAME" to "alice", "GIT_COMMITTER_EMAIL" to "alice@example.com",
-            "GIT_CONFIG_GLOBAL" to "/dev/null", "GIT_CONFIG_NOSYSTEM" to "1",
-        ))
-        val p = pb.start()
-        val out = p.inputStream.bufferedReader().readText()
-        if (!p.waitFor(30, TimeUnit.SECONDS) || p.exitValue() != 0) throw IllegalStateException("git ${args.joinToString(" ")}: $out")
-    }
+    fun git(vararg args: String) = git(dir, *args)
     write("src/a.go", "package a\n")
     write("src/gone.go", "package gone\n")
     write("src/old.go", "package old\n")
@@ -247,6 +250,7 @@ class Relay(private val hub: String, logs: File) {
         val headers = HashMap<String, String>()
         c.getHeaderField("ETag")?.let { headers["ETag"] = it }
         c.getHeaderField("Content-Type")?.let { headers["Content-Type"] = it }
+        c.getHeaderField("Muxway-File")?.let { headers["Muxway-File"] = it }
         c.disconnect()
         return Response(status, data, headers)
     }
