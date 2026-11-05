@@ -320,7 +320,12 @@ flowchart LR
   renderer, the first twenty pages), anything else as its
   download only, with the name, the size, `⤓` (saved under Downloads
   under the file's own name), *open* for the types the phone shows
-  (handed to the system read-only from the app's cache) and `×`. What
+  (handed to the system read-only from the app's cache) and `×`. When
+  the host found a relative path elsewhere in the pane's repository
+  (above the pane's directory, or in another worktree: the hub's
+  `Muxway-File` header), a dim row under the bar names the file,
+  `found /home/alice/src/feature/docs/a.md`, so the reader sees which
+  tree answered; the pane's own file has no such row. What
   the host will not serve says `the host does not preview this file`.
 - **Names.** In a writable shell pane (by its program: `bash`, `zsh`,
   `fish`, `sh` and their kind) on a host whose agent lists directories
