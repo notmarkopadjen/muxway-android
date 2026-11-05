@@ -296,6 +296,33 @@ class ApiTest {
     }
 
     @Test
+    fun aPreviewSaysWhereTheHostFoundTheFileAndAnOddHeaderIsDropped() {
+        val text = "plan a, from feature\n".toByteArray()
+        val headers = { found: String? -> mapOf("Content-Type" to "text/plain; charset=utf-8") + (found?.let { mapOf("Muxway-File" to it) } ?: emptyMap()) }
+        answer = { Response(200, text, headers("/home/alice/src/feature/docs/plans/a.md")) }
+        val got = api().previewFile("alice-laptop/work/0.0", "docs/plans/a.md")
+        assertEquals("/v1/panes/alice-laptop/work/0.0/preview?path=docs%2Fplans%2Fa.md", seen.single().uri)
+        assertEquals("Bearer $token", seen.single().header("Authorization"))
+        assertEquals("text/plain", got.type)
+        assertTrue(text.contentEquals(got.bytes))
+        assertEquals("/home/alice/src/feature/docs/plans/a.md", got.found)
+        // The pane's own file carries no header; the inbox never does.
+        answer = { Response(200, text, headers(null)) }
+        assertEquals("", api().previewFile("alice-laptop/work/0.0", "docs/top.md").found)
+        assertEquals("", api().readFile("alice-laptop/work/0.0", "20261025-102235-56fwge.txt").found)
+        // A header the hub cannot have meant is shown as nothing: control characters and escapes go, a huge one is dropped whole.
+        answer = { Response(200, text, headers("/home/alice/a\u0007\u001b[31m.md")) }
+        assertEquals("/home/alice/a.md", api().previewFile("h/w/0.0", "a.md").found)
+        answer = { Response(200, text, headers("/" + "a".repeat(1024))) }
+        assertEquals("", api().previewFile("h/w/0.0", "a.md").found)
+        answer = { Response(200, text, headers("/" + "a".repeat(1023))) }
+        assertEquals(1024, api().previewFile("h/w/0.0", "a.md").found.length)
+        // A refusal is its code, and never a path.
+        answer = { json(404, """{"error":"not_found"}""") }
+        assertEquals("not_found", assertThrows(ApiException::class.java) { api().previewFile("h/w/0.0", "docs/out.md") }.code)
+    }
+
+    @Test
     fun theFilesProbeIsTrueOnlyOn204() {
         answer = { Response(204) }
         assertTrue(api().takesFiles("alice-laptop/work/0.0"))
