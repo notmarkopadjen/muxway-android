@@ -9,7 +9,7 @@ import org.junit.Test
 
 class FilesTest {
     @Test
-    fun theTypeComesFromTheResolverOrTheNameAndOnlyFromTheList() {
+    fun theTypeComesFromTheResolverOrTheNameElseBytes() {
         assertEquals("image/png", Files.type("image/png", "shot.png"))
         assertEquals("image/png", Files.type("IMAGE/PNG; charset=binary", "x"))
         assertEquals("image/jpeg", Files.type(null, "photo.JPG"))
@@ -19,11 +19,23 @@ class FilesTest {
         assertEquals("application/pdf", Files.type("application/pdf", null))
         assertEquals("application/zip", Files.type(null, "tool.zip"))
         assertEquals("application/zip", Files.type("application/zip", "x"))
-        for (bad in listOf("image/svg+xml" to "a.svg", "text/html" to "a.html", "application/x-sh" to "a.sh", null to "a.exe", null to "noext", null to "dot.")) {
-            assertNull("${bad.first} ${bad.second}", Files.type(bad.first, bad.second))
+        for (other in listOf("image/svg+xml" to "a.svg", "text/html" to "a.html", "application/x-sh" to "a.sh", null to "a.exe", null to "noext", null to "dot.", "text/x-python" to "a.py")) {
+            assertEquals("${other.first} ${other.second}", Files.OCTET, Files.type(other.first, other.second))
         }
         assertEquals("text/plain", Files.type("text/plain", "notes"))
         assertEquals(9, Files.MIMES.size)
+    }
+
+    @Test
+    fun theExtensionIsOneShortLowercaseWordOrNothing() {
+        assertEquals("pcap", Files.ext("capture.pcap"))
+        assertEquals("py", Files.ext("a.PY"))
+        assertEquals("gz", Files.ext("x.TAR.GZ"))
+        assertEquals("abcdefgh", Files.ext("x.abcdefgh"))
+        assertEquals("png", Files.ext("shot.png"))
+        for (bad in listOf("../../x.sh/", "x.", ".bashrc", "x.abcdefghi", "x.p y", "Makefile", "x.p/y", "x.é", "x.a_b", "x.a-b", null, "")) {
+            assertNull(bad, Files.ext(bad))
+        }
     }
 
     @Test
@@ -59,7 +71,7 @@ class FilesTest {
     @Test
     fun theMultipartBodyHasOnePartNamedFileAndNeverThePhonesName() {
         val data = byteArrayOf(0x89.toByte(), 'P'.code.toByte(), 'N'.code.toByte(), 'G'.code.toByte(), '\r'.code.toByte(), '\n'.code.toByte(), 0, 0x1a, '-'.code.toByte(), '-'.code.toByte())
-        val m = Files.multipart(data, "image/png", "boundary0123456789ab")
+        val m = Files.multipart(data, "image/png", boundary = "boundary0123456789ab")
         assertEquals("multipart/form-data; boundary=boundary0123456789ab", m.contentType)
         val head = "--boundary0123456789ab\r\nContent-Disposition: form-data; name=\"file\"; filename=\"file\"\r\nContent-Type: image/png\r\n\r\n".toByteArray()
         val tail = "\r\n--boundary0123456789ab--\r\n".toByteArray()
@@ -75,8 +87,13 @@ class FilesTest {
         assertTrue(boundaryOf(a).all { it.isLetterOrDigit() })
         assertFalse(boundaryOf(a) == boundaryOf(b))
         assertThrows(IllegalArgumentException::class.java) { Files.multipart(data, "image/svg+xml") }
+        assertThrows(IllegalArgumentException::class.java) { Files.multipart(data, Files.OCTET, "a/b") }
+        assertThrows(IllegalArgumentException::class.java) { Files.multipart(data, Files.OCTET, "Py") }
+        // Bytes of a kind the host does not know travel with the name's extension and nothing else of the name.
+        val any = Files.multipart(data, Files.OCTET, "pcap", "boundary0123456789ab")
+        assertTrue(String(any.body, Charsets.ISO_8859_1).startsWith("--boundary0123456789ab\r\nContent-Disposition: form-data; name=\"file\"; filename=\"file.pcap\"\r\nContent-Type: application/octet-stream\r\n\r\n"))
         assertThrows(IllegalArgumentException::class.java) { Files.multipart(ByteArray(Files.MAX_BYTES + 1), "text/plain") }
-        assertThrows(IllegalArgumentException::class.java) { Files.multipart(data, "text/plain", "short") }
+        assertThrows(IllegalArgumentException::class.java) { Files.multipart(data, "text/plain", boundary = "short") }
         assertThrows(IllegalArgumentException::class.java) { Files.multipart(data, "text/plain", "has-a-dash-and-is-long-enough") }
     }
 }

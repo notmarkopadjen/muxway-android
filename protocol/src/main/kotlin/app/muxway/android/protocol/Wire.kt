@@ -69,7 +69,7 @@ object Wire {
         val arr = o.optJSONArray("lines")
         val lines = arr?.let { a ->
             val out = ArrayList<String>(minOf(a.length(), MAX_LINES))
-            for (i in maxOf(0, a.length() - MAX_LINES) until a.length()) out.add(Ansi.keep(a.optString(i)).replace("\n", "").take(MAX_LINE))
+            for (i in maxOf(0, a.length() - MAX_LINES) until a.length()) out.add(Ansi.keep(a.optString(i), links = false).replace("\n", "").take(MAX_LINE))
             out
         }
         return Tail(id, address, short(o, "etag"), lines, o.optBoolean("writable"), o.optBoolean("transcriber"), short(o, "error"), short(o, "command").take(64))

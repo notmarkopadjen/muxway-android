@@ -98,11 +98,12 @@ survives a restart).
 
 - The rows are every hub's talk feed (`GET /v1/talk`, the last hundred
   entries of each) as one list, oldest at the top, the newest in view;
-  two lines a row: `✉` for a mail or `⇄` for a typed write, who → whom
+  `✉` for a mail or `⇄` for a typed write, who → whom
   by the panes' names (as their tabs show them; a pane that moved is
   found by its id, a pane not listed by its address), the time and the
-  token; then the excerpt, two lines at most, a key or an answer with
-  its kind before it.
+  token on one line; then the text's first 200 characters wrapping
+  under it, a key or an answer with its kind before it; a reply (a mail
+  with `reply_to`) is indented under what it answers.
 - A tap on a mail row opens the mail sheet of the pane the mail went
   to, with that mail framed. A tap on a typed row, and `⇆` on every row,
   lays the two panes side by side (the one pane when a client wrote to

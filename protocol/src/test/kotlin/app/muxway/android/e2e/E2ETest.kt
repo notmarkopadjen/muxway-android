@@ -14,6 +14,8 @@ import app.muxway.android.protocol.Changes
 import app.muxway.android.protocol.Clip
 import app.muxway.android.protocol.Files
 import app.muxway.android.protocol.Inbox
+import app.muxway.android.protocol.Json
+import app.muxway.android.protocol.Links
 import app.muxway.android.protocol.Keyboard
 import app.muxway.android.protocol.Feed
 import app.muxway.android.protocol.Lens
@@ -1390,6 +1392,89 @@ class E2ETest {
         assertTrue(observer("GET", "/v1/share/${s.id}/pane?lines=50", cookie = cookie).first in setOf(401, 404))
         val gone = assertThrows(ApiException::class.java) { api.revokeShare(s.id) }
         assertEquals(404, gone.status)
+    }
+
+    /** A multipart upload as a hostile or odd client would send it, with its own file name: the status and the body. */
+    private fun postFile(tok: String, address: String, filename: String, type: String, data: ByteArray): Pair<Int, String> {
+        val c = java.net.URL("${core.url}/v1/panes/$address/files").openConnection() as java.net.HttpURLConnection
+        c.requestMethod = "POST"
+        c.doOutput = true
+        c.setRequestProperty("Authorization", "Bearer $tok")
+        val boundary = "e2eboundary0123456789"
+        c.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+        val head = "--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"$filename\"\r\nContent-Type: $type\r\n\r\n".toByteArray()
+        val tail = "\r\n--$boundary--\r\n".toByteArray()
+        c.outputStream.use { it.write(head); it.write(data); it.write(tail) }
+        val status = c.responseCode
+        val body = (if (status < 400) c.inputStream else c.errorStream)?.use { String(it.readBytes()) } ?: ""
+        return status to body
+    }
+
+    @Test
+    fun s38_aFilesOwnNameGivesAnExtensionAndNothingElseAndAReaderSendsNoFile() {
+        val (api, tok) = setup(inbox = true)
+        val address = "$HOST/work/0.0"
+        // A name with a path in it: only its last word reaches the file's name, under the host's inbox.
+        val stamped = Regex("""\d{8}-\d{6}-[a-z0-9]{6}\.[a-z0-9]{1,8}""")
+        val (status, body) = postFile(tok, address, "../../etc/x.sh/", Files.OCTET, "not a script\n".toByteArray())
+        assertEquals(body, 201, status)
+        val path = Json.sent(body).path
+        assertEquals(path, core.inbox.absolutePath, File(path).parentFile!!.absolutePath)
+        assertTrue(path, stamped.matches(File(path).name))
+        assertTrue(inboxFiles().any { it.name == File(path).name })
+        Thread.sleep(2_100)
+        // An extension that is no word gives .bin; one in capitals lands lowercased.
+        val (s2, b2) = postFile(tok, address, "x.a b", Files.OCTET, byteArrayOf(1, 2, 3))
+        assertEquals(b2, 201, s2)
+        assertTrue(b2, Json.sent(b2).path.endsWith(".bin"))
+        Thread.sleep(2_100)
+        val (s3, b3) = postFile(tok, address, "x.ABC", Files.OCTET, byteArrayOf(1, 2, 3))
+        assertEquals(b3, 201, s3)
+        assertTrue(b3, Json.sent(b3).path.endsWith(".abc"))
+        // A reader is refused whatever the type; the client refuses an extension that is no word before any request.
+        val reader = Api(relay.url, core.token(write = null), "muxway-android-e2e")
+        assertEquals("read_only", assertThrows(ApiException::class.java) { reader.sendFile(address, byteArrayOf(1), Files.OCTET, "pcap") }.code)
+        val before = relay.seen.size
+        assertThrows(IllegalArgumentException::class.java) { api.sendFile(address, byteArrayOf(1), Files.OCTET, "a/b") }
+        assertThrows(IllegalArgumentException::class.java) { api.sendFile(address, byteArrayOf(1), "text/html") }
+        assertEquals(before, relay.seen.size)
+        assertEquals(3, inboxFiles().size)
+    }
+
+    @Test
+    fun f39_aFileOfAnyTypeLandsUnderTheNamesExtensionAndComesBackAsItWent() {
+        val (api, _) = setup(inbox = true)
+        val address = "$HOST/work/0.0"
+        val capture = byteArrayOf(0xd4.toByte(), 0xc3.toByte(), 0xb2.toByte(), 0xa1.toByte(), 2, 0, 4, 0) + ByteArray(40) { (it * 7).toByte() }
+        val pcap = api.sendFile(address, capture, Files.type("application/vnd.tcpdump.pcap", "capture.pcap"), Files.ext("capture.pcap"))
+        assertTrue(pcap.path, pcap.path.endsWith(".pcap"))
+        assertEquals(capture.size.toLong(), pcap.bytes)
+        Thread.sleep(2_100)
+        val source = "print('hi')\n".toByteArray()
+        val py = api.sendFile(address, source, Files.type("text/x-python", "tool.py"), Files.ext("tool.py"))
+        assertTrue(py.path, py.path.endsWith(".py"))
+        // Both paths are links in a pane's text, by the inbox pattern.
+        assertEquals(listOf(File(pcap.path).name, File(py.path).name), Links.findFiles("see ${pcap.path} and ${py.path}.").map { it.name })
+        // Read back: the bytes as they went; a kind the host does not show comes as a download or plain text, never sniffed.
+        val back = api.readFile(address, File(pcap.path).name)
+        assertTrue(capture.contentEquals(back.bytes))
+        assertEquals(Files.OCTET, back.type.substringBefore(';'))
+        val backPy = api.readFile(address, File(py.path).name)
+        assertTrue(source.contentEquals(backPy.bytes))
+        assertTrue(backPy.type, backPy.type.substringBefore(';') in listOf(Files.OCTET, "text/plain"))
+        assertEquals(2, inboxFiles().size)
+    }
+
+    @Test
+    fun f40_theListingMarksTheOnlyPaneOfItsSessionAsLast() {
+        val (api, _) = setup(allowClose = true)
+        assertTrue("the session's only pane is its last", api.panes().single().last)
+        val made = api.split(HOST, "work", 0, "v")
+        waitFor("two panes") { api.panes().size == 2 }
+        assertTrue("neither of two is the last", api.panes().none { it.last })
+        Thread.sleep(2_100)
+        api.closePane(made.address)
+        waitFor("one pane again, the last") { api.panes().singleOrNull()?.last == true }
     }
 
     @Test

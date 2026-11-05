@@ -14,7 +14,8 @@ object Links {
     /** A path as printed; where it leads is the host's to say. */
     data class PathLink(val start: Int, val end: Int, val path: String)
 
-    private val file = Regex("""/(?:\S*?/)?(\d{8}-\d{6}-[a-z0-9]{6}\.(?:png|jpg|gif|webp|pdf|txt|md|json|zip))(?!\.?[A-Za-z0-9_])""")
+    // The agent names an inbox file by its stamp and the file's extension: one short lowercase word.
+    private val file = Regex("""/(?:\S*?/)?(\d{8}-\d{6}-[a-z0-9]{6}\.[a-z0-9]{1,8})(?!\.?[A-Za-z0-9_])""")
     // A path of any extension but a secret's, or of a name the host shows without one, links:
     // anything else under a root is a download (the browser's types.ts).
     private const val DENIED = "keystore|tfstate|kdbx|ovpn|env|pem|key|crt|cer|der|p12|pfx|jks|asc|gpg|pgp"

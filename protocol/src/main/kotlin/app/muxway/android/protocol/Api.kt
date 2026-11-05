@@ -178,9 +178,9 @@ class Api(private val baseUrl: String, private val token: String, private val us
         if (e.status > 0) false else throw e
     }
 
-    /** A file for the pane's program, into its host's inbox; where it went. The phone's name for it is not sent. */
-    fun sendFile(address: String, data: ByteArray, type: String): Sent {
-        val part = Files.multipart(data, type)
+    /** A file for the pane's program, into its host's inbox; where it went. Of the phone's name only [ext] is sent. */
+    fun sendFile(address: String, data: ByteArray, type: String, ext: String? = null): Sent {
+        val part = Files.multipart(data, type, ext)
         return Json.sent(call("POST", "panes/${encode(address)}/files", part.body, part.contentType, null, FILE_TIMEOUT).body)
     }
 

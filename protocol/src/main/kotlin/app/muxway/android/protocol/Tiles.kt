@@ -132,6 +132,10 @@ object Tiles {
         return relabel(flatten(without(made, gone) ?: Node.Leaf(at)))
     }
 
+    /** Whether tile [at] already lies across the whole view: a leaf of the root split, which runs [horizontal]. */
+    fun isAcross(node: Node, at: Int, horizontal: Boolean): Boolean =
+        node is Node.Split && node.horizontal == horizontal && node.children.any { it is Node.Leaf && it.index == at }
+
     /** Where each tile is in the area, in fractions of it. */
     fun rects(node: Node, weights: Map<String, List<Float>>): Map<Int, Rect> {
         val out = HashMap<Int, Rect>()

@@ -1112,7 +1112,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 var tries = 0
                 while (true) {
                     try {
-                        val sent = withContext(Dispatchers.IO) { api(key).sendFile(v.address, f.bytes, f.type) }
+                        val sent = withContext(Dispatchers.IO) { api(key).sendFile(v.address, f.bytes, f.type, f.ext) }
                         v.landed = v.landed + sent.path
                         break
                     } catch (e: ApiException) {

@@ -197,6 +197,10 @@ private fun PaneRow(pane: Pane, status: Lens.Status, selected: Boolean, onTap: (
         Lens.word(status, pane.attention?.kind)?.let { w ->
             Text(" $w", color = if (selected) p.bg else if (status == Lens.Status.WAITING) p.attention else p.dim, maxLines = 1)
         }
+        // What waits under a parked pane, dimmed after the word, as the header and the inbox show it.
+        pane.attention?.kind?.takeIf { status == Lens.Status.LATER }?.let { kind ->
+            Text(" · ${Lens.glyph(Lens.Status.WAITING, kind)} $kind", color = dim, maxLines = 1)
+        }
     }
     Rule()
 }

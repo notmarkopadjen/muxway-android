@@ -9,14 +9,15 @@ import java.io.InputStream
 
 /** A file the phone was handed, read into memory, or why it was not. [name] is for the status line only. */
 sealed class Attachment(val name: String) {
-    class Ready(name: String, val type: String, val bytes: ByteArray) : Attachment(name)
+    class Ready(name: String, val type: String, val ext: String?, val bytes: ByteArray) : Attachment(name)
     class Refused(name: String, val why: String) : Attachment(name)
 }
 
 /**
  * Reads what the keyboard, the picker or a share hands over: a content URI, through the system
  * resolver with whatever grant the sender gave. The type comes from the resolver or the name's
- * extension, against the inbox's list; the bytes stop at the cap, so a big file costs no request.
+ * extension for a kind the host knows, else the file goes as bytes with the name's extension
+ * alone; the bytes stop at the cap, so a big file costs no request.
  */
 object Attachments {
     private const val TOO_LARGE = "too large, 8 MiB at most"
@@ -26,7 +27,7 @@ object Attachments {
         val (rawName, declared) = describe(resolver, uri)
         val name = Files.shown(rawName)
         val mime = try { resolver.getType(uri) } catch (e: Exception) { null }
-        val type = Files.type(mime, rawName) ?: return Attachment.Refused(name, "not a type the host takes")
+        val type = Files.type(mime, rawName)
         if (declared != null && declared > 0 && !Files.fits(declared)) return Attachment.Refused(name, TOO_LARGE)
         val stream = try { resolver.openInputStream(uri) } catch (e: Exception) { null } ?: return Attachment.Refused(name, "cannot be read")
         val bytes = try {
@@ -35,7 +36,7 @@ object Attachments {
             return Attachment.Refused(name, "cannot be read")
         } ?: return Attachment.Refused(name, TOO_LARGE)
         if (bytes.isEmpty()) return Attachment.Refused(name, "empty")
-        return Attachment.Ready(name, type, bytes)
+        return Attachment.Ready(name, type, Files.ext(rawName), bytes)
     }
 
     /** The display name and size the provider gives, when it does. */

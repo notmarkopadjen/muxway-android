@@ -73,6 +73,8 @@ data class Pane(
     val laterAt: Long = 0,
     /** How many live read-only shares this token made of the pane; 0 for everyone else. */
     val shared: Int = 0,
+    /** The only pane of its session, exposed or not: closing it ends the session. */
+    val last: Boolean = false,
 ) {
     val writable get() = mode == "write"
 

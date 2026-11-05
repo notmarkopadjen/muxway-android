@@ -61,6 +61,7 @@ import kotlin.math.abs
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -471,7 +472,8 @@ fun AgentMark(agent: Lens.Agent?, modifier: Modifier = Modifier) {
 @Composable
 fun PaneName(pane: Pane, ink: Color, dim: Color, bold: Boolean = false, tab: Boolean = false, mail: Color? = null, folder: String? = null, italic: Boolean = false, onMail: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     val d = Lens.describe(pane)
-    val weight = if (bold) FontWeight.Bold else FontWeight.Normal
+    // The alias is the name in bold wherever it shows; the focus adds its bold where it has to.
+    val weight = if (bold || pane.alias.isNotEmpty()) FontWeight.Bold else FontWeight.Normal
     // A parked pane's header name leans, so the sleep shows in the name itself.
     val slant = if (italic) FontStyle.Italic else FontStyle.Normal
     val hue = mail ?: LocalPalette.current.talk
@@ -489,6 +491,25 @@ fun PaneName(pane: Pane, ink: Color, dim: Color, bold: Boolean = false, tab: Boo
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         if (d.agent != null) { AgentMark(d.agent); if (d.agent == Lens.Agent.CLAUDE || d.agent == Lens.Agent.CODEX || d.agent == Lens.Agent.ANTIGRAVITY) Text(" ", maxLines = 1) }
         Text(text, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(shadow = null))
+    }
+}
+
+/**
+ * The chain between two tiles that talk, as the web draws it: two links, strokes like the
+ * agents' marks, along a divider that runs [vertical] (between tiles side by side) or across.
+ */
+@Composable
+fun Chain(color: Color, vertical: Boolean, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(14.dp)) {
+        val u = size.width / 14f
+        val stroke = Stroke(width = 1.4f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        fun link(x: Float, y: Float) {
+            val w = if (vertical) 5f * u else 8f * u
+            val h = if (vertical) 8f * u else 5f * u
+            drawRoundRect(color, topLeft = Offset(x - w / 2, y - h / 2), size = Size(w, h), cornerRadius = CornerRadius(2f * u), style = stroke)
+        }
+        val c = Offset(size.width / 2f, size.height / 2f)
+        if (vertical) { link(c.x, c.y - 2.5f * u); link(c.x, c.y + 2.5f * u) } else { link(c.x - 2.5f * u, c.y); link(c.x + 2.5f * u, c.y) }
     }
 }
 

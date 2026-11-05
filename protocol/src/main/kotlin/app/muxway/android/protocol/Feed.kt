@@ -33,6 +33,12 @@ object Feed {
     fun panesOf(e: TalkEntry): List<String> =
         if (e.from == null || e.from.address == e.to.address) listOf(e.to.address) else listOf(e.from.address, e.to.address)
 
+    /** What a row shows of a text at most. */
+    const val MAX_SHOWN = 200
+
     /** The row's second line: a mail or typed text as it is, a key or an answer with its kind before it. */
     fun excerpt(e: TalkEntry): String = if (e.kind == "text" || e.kind == "mail") e.text else "${e.kind}: ${e.text}"
+
+    /** The excerpt cut to what a row shows, with an ellipsis where it was cut. */
+    fun shown(e: TalkEntry): String = excerpt(e).let { if (it.length > MAX_SHOWN) it.take(MAX_SHOWN - 1) + "…" else it }
 }

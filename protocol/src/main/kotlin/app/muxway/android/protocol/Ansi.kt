@@ -2,8 +2,9 @@ package app.muxway.android.protocol
 
 /**
  * Pane content with colour. The hub sends tmux's escape sequences when asked (`ansi=1`);
- * this keeps the SGR ones (colours and attributes), drops every other sequence and control
- * character, and turns the result into rows of styled spans. Nothing else is interpreted.
+ * this keeps the SGR ones (colours and attributes) and the links a program names (OSC 8),
+ * drops every other sequence and control character, and turns the result into rows of
+ * styled spans. Nothing else is interpreted.
  */
 object Ansi {
     /** The terminal's default colour. */
@@ -11,6 +12,9 @@ object Ansi {
 
     /** Set on a 24-bit colour; below it the value is a palette index 0..255. */
     const val RGB = 1 shl 24
+
+    /** The longest address a program may name for a link. */
+    const val MAX_HREF = 2048
 
     data class Style(
         val fg: Int = DEFAULT,
@@ -20,6 +24,8 @@ object Ansi {
         val italic: Boolean = false,
         val underline: Boolean = false,
         val inverse: Boolean = false,
+        /** The address a program named for this run of text (OSC 8); null for text. */
+        val href: String? = null,
     ) {
         companion object {
             val PLAIN = Style()
@@ -28,8 +34,11 @@ object Ansi {
 
     data class Span(val text: String, val style: Style)
 
-    /** Printable text, newlines, expanded tabs and SGR sequences; everything else is dropped. */
-    fun keep(s: String): String {
+    /**
+     * Printable text, newlines, expanded tabs and SGR sequences, and with [links] the OSC 8
+     * links whose address may be followed (each put back in one shape); everything else is dropped.
+     */
+    fun keep(s: String, links: Boolean = true): String {
         val out = StringBuilder(s.length)
         var col = 0
         var i = 0
@@ -39,6 +48,7 @@ object Ansi {
                 c == '\u001b' -> {
                     val end = Input.escapeEnd(s, i).coerceAtMost(s.length)
                     if (isSgr(s, i, end)) out.append(s, i, end)
+                    else if (links) link(s, i, end)?.let { out.append("\u001b]8;;").append(it).append("\u001b\\") }
                     i = end
                     continue
                 }
@@ -76,10 +86,8 @@ object Ansi {
             when {
                 c == '\u001b' -> {
                     val end = Input.escapeEnd(s, i).coerceAtMost(s.length)
-                    if (isSgr(s, i, end)) {
-                        val next = apply(style, s.substring(i + 2, end - 1))
-                        if (next != style) { flush(); style = next }
-                    }
+                    val next = if (isSgr(s, i, end)) apply(style, s.substring(i + 2, end - 1)) else link(s, i, end)?.let { style.copy(href = it.ifEmpty { null }) } ?: style
+                    if (next != style) { flush(); style = next }
                     i = end
                     continue
                 }
@@ -95,6 +103,39 @@ object Ansi {
         flush()
         if (row.isNotEmpty() || rows.isEmpty()) rows.add(row)
         return rows
+    }
+
+    /** The address the span at column [col] (0-based) of [row] carries, if a program named one. */
+    fun hrefAt(row: List<Span>, col: Int): String? {
+        var at = 0
+        for (s in row) {
+            if (col < at + s.text.length) return if (col >= at) s.style.href else null
+            at += s.text.length
+        }
+        return null
+    }
+
+    /**
+     * An OSC 8 sequence's address: `ESC ] 8 ; <params> ; <address>` ended by BEL or ST. The
+     * address when it is one the phone may open, "" when the sequence closes a link or names an
+     * address it may not, null when this is no OSC 8 at all.
+     */
+    private fun link(s: String, start: Int, end: Int): String? {
+        if (end - start < 5 || s[start + 1] != ']' || s[start + 2] != '8' || s[start + 3] != ';') return null
+        var stop = end
+        if (stop > start && s[stop - 1] == '\u0007') stop--
+        else if (stop - 1 > start && s[stop - 1] == '\\' && s[stop - 2] == '\u001b') stop -= 2
+        val semi = s.indexOf(';', start + 4)
+        if (semi < 0 || semi >= stop) return ""
+        return target(s.substring(semi + 1, stop)) ?: ""
+    }
+
+    /** [uri] when it is http or https, not overlong and free of control and space characters; else null. */
+    fun target(uri: String): String? {
+        if (uri.length > MAX_HREF || uri.any { it <= ' ' || it == '\u007f' || it in '\u0080'..'\u009f' }) return null
+        val scheme = uri.substringBefore("://", "").lowercase()
+        if (scheme != "http" && scheme != "https") return null
+        return if (uri.length > scheme.length + 3) uri else null
     }
 
     /** `ESC [ <digits ; :> m` and nothing else. */
@@ -131,7 +172,7 @@ object Ansi {
             }
             val n = num(part)
             when (n) {
-                0 -> st = Style.PLAIN
+                0 -> st = Style.PLAIN.copy(href = st.href)
                 1 -> st = st.copy(bold = true)
                 2 -> st = st.copy(dim = true)
                 3 -> st = st.copy(italic = true)

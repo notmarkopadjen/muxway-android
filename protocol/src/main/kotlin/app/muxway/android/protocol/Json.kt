@@ -227,6 +227,7 @@ object Json {
             later = o.optBoolean("later"),
             laterAt = o.optLong("later_at").coerceAtLeast(0),
             shared = o.optInt("shared").coerceAtLeast(0),
+            last = o.optBoolean("last"),
         )
     }
 

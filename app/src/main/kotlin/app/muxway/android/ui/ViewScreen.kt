@@ -137,6 +137,7 @@ import app.muxway.android.Screen
 import app.muxway.android.audio.Recorder
 import app.muxway.android.protocol.AddMenu
 import app.muxway.android.protocol.Ansi
+import app.muxway.android.protocol.Beside
 import app.muxway.android.protocol.Clip
 import app.muxway.android.protocol.Commands
 import app.muxway.android.protocol.Complete
@@ -175,9 +176,11 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val index = focusedIndex.coerceIn(0, tiles.lastIndex)
     val focused = tiles[index]
     val state = model.view(focused)
-    // Fit: the host pane follows the tile, as a terminal would. On by default. Kept by the count
-    // of panes, not their addresses: a layout the host took may rename them.
-    var fit by rememberSaveable(addresses.size) { mutableStateOf(true) }
+    // Fit, per tile: the host pane follows its tile, as a terminal would. On unless the tile's
+    // address is in the set; ⤢ serves the focused tile. Kept by the count of panes, not their
+    // addresses: a layout the host took may rename them.
+    var fitOff by rememberSaveable(addresses.size, saver = listSaver<MutableState<Set<String>>, String>({ it.value.toList() }, { mutableStateOf(it.toSet()) })) { mutableStateOf(setOf()) }
+    val fit = focused !in fitOff
     var fitAgain by remember { mutableIntStateOf(0) }
     val hardware = model.settings.hardwareKeyboard
     // With a hardware keyboard assumed the on-screen one stays down until asked for.
@@ -362,6 +365,36 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         focus.requestFocus()
     }
 
+    // When each pane was focused here last: a partner takes the place of the tile focused
+    // longest ago when the view is full.
+    val focusedAt = remember { HashMap<String, Long>() }
+    LaunchedEffect(focused) { focusedAt[focused] = System.currentTimeMillis() }
+    // The pane [key] talked with laid beside it, the browser's rule (see Beside): a tab's pane
+    // not open first takes the focused tile, as a tap on the tab would.
+    fun beside(key: String, partner: String) {
+        val open = if (key in addresses) addresses else addresses.map { if (it == focused) key else it }
+        val laid = Beside.lay(open, key, partner, focusedAt)
+        model.wake(partner)
+        if (laid == addresses) { tiles.indexOf(key).takeIf { it >= 0 }?.let { focusedIndex = it }; focus.requestFocus(); return }
+        touch()
+        kept.focusNext = key
+        model.open(Screen.View(laid))
+    }
+    // The focused tile across the whole view: the width (stacked over or under the rest) or the
+    // height (beside it), on the side its middle is, as the web's e and E.
+    fun across(key: String, horizontal: Boolean) {
+        val at = tiles.indexOf(key)
+        val root = Tiles.rootKey(shape)
+        if (at < 0 || root == null) return
+        if (!rearrangeable) { refusedMove(); return }
+        val r = Tiles.rects(shape, weights)[at] ?: return
+        val first = if (horizontal) r.x + r.w / 2 < 0.5f else r.y + r.h / 2 < 0.5f
+        touch()
+        custom = Tiles.across(shape, at, root, horizontal, first)
+        layout = Layout.CUSTOM
+        weights.clear()
+    }
+
     // `_`: the tile leaves for the row above the keys and gives its size back; the last tile stays.
     // A made tree closes up around the tile that left.
     fun minimise(key: String) {
@@ -419,7 +452,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Btn("‹", { model.open(Screen.Panes) })
-            Tabs(model, tiles, minimised, focused, now, Modifier.weight(1f), ::show, onHold = { tabMenu = it }, menu = tabMenu, onMenuClose = { tabMenu = null }, onBeside = ::add)
+            Tabs(model, tiles, minimised, focused, now, Modifier.weight(1f), ::show, onHold = { tabMenu = it }, menu = tabMenu, onMenuClose = { tabMenu = null }, onBeside = ::add, onPartner = ::beside)
             Box {
                 Btn("+", { adding = true }, selected = adding, modifier = Modifier.testTag("add"))
                 if (adding) AddMenuPopup(model, addresses, tiles, minimised, focused, now, onClose = { adding = false }) { add(it) }
@@ -428,7 +461,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             if (tiles.size > 1) Btn("▦", { touch(); layout = layout.next(tiles.size) }, enabled = rearrangeable, onLongClick = { touch(); weights.clear() })
             if (tiles.size > 1 || model.panes.any { it.key != focused && windowOf(it.key) == windowOf(focused) }) Btn("⊡", ::zoom, modifier = Modifier.testTag("zoom"))
             // Tap: fit on, or send this size once more when it is on already; hold: fit off.
-            Btn("⤢", { if (fit) fitAgain++ else fit = true }, selected = fit, enabled = writable, onLongClick = { fit = false })
+            Btn("⤢", { if (fit) fitAgain++ else fitOff = fitOff - focused }, selected = fit, enabled = writable, onLongClick = { fitOff = fitOff + focused })
             if (hardware) Btn("abc", { ime = !ime; if (ime) { fieldFocus.request(); keyboard?.show() } else keyboard?.hide() }, selected = ime)
             InboxCount(model)
             MessagesCount(model)
@@ -495,7 +528,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             val tile: @Composable (Int, Modifier) -> Unit = { i, m ->
                 key(tiles[i]) {
                     PaneTile(
-                        model, tiles[i], i == index, tiles.size > 1, tiles[i] in groups, fit, tiles[i] in held, siblings(tiles[i]), ids != null, exact?.sizes?.get(i)?.takeIf { sent },
+                        model, tiles[i], i == index, tiles.size > 1, tiles[i] in groups, tiles[i] !in fitOff, tiles[i] in held, siblings(tiles[i]), ids != null, exact?.sizes?.get(i)?.takeIf { sent },
                         fitAgain, now, if (i in bottom) slackPx else 0, m,
                         onMeasured = { sizes[tiles[i]] = it },
                         onDrop = { from, zone -> drop(from, i, zone) },
@@ -512,13 +545,16 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
                         menu = headerMenu == tiles[i],
                         onMenu = { headerMenu = tiles[i] },
                         onMenuClose = { headerMenu = null },
+                        onPartner = { beside(tiles[i], it) },
+                        onAcross = if (tiles.size > 1) ({ h -> across(tiles[i], h) }) else null,
+                        acrossNow = { h -> Tiles.isAcross(shape, i, h) },
                     ) {
                         focusedIndex = i
                         focus.requestFocus()
                     }
                 }
             }
-            Tree(shape, weights, Modifier.fillMaxSize(), dropping = tiles.size > 1, onAcross = ::lay, tile)
+            Tree(shape, weights, Modifier.fillMaxSize(), dropping = tiles.size > 1, onAcross = ::lay, groupOf = { groups[tiles.getOrNull(it) ?: ""] }, tile)
         }
         Rule()
         if (minimised.isNotEmpty()) MinimisedRow(model, minimised, now) { show(it) }
@@ -591,13 +627,14 @@ enum class Layout {
 /**
  * The tree of splits: a leaf is a tile, a split a row or a column sharing the space by its
  * shares, with a bar between neighbours that drags the split and, while a header is dragged,
- * takes it to lay the pane across the split, first or last by which half it lands on.
+ * takes it to lay the pane across the split, first or last by which half it lands on. The bar
+ * between two tiles of one group (see [Groups]) carries the chain in the talk hue.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Tree(
     node: WindowLayout.Node, weights: SnapshotStateMap<String, List<Float>>, modifier: Modifier, dropping: Boolean,
-    onAcross: (from: String, key: String, horizontal: Boolean, first: Boolean) -> Unit, tile: @Composable (Int, Modifier) -> Unit,
+    onAcross: (from: String, key: String, horizontal: Boolean, first: Boolean) -> Unit, groupOf: (Int) -> Int? = { null }, tile: @Composable (Int, Modifier) -> Unit,
 ) {
     val p = LocalPalette.current
     when (node) {
@@ -609,6 +646,10 @@ private fun Tree(
             fun drag(k: Int, px: Float) { weights[node.key] = Tiles.drag(weights[node.key]?.takeIf { it.size == n } ?: Tiles.equal(n), k, px / total) }
             val bar: @Composable (Int) -> Unit = { k ->
                 var bounds by remember { mutableStateOf<Rect?>(null) }
+                // Two tiles of one group side by side: the chain between them.
+                val a = node.children[k] as? WindowLayout.Node.Leaf
+                val b = node.children[k + 1] as? WindowLayout.Node.Leaf
+                val chained = a != null && b != null && groupOf(a.index) != null && groupOf(a.index) == groupOf(b.index)
                 // The target outlives the tree it was made for: it drops into the latest one.
                 val across by rememberUpdatedState(onAcross)
                 val target = remember(node.key, k) {
@@ -630,20 +671,21 @@ private fun Tree(
                         .pointerInput(node.key, k) { detectDragGestures { change, delta -> change.consume(); drag(k, if (node.horizontal) delta.x else delta.y) } },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Box(Modifier.then(if (node.horizontal) Modifier.fillMaxHeight(0.3f).width(2.dp) else Modifier.fillMaxWidth(0.3f).height(2.dp)).background(p.dim))
+                    Box(Modifier.then(if (node.horizontal) Modifier.fillMaxHeight(0.3f).width(2.dp) else Modifier.fillMaxWidth(0.3f).height(2.dp)).background(if (chained) p.talk.copy(alpha = 0.4f) else p.dim))
+                    if (chained) Chain(p.talk, node.horizontal, Modifier.testTag("divider-chain"))
                 }
             }
             if (node.horizontal) {
                 Row(Modifier.fillMaxSize()) {
                     node.children.forEachIndexed { k, c ->
-                        Tree(c, weights, Modifier.fillMaxHeight().weight(w[k].coerceAtLeast(0.01f)), dropping, onAcross, tile)
+                        Tree(c, weights, Modifier.fillMaxHeight().weight(w[k].coerceAtLeast(0.01f)), dropping, onAcross, groupOf, tile)
                         if (k < n - 1) bar(k)
                     }
                 }
             } else {
                 Column(Modifier.fillMaxSize()) {
                     node.children.forEachIndexed { k, c ->
-                        Tree(c, weights, Modifier.fillMaxWidth().weight(w[k].coerceAtLeast(0.01f)), dropping, onAcross, tile)
+                        Tree(c, weights, Modifier.fillMaxWidth().weight(w[k].coerceAtLeast(0.01f)), dropping, onAcross, groupOf, tile)
                         if (k < n - 1) bar(k)
                     }
                 }
@@ -682,7 +724,7 @@ private fun mailOf(status: Lens.Status?, ink: Color): Color = if (status == Lens
 @Composable
 private fun Tabs(
     model: AppModel, open: List<String>, minimised: List<String>, focused: String, now: Long, modifier: Modifier,
-    onTap: (String) -> Unit, onHold: (String) -> Unit, menu: String?, onMenuClose: () -> Unit, onBeside: (String) -> Unit,
+    onTap: (String) -> Unit, onHold: (String) -> Unit, menu: String?, onMenuClose: () -> Unit, onBeside: (String) -> Unit, onPartner: (String, String) -> Unit,
 ) {
     val p = LocalPalette.current
     val panes = ArrayList<Pair<String, Pane?>>()
@@ -728,7 +770,7 @@ private fun Tabs(
                         if (status != null && status != Lens.Status.QUIET) { Mark(status, pane?.attention?.kind, ink); Text(" ", maxLines = 1) }
                         if (pane != null) PaneName(pane, ink, dimOf(status, ink), bold = isFocused, tab = true, mail = mailOf(status, ink), onMail = { model.mailOpen = MailTarget(address) })
                         else Text(Keys.address(address).substringAfter('/'), color = ink, maxLines = 1, style = LocalTextStyle.current.copy(fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Normal, shadow = null))
-                        if (menu == address) PaneMenu(model, address, onBeside = { onBeside(address) }, onClose = onMenuClose)
+                        if (menu == address) PaneMenu(model, address, onBeside = { onBeside(address) }, onClose = onMenuClose, onPartner = { onPartner(address, it) })
                     }
                 }
             }
@@ -1026,7 +1068,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
             }
         }
         Btn("⌨\uFE0E", { board = !board }, selected = board, enabled = writable, modifier = Modifier.testTag("keyboard-open"))
-        if (takes == true) Btn("⇪", { pick.launch(Files.MIMES.toTypedArray()) }, enabled = !busy && sending == null, modifier = Modifier.testTag("files"))
+        if (takes == true) Btn("⇪", { pick.launch(arrayOf("*/*")) }, enabled = !busy && sending == null, modifier = Modifier.testTag("files"))
         // Held, it records until the finger lifts; tapped, it records and the next tap stops.
         if (model.transcriber(state.key)) {
             Btn(
@@ -1058,7 +1100,8 @@ private fun PaneTile(
     windowFit: Boolean, expected: WindowLayout.Size?, fitAgain: Int, now: Long, slackPx: Int, modifier: Modifier,
     onMeasured: (WindowLayout.Size) -> Unit, onDrop: (String, Tiles.Zone) -> Unit, onZoom: () -> Unit, onClose: () -> Unit, onCloseTile: () -> Unit,
     onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onChanges: () -> Unit, onName: () -> Unit, onShare: () -> Unit, onPrompt: () -> Unit, ghost: String? = null,
-    menu: Boolean = false, onMenu: () -> Unit = {}, onMenuClose: () -> Unit = {}, onFocus: () -> Unit,
+    menu: Boolean = false, onMenu: () -> Unit = {}, onMenuClose: () -> Unit = {}, onPartner: (String) -> Unit = {},
+    onAcross: ((Boolean) -> Unit)? = null, acrossNow: (Boolean) -> Boolean = { false }, onFocus: () -> Unit,
 ) {
     // Another tile of this window carries the fit: this one is held. With the window fitted as
     // one ([windowFit]) the view sends the size and this tile is [expected] to be its share.
@@ -1170,10 +1213,13 @@ private fun PaneTile(
                 Text(" ${Lens.word(status, kind)} ", color = ink, maxLines = 1, modifier = if (waiting) Modifier.alpha(pulse()) else Modifier)
                 // What waits under a parked pane's mark, dimmed, so it is not lost.
                 if (status == Lens.Status.LATER && kind != null) Text("· ${Lens.glyph(Lens.Status.WAITING, kind)} $kind ", color = dimOf(status, ink), maxLines = 1)
+                // A question's or a permission's own words, in the room the name leaves.
+                val said = pane?.attention?.text?.takeIf { waiting && (kind == "question" || kind == "permission") && it.isNotBlank() }
+                if (said != null) Text("· $said ", color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).testTag("notice"))
                 // A question asked with fixed answers: its choices, answered here.
                 if (pane != null && waiting) Choices(model, pane)
             }
-            if (menu) PaneMenu(model, address, onBeside = null, onClose = onMenuClose)
+            if (menu) PaneMenu(model, address, onBeside = null, onClose = onMenuClose, onPartner = onPartner, onAcross = onAcross, acrossNow = acrossNow)
             if (fitAsked && pane?.writable == true) {
                 // Alert colour when the host did not keep this phone's size: another terminal holds
                 // it, or another tile of the window carries the fit.
@@ -1182,7 +1228,7 @@ private fun PaneTile(
                     windowFit -> expected != null && (pane.width != expected.cols || pane.height != expected.rows)
                     else -> state.fitKey.isNotEmpty() && state.fitKey != "${pane.width}x${pane.height}"
                 }
-                Text(" ${pane.width}×${pane.height}${if (held) " held" else ""} ", color = if (held) p.alert else ink, maxLines = 1)
+                Text(" ${pane.width}×${pane.height}${if (held) " held" else ""} ", color = if (held) p.alert else ink, maxLines = 1, modifier = Modifier.testTag("size"))
             }
             // The pane's live shares made by this token, counted and dim; a tap opens the share sheet.
             if (pane != null && pane.shared > 0) {
@@ -1198,7 +1244,8 @@ private fun PaneTile(
             // pane is writable: the header asks first. Elsewhere × closes the tile.
             if (pane?.writable == true && model.hostCloses(address)) {
                 if (asking) {
-                    Text(" close the pane on ${pane.host}? ", color = ink, maxLines = 1, fontWeight = FontWeight.Bold)
+                    // The only pane of its session: closing it ends the session, and the question says so.
+                    Text(if (pane.last) " end session ${pane.session} on ${pane.host}? " else " close the pane on ${pane.host}? ", color = ink, maxLines = 1, fontWeight = FontWeight.Bold, modifier = Modifier.testTag("close-question"))
                     Text(" y ", color = ink, maxLines = 1, modifier = Modifier.border(1.dp, ink).clickable { asking = false; onClose() })
                     Text(" n ", color = ink, maxLines = 1, modifier = Modifier.padding(start = 4.dp).border(1.dp, ink).clickable { asking = false })
                 } else {
@@ -1303,9 +1350,11 @@ private fun PaneTile(
                     detectTapGestures(
                         onLongPress = { at ->
                             val (index, _) = rowAt(at.y) ?: return@detectTapGestures
-                            // Held on a name of the directory, the quoted name lands on the line, nothing sent.
                             val f = facts
                             val px = at.x + if (f.sideways) horizontal.value else 0
+                            // Held on a link a program named, the address shows: the label may say anything.
+                            Ansi.hrefAt(shown[index], colAt(index, px))?.let { model.told = it.take(200); return@detectTapGestures }
+                            // Held on a name of the directory, the quoted name lands on the line, nothing sent.
                             Names.at(shown[index].joinToString("") { it.text }, colAt(index, px), f.names)?.let { m ->
                                 state.landed = state.landed + Names.shellQuote(m.name)
                                 return@detectTapGestures
@@ -1320,7 +1369,8 @@ private fun PaneTile(
                         val (index, y) = rowAt(at.y) ?: return@detectTapGestures
                         val col = colAt(index, px)
                         val row = shown[index].joinToString("") { it.text }
-                        if (Links.at(row, col) != null) return@detectTapGestures
+                        // A link, printed or named by the program, opens through its annotation and sends nothing.
+                        if (Links.at(row, col) != null || Ansi.hrefAt(shown[index], col) != null) return@detectTapGestures
                         Links.fileAt(row, col)?.let { onFile(Shown(address, name = it.name)); return@detectTapGestures }
                         if (f.previews) Links.pathAt(row, col)?.let { onFile(Shown(address, path = it.path)); return@detectTapGestures }
                         // A name of the pane's directory: a directory is entered, a file opened as set;
@@ -1452,12 +1502,15 @@ private class StyledRow(val text: AnnotatedString, val links: List<Underline>)
 
 private class Underline(val start: Int, val end: Int, val color: Color)
 
-// Colours as the pane gave them; a web address in the row opens through the system, and an
-// inbox file or, where the host previews, a printed path is underlined the same way, dotted.
+// Colours as the pane gave them; a web address in the row, or a link the program named, opens
+// through the system, and an inbox file or, where the host previews, a printed path is
+// underlined the same way, dotted. The program's link comes first where they overlap.
 private fun styled(row: List<Ansi.Span>, p: Palette, paths: Boolean): StyledRow {
     val links = ArrayList<Underline>()
     // The builder's own toString is not its text.
     val text = row.joinToString("") { it.text }
+    val named = ArrayList<IntRange>()
+    fun inNamed(at: Int) = named.any { at in it }
     fun colourAt(at: Int): Color {
         var off = 0
         for (s in row) {
@@ -1469,11 +1522,18 @@ private fun styled(row: List<Ansi.Span>, p: Palette, paths: Boolean): StyledRow 
     val built = buildAnnotatedString {
         for (s in row) {
             val st = spanStyle(s.style, p)
+            val href = s.style.href
+            if (href != null && s.text.isNotEmpty()) {
+                val start = length
+                named.add(start until start + s.text.length)
+                addLink(LinkAnnotation.Url(href, linkStyles), start, start + s.text.length)
+                links.add(Underline(start, start + s.text.length, colourAt(start)))
+            }
             if (st == null) append(s.text) else withStyle(st) { append(s.text) }
         }
-        for (l in Links.find(text)) { addLink(LinkAnnotation.Url(l.href, linkStyles), l.start, l.end); links.add(Underline(l.start, l.end, colourAt(l.start))) }
-        for (f in Links.findFiles(text)) if (Links.at(text, f.start) == null) links.add(Underline(f.start, f.end, colourAt(f.start)))
-        if (paths) for (l in Links.findPaths(text)) if (Links.at(text, l.start) == null && Links.fileAt(text, l.start) == null) links.add(Underline(l.start, l.end, colourAt(l.start)))
+        for (l in Links.find(text)) if (!inNamed(l.start)) { addLink(LinkAnnotation.Url(l.href, linkStyles), l.start, l.end); links.add(Underline(l.start, l.end, colourAt(l.start))) }
+        for (f in Links.findFiles(text)) if (Links.at(text, f.start) == null && !inNamed(f.start)) links.add(Underline(f.start, f.end, colourAt(f.start)))
+        if (paths) for (l in Links.findPaths(text)) if (Links.at(text, l.start) == null && Links.fileAt(text, l.start) == null && !inNamed(l.start)) links.add(Underline(l.start, l.end, colourAt(l.start)))
         if (length == 0) append(" ")
     }
     return StyledRow(built, links)

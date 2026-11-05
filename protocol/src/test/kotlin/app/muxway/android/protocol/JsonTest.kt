@@ -250,6 +250,10 @@ class JsonTest {
         assertEquals(1, Json.panes("""{"panes":[{"session":"work","shared":1}]}""").single().shared)
         assertEquals(0, Json.panes("""{"panes":[{"session":"work"}]}""").single().shared)
         assertEquals(0, Json.panes("""{"panes":[{"session":"work","shared":-3}]}""").single().shared)
+        // The only pane of its session, which a close ends; absent or odd is not.
+        assertTrue(Json.panes("""{"panes":[{"session":"work","last":true}]}""").single().last)
+        assertFalse(Json.panes("""{"panes":[{"session":"work"}]}""").single().last)
+        assertFalse(Json.panes("""{"panes":[{"session":"work","last":"yes"}]}""").single().last)
         val body = org.json.JSONObject(Json.shareBody(3600, "aaaa-bbbb-2222"))
         assertEquals(3600, body.getInt("ttl"))
         assertEquals("aaaa-bbbb-2222", body.getString("password"))

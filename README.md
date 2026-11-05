@@ -125,6 +125,8 @@ The features: [connect](docs/features/connect.md),
 [lenses](docs/features/lenses.md),
 [notifications](docs/features/notifications.md),
 [inbox](docs/features/inbox.md),
+[mail](docs/features/mail.md), [share](docs/features/share.md),
+[shell helper](docs/features/shell-helper.md),
 [attachments](docs/features/attachments.md),
 [watch](docs/features/watch.md), [admin](docs/features/admin.md),
 [look](docs/features/look.md). How it is built:

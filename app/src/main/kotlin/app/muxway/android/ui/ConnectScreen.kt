@@ -194,9 +194,12 @@ fun ConnectScreen(model: AppModel) {
         Toggle("notification text: show what a pane asks on the phone and the watch (bystanders can read it)", notifyText) { notifyText = it }
         Toggle("watch may answer: the watch can send Enter, Esc, y, n, ^C and a spoken line to a pane while this phone is locked", watchAnswer) { watchAnswer = it }
         Rule(Modifier.padding(vertical = 6.dp))
+        var help by remember { mutableStateOf(false) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Btn("save settings", ::saveSettings)
+            Btn("help", { help = true }, modifier = Modifier.testTag("help"))
         }
+        if (help) HelpSheet { help = false }
         for (c in model.adminHubs) AdminSection(model, c)
         Spacer(Modifier.height(12.dp))
         Text("  https only. plain http reaches localhost alone.\n  each hub's token is kept in the keystore and never shown again.", color = p.dim)
