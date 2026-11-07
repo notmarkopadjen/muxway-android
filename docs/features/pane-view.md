@@ -166,6 +166,25 @@ focused pane.
   nothing is typed into the pane, and the attention goes with it; the
   buttons are dim on a read-only pane and while an answer is on its way
   (see [notifications](notifications.md#questions-with-fixed-answers)).
+- A tile shows **its own pane or nothing**. An address is a position
+  (`work/1.1`), and the host renumbers panes when one of their window
+  closes, so a tile learns which pane it is for by the pane's id
+  (`pane_id` of the listing) when it opens, or from its first read when
+  the listing had no entry yet, and takes no read that names another
+  pane at its address; a tile reopened at an address another pane has
+  moved to starts empty, never with the old pane's kept screen. While a
+  tile has nothing of its own to draw yet it **warms up** like the tube:
+  a bright line across the middle of the box holds until the first
+  frame, then opens into the box with a bloom and settles through
+  scanlines, in the theme's ink, 600 ms, the frame coming up under it;
+  with *effects* off the box is blank until the frame. Never a borrowed
+  screen, never a spinner. When the host renumbers a tile's pane, the
+  tile **follows it** to its new address (the addresses change, the
+  focus, the arrangement, the minimised row and a fit turned off stay);
+  when the pane is gone, the tile closes with a word in the status
+  area, `<name> is gone` (on the list, when it was the last), and no
+  other tile changes pane. `Follow` in the protocol module decides,
+  from each listing, which tiles move and which are gone; unit-tested.
 - The line under the input shows the time of the last successful read, or
   the error.
 
@@ -507,9 +526,13 @@ anything to it.
 A Wear OS watch shows a pane's tail with a few of these answers, through
 the phone; see [watch.md](watch.md), *The pane screen*.
 
-A pane that **exits on its host** is read no more: the tile leaves the
-view by itself when the hub answers `404 not_found`, and with no tiles
-left the pane list shows.
+A pane that **exits on its host** is read no more: a read answers `404
+not_found`, or names the pane that took its address, and the next
+listing of its hub, asked at once, says it is gone (its host is listed
+without it): the tile leaves the view by itself with the word, and with
+no tiles left the pane list shows. A tile whose host is away (offline,
+or its agent reconnecting) keeps its screen and its error until the host
+is back.
 
 ## Closing a pane
 

@@ -145,8 +145,8 @@ client's side of it.
 
 | Feature | Request | Used by |
 |---|---|---|
-| hosts and panes | `GET /v1/hosts`, `GET /v1/panes`; a host's `sessions`, `close`, `keys` and `rename` flags decide what the UI offers; a pane's `alias` is its name first, its `cwd` the folder in the tile header, its `talk` partners draw the groups and its `mail` the `✉ n` count (`protocol/.../Groups.kt`, `Lens.kt`) | pane list, strip, tiles, watch service |
-| reading a pane | `GET /v1/panes/{address}?lines=N&ansi=1` with `If-None-Match`; `304` when unchanged; colour kept, every other escape dropped | pane view, the watch's tail |
+| hosts and panes | `GET /v1/hosts`, `GET /v1/panes`; a host's `sessions`, `close`, `keys` and `rename` flags decide what the UI offers; a pane's `alias` is its name first, its `cwd` the folder in the tile header, its `talk` partners draw the groups and its `mail` the `✉ n` count (`protocol/.../Groups.kt`, `Lens.kt`); its `pane_id` (`%<digits>`, else none) is what a tile knows its pane by, so a tile follows the pane when the host renumbers it and closes when the listing lacks it (`protocol/.../Follow.kt`) | pane list, strip, tiles, watch service |
+| reading a pane | `GET /v1/panes/{address}?lines=N&ansi=1` with `If-None-Match`; `304` when unchanged; colour kept, every other escape dropped; an answer whose `pane_id` is not the tile's is not drawn, and a `404` or such a stranger has the hub listed again at once (once per two seconds) | pane view, the watch's tail |
 | typing | `POST /v1/panes/{address}/input` with `{"text"}` (control characters removed, 4096 bytes at most) | input bar, watch |
 | keys | the same with `{"key"}`; the grammar (`C-`, `M-`, `S-` on any key, chords) where the host says `keys: 2`, the old names elsewhere | key row, keyboard, hardware keyboard, watch |
 | mouse | the same with `{"mouse": {button, x, y}}`, only when the pane reports the mouse on; `count` (2 to 50, wheel buttons only) turns the wheel that many notches in one request, left out where the hub answered `bad_input` to it | taps, the notches of a drag |

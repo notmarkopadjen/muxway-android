@@ -717,6 +717,48 @@ class FlowTest {
     }
 
     @Test
+    fun aTileFollowsItsPaneWhenTheHostRenumbersAndClosesWithAWordWhenItIsGone() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0")
+        // A session of this test's own, so the shared panes are left as they are.
+        await("+ session").performClick()
+        await("cancel")
+        rule.onNode(hasSetTextAction()).performTextInput("own")
+        rule.onNodeWithText("start").performClick()
+        // The tile warms up until its first frame is in, then the frame comes up and the warm-up goes.
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("warmup").fetchSemanticsNodes().isNotEmpty() }
+        shot("own-pane-warmup")
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("warmup").fetchSemanticsNodes().isEmpty() }
+        await("$ ")
+        rule.onNodeWithTag("add").performClick()
+        await("+ pane").performClick()
+        rule.waitUntil(15_000) { tiles() == 2 }
+        rule.onNodeWithTag("tile:alice-laptop/own/0.1").assertExists()
+        shot("own-pane-split")
+        // The second tile is focused once it is up: a line typed into it marks its screen.
+        rule.onNode(hasSetTextAction()).performTextInput("echo second-pane")
+        rule.onNodeWithText("⏎").performClick()
+        await("second-pane")
+        // The first pane exits: the host renumbers the second to its address. The first's tile
+        // goes with the word, the second's follows its pane, its screen its own.
+        rule.onNodeWithTag("tile:alice-laptop/own/0.0").performClick()
+        rule.onNode(hasSetTextAction()).performTextInput("exit")
+        rule.onNodeWithText("⏎").performClick()
+        rule.waitUntil(15_000) { tiles() == 1 }
+        await("is gone")
+        rule.onNodeWithTag("tile:alice-laptop/own/0.0").assertExists()
+        rule.onAllNodesWithTag("tile:alice-laptop/own/0.1").assertCountEquals(0)
+        await("second-pane")
+        shot("own-pane-moved")
+        // The last pane exits too: the view ends on the list, with the word.
+        rule.onNode(hasSetTextAction()).performTextInput("exit")
+        rule.onNodeWithText("⏎").performClick()
+        await("tap to open")
+        await("is gone")
+        shot("own-pane-gone")
+    }
+
+    @Test
     fun theGhostWordIsOffBySetting() {
         SettingsStore(context).save(SettingsStore(context).load().copy(suggest = false))
         scenario = ActivityScenario.launch(MainActivity::class.java)

@@ -208,7 +208,7 @@ object Json {
             windowIndex = o.optInt("window_index"),
             window = o.optString("window"),
             paneIndex = o.optInt("pane_index"),
-            paneId = o.optString("pane_id"),
+            paneId = Follow.id(o.optString("pane_id")),
             width = o.optInt("width"),
             height = o.optInt("height"),
             title = Input.printable(o.optString("title")),

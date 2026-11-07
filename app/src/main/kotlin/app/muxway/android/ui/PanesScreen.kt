@@ -38,6 +38,7 @@ import app.muxway.android.Screen
 import app.muxway.android.protocol.Groups
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Pane
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -107,6 +108,9 @@ fun PanesScreen(model: AppModel) {
             // The way to open a selection comes right after the list, not pinned to the screen's foot.
             if (model.selected.isNotEmpty()) item(key = "selection") { SelectionBar(model) }
         }
+        // A word from the view that ended on the list: the last tile's pane is gone.
+        model.told?.let { Text(" $it", color = p.dim, modifier = Modifier.padding(horizontal = 4.dp)) }
+        LaunchedEffect(model.told) { if (model.told != null) { delay(4000); model.told = null } }
         Text(if (model.selected.isEmpty()) "  tap to open · hold to pick several" else "  ${model.selected.size}/4 · hold to pick more", color = p.dim, modifier = Modifier.padding(4.dp))
     }
     model.naming?.takeIf { it.into == null }?.let { SessionDialog(it, model) }

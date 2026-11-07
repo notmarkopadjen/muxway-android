@@ -13,6 +13,7 @@ import app.muxway.android.protocol.Board
 import app.muxway.android.protocol.Changes
 import app.muxway.android.protocol.Clip
 import app.muxway.android.protocol.Files
+import app.muxway.android.protocol.Follow
 import app.muxway.android.protocol.Inbox
 import app.muxway.android.protocol.Json
 import app.muxway.android.protocol.Links
@@ -28,6 +29,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -1579,6 +1581,40 @@ class E2ETest {
         val top = api.previewFile(address, "docs/top.md")
         assertEquals("top of main\n", String(top.bytes, Charsets.UTF_8))
         sameFile(File(main, "docs/top.md"), top.found)
+    }
+
+    @Test
+    fun f42_aTileKnowsItsPaneByIdAndFollowsItWhenTheHostRenumbers() {
+        val (api, _) = setup()
+        api.split(HOST, "work", 0, "h")
+        waitFor("two panes") { api.panes().size == 2 }
+        val before = api.panes().sortedBy { it.paneIndex }
+        val first = before[0]
+        val second = before[1]
+        assertTrue(first.paneId, Follow.ID.matches(first.paneId))
+        assertNotEquals(first.paneId, second.paneId)
+        // A read names the pane it answers for: each tile's own, and no other's.
+        assertEquals(first.paneId, api.read(first.address, 50, null)!!.pane.paneId)
+        assertEquals(second.paneId, api.read(second.address, 50, null)!!.pane.paneId)
+        assertTrue(Follow.own(first.paneId, first.paneId))
+        assertFalse(Follow.own(first.paneId, second.paneId))
+        // The first pane exits on the host: tmux renumbers the second to the first's address.
+        core.tmux("kill-pane", "-t", "work:0.0")
+        waitFor("one pane listed") { api.panes().size == 1 }
+        val now = api.panes().single()
+        assertEquals(first.address, now.address)
+        assertEquals(second.paneId, now.paneId)
+        // The read at the first's address is the second's: a stranger to the first tile, the second's own.
+        val read = api.read(first.address, 50, null)!!
+        assertFalse(Follow.own(first.paneId, read.pane.paneId))
+        assertTrue(Follow.own(second.paneId, read.pane.paneId))
+        val gone = assertThrows(ApiException::class.java) { api.read(second.address, 50, null) }
+        assertEquals("not_found", gone.code)
+        // The listing moves the second tile to the first's address and drops the first, in one pass.
+        val ids = mapOf(first.key to first.paneId, second.key to second.paneId)
+        val out = Follow.reconcile("", listOf(first.key, second.key), { ids[it] ?: "" }, emptySet(), api.panes()) { h -> api.hosts().any { it.name == h && it.online } }
+        assertEquals(listOf(first.key), out.gone)
+        assertEquals(mapOf(second.key to first.key), out.moved)
     }
 
     @Test

@@ -196,7 +196,16 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     var layout by rememberSaveable { mutableStateOf(preset) }
     var custom by remember { mutableStateOf<WindowLayout.Node?>(null) }
     val weights = remember { mutableStateMapOf<String, List<Float>>() }
-    val kept = remember { Remembered() }
+    val kept = remember { Remembered().also { it.moves = model.moves } }
+    // The host renumbered a tile's pane and the model moved the tile: the minimised row and the
+    // fit-off set, kept here by key, follow it.
+    LaunchedEffect(model.moves) {
+        if (model.moves == kept.moves) return@LaunchedEffect
+        kept.moves = model.moves
+        val by = model.moved
+        parked = parked.map { by[it] ?: it }
+        fitOff = fitOff.map { by[it] ?: it }.toSet()
+    }
     // A made tree is drawn only while it has a leaf per tile: for the frame between a tile
     // leaving or arriving and the effect below catching up, the preset stands in.
     val shape = if (layout == Layout.CUSTOM) custom?.takeIf { Tiles.leaves(it).size == tiles.size } ?: preset.tree(tiles.size) else layout.tree(tiles.size)
@@ -588,6 +597,7 @@ private class Remembered {
     var touched = 0L
     var sent = ""
     var count = 0
+    var moves = 0
 }
 
 /** How several panes share the screen: a preset by count, or a tree made here ([CUSTOM]). */
@@ -1454,6 +1464,9 @@ private fun PaneTile(
                     }
                 }
             }
+            // While the tile has nothing of its own to draw, the tube warms up over the box; the
+            // first frame comes up under it. Never a borrowed screen, never a spinner.
+            Warmup(hasOwn = state.read, Modifier.matchParentSize())
         }
     }
 }
