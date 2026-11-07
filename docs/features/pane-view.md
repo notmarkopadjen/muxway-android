@@ -82,7 +82,10 @@ focused pane.
   or previous tile, or with one tile open swaps the strip's next or
   previous pane into it, coming round at either end as `]` and `[` do
   in the browser; the panes parked for later are skipped, since a swipe
-  that landed on one would only wake it. A tab **held and let go in place** (the drag's long
+  that landed on one would only wake it. With the *hardware keyboard*
+  setting on, `Ctrl+]` and `Ctrl+[` on a hardware keyboard do the same
+  from anywhere in the view, the line and direct typing included (see
+  *Typing*). A tab **held and let go in place** (the drag's long
   press without a move) opens the **pane menu**: *open
   beside* opens its pane beside the focused one, as the browser's
   Shift+click does; *⇆ beside <partner>*, one row per pane this one
@@ -166,6 +169,30 @@ focused pane.
   nothing is typed into the pane, and the attention goes with it; the
   buttons are dim on a read-only pane and while an answer is on its way
   (see [notifications](notifications.md#questions-with-fixed-answers)).
+- A tile shows **its own pane or nothing**. An address is a position
+  (`work/1.1`), and the host renumbers panes when one of their window
+  closes, so a tile learns which pane it is for by the pane's id
+  (`pane_id` of the listing) when it opens, or from its first read when
+  the listing had no entry yet, and takes no read that names another
+  pane at its address; a tile reopened at an address another pane has
+  moved to starts empty, never with the old pane's kept screen. While a
+  tile has nothing of its own to draw yet it **warms up** like the tube:
+  a bright line across the middle of the box holds until the first
+  frame, then opens into the box with a bloom and settles through
+  scanlines, in the theme's ink, 600 ms, the frame coming up under it;
+  with *effects* off the box is blank until the frame. Never a borrowed
+  screen, never a spinner. When the host renumbers a tile's pane, the
+  tile **follows it** to its new address (the addresses change, the
+  focus, the arrangement, the minimised row and a fit turned off stay);
+  when the pane is gone, the tile closes with a word in the status
+  area, `<name> is gone` (on the list, when it was the last), and no
+  other tile changes pane. `Follow` in the protocol module decides,
+  from each listing, which tiles move and which are gone; unit-tested.
+- The view is the **desk** (see [desk](desk.md)): half a second after a
+  change of the tiles, the focus, the arrangement, a split's shares or
+  the minimised row it is written to the focused tile's hub, and another
+  client's change to the desk is followed within a second, the focus
+  excepted.
 - The line under the input shows the time of the last successful read, or
   the error.
 
@@ -416,7 +443,15 @@ it is writable:
   status line says `direct`. A tap on the line takes the keys back, and
   back from the line gives them to the pane again; nothing goes from a
   read-only pane. Without the setting the named keys still go by name;
-  letters wait for the line;
+  letters wait for the line. Two chords are the view's and never reach
+  the pane: `Ctrl+]` moves to the next tile and `Ctrl+[` to the
+  previous, coming round at the ends, or with one tile open swaps the
+  strip's next or previous awake pane into it, as the swipe does;
+  direct typing stays on, so the next pane is typed into at once, and
+  from the line the line keeps the focus and follows the pane
+  (`Chords.pane` in the protocol module decides; whoever needs the keys
+  themselves, a terminal's `Escape` or telnet's escape, sends them from
+  the keyboard window);
 - **type** sends the text as typed, without `Enter`;
 - **`⏎`** (send), the keyboard's send action, or a hardware `Enter` sends the
   text and then `Enter`;
@@ -507,9 +542,13 @@ anything to it.
 A Wear OS watch shows a pane's tail with a few of these answers, through
 the phone; see [watch.md](watch.md), *The pane screen*.
 
-A pane that **exits on its host** is read no more: the tile leaves the
-view by itself when the hub answers `404 not_found`, and with no tiles
-left the pane list shows.
+A pane that **exits on its host** is read no more: a read answers `404
+not_found`, or names the pane that took its address, and the next
+listing of its hub, asked at once, says it is gone (its host is listed
+without it): the tile leaves the view by itself with the word, and with
+no tiles left the pane list shows. A tile whose host is away (offline,
+or its agent reconnecting) keeps its screen and its error until the host
+is back.
 
 ## Closing a pane
 

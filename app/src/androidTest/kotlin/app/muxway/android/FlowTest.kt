@@ -36,6 +36,13 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.withKeyDown
+import androidx.compose.ui.input.key.Key
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -78,6 +85,8 @@ class FlowTest {
     fun seed() {
         assumeTrue("hub and token come from scripts/ui-tests.sh", hub.isNotEmpty() && token.isNotEmpty())
         SettingsStore(context).save(Settings(hubs = listOf(Hub("test", "test", hub)), current = "test", refreshSeconds = 1))
+        // A test that ended in a view would start the next on the desk: every test starts on the list.
+        SettingsStore(context).saveLastPlace("list")
         Vault(context).store("test", token)
         File(context.getExternalFilesDir(null), "screens").deleteRecursively()
     }
@@ -714,6 +723,132 @@ class FlowTest {
         rule.onNodeWithTag("help-sheet").assertExists()
         await("lay the pane a tile talks with beside it")
         shot("help-sheet")
+    }
+
+    @Test
+    fun aTileFollowsItsPaneWhenTheHostRenumbersAndClosesWithAWordWhenItIsGone() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0")
+        // A session of this test's own, so the shared panes are left as they are.
+        await("+ session").performClick()
+        await("cancel")
+        rule.onNode(hasSetTextAction()).performTextInput("own")
+        rule.onNodeWithText("start").performClick()
+        // The tile warms up until its first frame is in, then the frame comes up and the warm-up goes.
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("warmup").fetchSemanticsNodes().isNotEmpty() }
+        shot("own-pane-warmup")
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("warmup").fetchSemanticsNodes().isEmpty() }
+        await("$ ")
+        rule.onNodeWithTag("add").performClick()
+        await("+ pane").performClick()
+        rule.waitUntil(15_000) { tiles() == 2 }
+        rule.onNodeWithTag("tile:alice-laptop/own/0.1").assertExists()
+        shot("own-pane-split")
+        // The second tile is focused once it is up: a line typed into it marks its screen.
+        rule.onNode(hasSetTextAction()).performTextInput("echo second-pane")
+        rule.onNodeWithText("⏎").performClick()
+        await("second-pane")
+        // The first pane exits: the host renumbers the second to its address. The first's tile
+        // goes with the word, the second's follows its pane, its screen its own.
+        rule.onNodeWithTag("tile:alice-laptop/own/0.0").performClick()
+        rule.onNode(hasSetTextAction()).performTextInput("exit")
+        rule.onNodeWithText("⏎").performClick()
+        rule.waitUntil(15_000) { tiles() == 1 }
+        await("is gone")
+        rule.onNodeWithTag("tile:alice-laptop/own/0.0").assertExists()
+        rule.onAllNodesWithTag("tile:alice-laptop/own/0.1").assertCountEquals(0)
+        await("second-pane")
+        shot("own-pane-moved")
+        // The last pane exits too: the view ends on the list, with the word.
+        rule.onNode(hasSetTextAction()).performTextInput("exit")
+        rule.onNodeWithText("⏎").performClick()
+        await("tap to open")
+        await("is gone")
+        shot("own-pane-gone")
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun thePaneChordsOfAHardwareKeyboardMoveBetweenTheTilesAndNeverReachThePane() {
+        // A hardware keyboard assumed: the keys go to the pane while the line is not focused.
+        SettingsStore(context).save(SettingsStore(context).load().copy(hardwareKeyboard = true))
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        rule.onNodeWithTag("add").performClick()
+        await("+ pane").performClick()
+        rule.waitUntil(15_000) { tiles() == 2 }
+        // The new tile is focused; the line's hint names the focused pane.
+        await("direct")
+        rule.waitUntil(5_000) { rule.onAllNodesWithText("work/0.1").fetchSemanticsNodes().isNotEmpty() }
+        // Ctrl+] comes round to the first tile, Ctrl+] again to the second, Ctrl+[ back to the first.
+        rule.onRoot().performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.RightBracket) } }
+        rule.waitUntil(5_000) { rule.onAllNodesWithText("work/0.0").fetchSemanticsNodes().isNotEmpty() }
+        shot("chord-next")
+        rule.onRoot().performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.RightBracket) } }
+        rule.waitUntil(5_000) { rule.onAllNodesWithText("work/0.1").fetchSemanticsNodes().isNotEmpty() }
+        rule.onRoot().performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.LeftBracket) } }
+        rule.waitUntil(5_000) { rule.onAllNodesWithText("work/0.0").fetchSemanticsNodes().isNotEmpty() }
+        // Direct typing stayed on: a word typed lands in the focused pane, and no chord did.
+        rule.onRoot().performKeyInput { pressKey(Key.E); pressKey(Key.C); pressKey(Key.H); pressKey(Key.O); pressKey(Key.Spacebar); pressKey(Key.C); pressKey(Key.H); pressKey(Key.O); pressKey(Key.R); pressKey(Key.D); pressKey(Key.Enter) }
+        await("chord")
+        rule.onNode(hasTestTag("tile:alice-laptop/work/0.0") and hasAnyDescendant(hasText("chord", substring = true))).assertExists()
+        rule.onAllNodes(hasText("^]", substring = true)).assertCountEquals(0)
+        rule.onAllNodes(hasText("^[", substring = true)).assertCountEquals(0)
+        shot("chord-typed")
+        // From the line the chord moves the pane too, and the line keeps the focus.
+        rule.onNode(hasSetTextAction()).performClick()
+        rule.onNode(hasSetTextAction()).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.RightBracket) } }
+        rule.waitUntil(5_000) { rule.onAllNodesWithText("work/0.1").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNode(hasSetTextAction()).assertIsFocused()
+        shot("chord-from-line")
+    }
+
+    /** A desk written through the hub by the test, as another client would; the status. */
+    private fun putDesk(body: String): Int {
+        val c = java.net.URL("$hub/v1/desk").openConnection() as java.net.HttpURLConnection
+        c.requestMethod = "PUT"
+        c.doOutput = true
+        c.setRequestProperty("Authorization", "Bearer $token")
+        c.setRequestProperty("Content-Type", "application/json")
+        c.outputStream.use { it.write(body.toByteArray()) }
+        return c.responseCode
+    }
+
+    @Test
+    fun theDeskIsWrittenOpenedFromItsRowAndFollowed() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        // The row is there, whatever an earlier test left on the desk.
+        await("▤ ")
+        rule.onNodeWithTag("desk-row").assertExists()
+        shot("desk-row-at-start")
+        await("work/0.0").performClick()
+        await("$ ")
+        rule.onNodeWithTag("add").performClick()
+        await("+ pane").performClick()
+        rule.waitUntil(15_000) { tiles() == 2 }
+        // Half a second after the change the view is the desk: the row names it.
+        Thread.sleep(1_500)
+        rule.onNodeWithText("panes").performClick()
+        await("desk · 2 panes · column")
+        shot("desk-row")
+        rule.onNodeWithTag("desk-row").performClick()
+        rule.waitUntil(15_000) { tiles() == 2 }
+        shot("desk-opened")
+        // Another client leaves one pane on the desk: the view follows within the second, and the
+        // view does not write it back (it shows what the hub has).
+        assertEquals(200, putDesk("""{"view":"panes","panes":["alice-laptop/work/0.0"],"focused":"alice-laptop/work/0.0"}"""))
+        rule.waitUntil(15_000) { tiles() == 1 }
+        rule.onNodeWithTag("tile:alice-laptop/work/0.0").assertExists()
+        shot("desk-followed")
+        // Started again on the list after a view: the desk opens by itself.
+        scenario!!.close()
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        rule.waitUntil(15_000) { tiles() == 1 }
+        rule.onNodeWithTag("tile:alice-laptop/work/0.0").assertExists()
+        shot("desk-at-start")
+        rule.onNodeWithText("panes").performClick()
+        await("desk · 1 pane")
     }
 
     @Test

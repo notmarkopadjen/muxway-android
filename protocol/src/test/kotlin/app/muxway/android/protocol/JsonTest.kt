@@ -21,6 +21,16 @@ class JsonTest {
         assertEquals("build", p.title)
         assertEquals("permission", p.attention?.kind)
         assertEquals("Claude needs you", p.attention?.text)
+        assertEquals("%3", p.paneId)
+    }
+
+    @Test
+    fun aPaneIdOutsideTmuxsGrammarIsNone() {
+        for (bad in listOf("3", "%3\u0007", "%" + "9".repeat(40), "../x", "")) {
+            val p = Json.panes("""{"panes":[{"session":"work","pane_id":"$bad","mode":"read"}]}""").single()
+            assertEquals(bad, "", p.paneId)
+        }
+        assertEquals("%12", Json.read("""{"pane":{"session":"work","pane_id":"%12"},"content":""}""", "").pane.paneId)
     }
 
     @Test

@@ -3,10 +3,12 @@ package app.muxway.android.ui
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.utf16CodePoint
+import app.muxway.android.protocol.Chords
 import app.muxway.android.protocol.Input
 
 /**
@@ -32,6 +34,13 @@ object HardKeys {
     }
 
     fun name(key: Key): String? = MAP[key]
+
+    /** `1` for Ctrl+], `-1` for Ctrl+[, the pane chords, which never reach the pane; `0` for any other key. */
+    fun paneChord(e: KeyEvent): Int {
+        val code = when (e.key) { Key.RightBracket -> ']'; Key.LeftBracket -> '['; else -> null }
+        val char = e.nativeKeyEvent.getUnicodeChar(0).takeIf { it in 0x21..0x7e }?.toChar()
+        return Chords.pane(e.isCtrlPressed, e.isAltPressed, e.isShiftPressed, e.isMetaPressed, code, char)
+    }
 
     /** What direct typing sends for a key that is not named: text, or a chord the grammar has; null when nothing. */
     sealed class Direct {

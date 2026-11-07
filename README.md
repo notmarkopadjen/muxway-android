@@ -121,6 +121,7 @@ the Claude Code lens is the one that also reshapes a screen.
 
 The features: [connect](docs/features/connect.md),
 [panes](docs/features/panes.md), [pane view](docs/features/pane-view.md),
+[desk](docs/features/desk.md),
 [pane names](docs/features/pane-names.md),
 [lenses](docs/features/lenses.md),
 [notifications](docs/features/notifications.md),
