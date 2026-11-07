@@ -121,11 +121,20 @@ or the emulator.
 
 ## Review (after implementation)
 
-- [ ] Diff matches the plan, deviations explained here
-- [ ] Security rules (AGENTS.md section 2) hold
-- [ ] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
-- [ ] Docs and diagrams updated
+- [x] Diff matches the plan. Deviations: `show` and `neighbour` moved
+  ahead of `hardKey` in `ViewScreen`, since a local function is named
+  before it is used; nothing else.
+- [x] Security rules (AGENTS.md section 2) hold: the chords send nothing; `C-]` and `C-[` are no longer sendable from a hardware keyboard and stay on the virtual keyboard, where the person chooses them.
+- [x] Privacy check passed: the secret scan and the deny-list grep over
+  the branch's commits are clean, and the diff read; the tests name
+  `alice-laptop`, `work`, `own`, `phone` and `web`.
+- [x] Docs and diagrams updated: the pane view page's swipe and direct-typing bullets, the help sheet's row, the testing page, the plan's diagram.
 
 ## Test run
 
-(to come, shared with the branch's other plans)
+The full suite without the UI run, 349 tests, 0 failed, at `8e73653`
+against the core's `9207eca` (https://github.com/notmarkopadjen/muxway-android/issues/99, `20261107-110642-8e73653`); the
+secret search found nothing in 196 logs. The UI steps wait for a
+device: this machine has no `adb` and no emulator, so `ui-skipped.txt`
+says so and the pull request does too. The run is the one recorded for
+the three plans of the branch.
