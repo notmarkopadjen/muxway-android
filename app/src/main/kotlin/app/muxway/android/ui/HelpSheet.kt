@@ -78,6 +78,7 @@ private val PARTS = listOf(
         "a file for the pane's program" to "⇪, paste into the line, or share to muxway",
         "speak a line" to "◉ held records until the finger lifts; tapped, the next tap or ■ stops; back drops",
         "direct typing, with the hardware keyboard setting on" to "every key goes to the pane while the line is not focused; a tap on the line leaves, back from the line returns",
+        "next, previous pane from a hardware keyboard" to "Ctrl+], Ctrl+[, from the line and direct typing too, coming round at the ends; never sent to the pane",
         "answer a question asked with choices" to "a button on the header, the inbox row, the notification or the watch",
     )),
 )

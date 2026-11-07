@@ -325,26 +325,6 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         if (row == null || pane.cursorY < 1) null
         else Suggest.suggest(row, pane.cursorX, shadow, model.recent + Suggest.screenCommands(rows, at) + Commands.SHELL.map { it.text }, state.listing?.let { Names.index(it.entries) })
     } else null
-    fun hardKey(e: KeyEvent): Boolean {
-        if (e.type != KeyEventType.KeyDown || !writable) return false
-        HardKeys.name(e)?.let { name ->
-            if (direct && ghost != null && (name == "Right" || name == "C-Right")) {
-                val taken = if (name == "Right") ghost else Suggest.firstWord(ghost)
-                if (taken.isNotEmpty() && model.type(focused, taken, enter = false)) shadow = Suggest.nextShadow(shadow, Suggest.Body.Text(taken))
-                return true
-            }
-            model.key(focused, name)
-            if (direct) shadow = Suggest.nextShadow(shadow, Suggest.Body.Key(name))
-            return true
-        }
-        if (!direct) return false
-        when (val d = HardKeys.direct(e) ?: return false) {
-            is HardKeys.Direct.Chord -> { model.key(focused, d.name); shadow = Suggest.nextShadow(shadow, Suggest.Body.Key(d.name)) }
-            is HardKeys.Direct.Text -> { model.type(focused, d.text, enter = false); shadow = Suggest.nextShadow(shadow, Suggest.Body.Text(d.text)) }
-        }
-        return true
-    }
-
     fun show(key: String) {
         val at = tiles.indexOf(key)
         // A parked tab's tap wakes it: the owner came back.
@@ -361,6 +341,49 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             else -> model.swap(addresses, addresses.indexOf(focused), key)
         }
         focus.requestFocus()
+    }
+
+    // With several tiles the focus moves to the next one; with one, the strip's next awake pane
+    // takes the tile. Either comes round at the end, as ] and [ do in the browser.
+    fun neighbour(step: Int) {
+        if (tiles.size > 1) {
+            focusedIndex = (index + step + tiles.size) % tiles.size
+            focus.requestFocus()
+            return
+        }
+        val at = order.indexOf(focused)
+        if (at < 0 || order.size < 2) return
+        show(order[(at + step + order.size) % order.size])
+    }
+
+    fun hardKey(e: KeyEvent): Boolean {
+        if (e.type != KeyEventType.KeyDown) return false
+        // Ctrl+] and Ctrl+[ go to the next and the previous pane from anywhere, the line and
+        // direct typing included, read-only or not, and never reach the pane; the line, when it
+        // had the focus, follows the pane.
+        HardKeys.paneChord(e).takeIf { it != 0 }?.let { step ->
+            val fromLine = lineFocused
+            neighbour(step)
+            if (fromLine) fieldFocus.request()
+            return true
+        }
+        if (!writable) return false
+        HardKeys.name(e)?.let { name ->
+            if (direct && ghost != null && (name == "Right" || name == "C-Right")) {
+                val taken = if (name == "Right") ghost else Suggest.firstWord(ghost)
+                if (taken.isNotEmpty() && model.type(focused, taken, enter = false)) shadow = Suggest.nextShadow(shadow, Suggest.Body.Text(taken))
+                return true
+            }
+            model.key(focused, name)
+            if (direct) shadow = Suggest.nextShadow(shadow, Suggest.Body.Key(name))
+            return true
+        }
+        if (!direct) return false
+        when (val d = HardKeys.direct(e) ?: return false) {
+            is HardKeys.Direct.Chord -> { model.key(focused, d.name); shadow = Suggest.nextShadow(shadow, Suggest.Body.Key(d.name)) }
+            is HardKeys.Direct.Text -> { model.type(focused, d.text, enter = false); shadow = Suggest.nextShadow(shadow, Suggest.Body.Text(d.text)) }
+        }
+        return true
     }
 
     // An existing pane from the menu: one more tile, focused; at four open, the minimised
@@ -433,19 +456,6 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         if (mates.isEmpty()) return
         kept.focusNext = focused
         model.open(Screen.View(model.panes.map { it.key }.filter { it == focused || it in mates }))
-    }
-
-    // With several tiles the focus moves to the next one; with one, the strip's next awake pane
-    // takes the tile. Either comes round at the end, as ] and [ do in the browser.
-    fun neighbour(step: Int) {
-        if (tiles.size > 1) {
-            focusedIndex = (index + step + tiles.size) % tiles.size
-            focus.requestFocus()
-            return
-        }
-        val at = order.indexOf(focused)
-        if (at < 0 || order.size < 2) return
-        show(order[(at + step + order.size) % order.size])
     }
 
     val swipe = with(LocalDensity.current) { 72.dp.toPx() }

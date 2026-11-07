@@ -36,6 +36,13 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.withKeyDown
+import androidx.compose.ui.input.key.Key
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -756,6 +763,43 @@ class FlowTest {
         await("tap to open")
         await("is gone")
         shot("own-pane-gone")
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun thePaneChordsOfAHardwareKeyboardMoveBetweenTheTilesAndNeverReachThePane() {
+        // A hardware keyboard assumed: the keys go to the pane while the line is not focused.
+        SettingsStore(context).save(SettingsStore(context).load().copy(hardwareKeyboard = true))
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        rule.onNodeWithTag("add").performClick()
+        await("+ pane").performClick()
+        rule.waitUntil(15_000) { tiles() == 2 }
+        // The new tile is focused; the line's hint names the focused pane.
+        await("direct")
+        rule.onNodeWithText("work/0.1").assertExists()
+        // Ctrl+] comes round to the first tile, Ctrl+] again to the second, Ctrl+[ back to the first.
+        rule.onRoot().performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.RightBracket) } }
+        rule.waitUntil(5_000) { rule.onAllNodesWithText("work/0.0").fetchSemanticsNodes().isNotEmpty() }
+        shot("chord-next")
+        rule.onRoot().performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.RightBracket) } }
+        rule.waitUntil(5_000) { rule.onAllNodesWithText("work/0.1").fetchSemanticsNodes().isNotEmpty() }
+        rule.onRoot().performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.LeftBracket) } }
+        rule.waitUntil(5_000) { rule.onAllNodesWithText("work/0.0").fetchSemanticsNodes().isNotEmpty() }
+        // Direct typing stayed on: a word typed lands in the focused pane, and no chord did.
+        rule.onRoot().performKeyInput { pressKey(Key.E); pressKey(Key.C); pressKey(Key.H); pressKey(Key.O); pressKey(Key.Spacebar); pressKey(Key.C); pressKey(Key.H); pressKey(Key.O); pressKey(Key.R); pressKey(Key.D); pressKey(Key.Enter) }
+        await("chord")
+        rule.onNode(hasTestTag("tile:alice-laptop/work/0.0") and hasAnyDescendant(hasText("chord", substring = true))).assertExists()
+        rule.onAllNodes(hasText("^]", substring = true)).assertCountEquals(0)
+        rule.onAllNodes(hasText("^[", substring = true)).assertCountEquals(0)
+        shot("chord-typed")
+        // From the line the chord moves the pane too, and the line keeps the focus.
+        rule.onNode(hasSetTextAction()).performClick()
+        rule.onNode(hasSetTextAction()).performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.RightBracket) } }
+        rule.waitUntil(5_000) { rule.onAllNodesWithText("work/0.1").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNode(hasSetTextAction()).assertIsFocused()
+        shot("chord-from-line")
     }
 
     @Test

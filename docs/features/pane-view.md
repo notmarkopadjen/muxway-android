@@ -82,7 +82,10 @@ focused pane.
   or previous tile, or with one tile open swaps the strip's next or
   previous pane into it, coming round at either end as `]` and `[` do
   in the browser; the panes parked for later are skipped, since a swipe
-  that landed on one would only wake it. A tab **held and let go in place** (the drag's long
+  that landed on one would only wake it. With the *hardware keyboard*
+  setting on, `Ctrl+]` and `Ctrl+[` on a hardware keyboard do the same
+  from anywhere in the view, the line and direct typing included (see
+  *Typing*). A tab **held and let go in place** (the drag's long
   press without a move) opens the **pane menu**: *open
   beside* opens its pane beside the focused one, as the browser's
   Shift+click does; *⇆ beside <partner>*, one row per pane this one
@@ -435,7 +438,15 @@ it is writable:
   status line says `direct`. A tap on the line takes the keys back, and
   back from the line gives them to the pane again; nothing goes from a
   read-only pane. Without the setting the named keys still go by name;
-  letters wait for the line;
+  letters wait for the line. Two chords are the view's and never reach
+  the pane: `Ctrl+]` moves to the next tile and `Ctrl+[` to the
+  previous, coming round at the ends, or with one tile open swaps the
+  strip's next or previous awake pane into it, as the swipe does;
+  direct typing stays on, so the next pane is typed into at once, and
+  from the line the line keeps the focus and follows the pane
+  (`Chords.pane` in the protocol module decides; whoever needs the keys
+  themselves, a terminal's `Escape` or telnet's escape, sends them from
+  the keyboard window);
 - **type** sends the text as typed, without `Enter`;
 - **`⏎`** (send), the keyboard's send action, or a hardware `Enter` sends the
   text and then `Enter`;
