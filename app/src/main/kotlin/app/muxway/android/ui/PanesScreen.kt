@@ -35,9 +35,11 @@ import app.muxway.android.AppModel
 import app.muxway.android.MailTarget
 import app.muxway.android.Naming
 import app.muxway.android.Screen
+import app.muxway.android.protocol.Desks
 import app.muxway.android.protocol.Groups
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Pane
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -69,6 +71,8 @@ fun PanesScreen(model: AppModel) {
                 val quiet = if (failed) emptyList() else c.hosts.filter { it.online && it.name !in byHost }
                 if (several) item(key = "hub:${c.id}") { HubRow(c.name, c.listError) }
                 else c.listError?.let { item(key = "error:${c.id}") { Text("! $it", color = p.alert, modifier = Modifier.padding(4.dp)) } }
+                // The desk, the view every client shares, at the top of the hub's panes: a tap opens it.
+                if (!failed && model.hasDesk(c.id)) item(key = "desk:${c.id}") { DeskRow(model.deskOf(c.id)) { model.openDesk(c.id) } }
                 for ((host, panes) in byHost) {
                     val starts = c.hosts.any { it.name == host && it.sessions }
                     item(key = "host:${c.id}:$host") {
@@ -107,12 +111,30 @@ fun PanesScreen(model: AppModel) {
             // The way to open a selection comes right after the list, not pinned to the screen's foot.
             if (model.selected.isNotEmpty()) item(key = "selection") { SelectionBar(model) }
         }
+        // A word from the view that ended on the list: the last tile's pane is gone.
+        model.told?.let { Text(" $it", color = p.dim, modifier = Modifier.padding(horizontal = 4.dp)) }
+        LaunchedEffect(model.told) { if (model.told != null) { delay(4000); model.told = null } }
         Text(if (model.selected.isEmpty()) "  tap to open · hold to pick several" else "  ${model.selected.size}/4 · hold to pick more", color = p.dim, modifier = Modifier.padding(4.dp))
     }
     model.naming?.takeIf { it.into == null }?.let { SessionDialog(it, model) }
     if (model.inboxOpen) InboxSheet(model, now) { model.inboxOpen = false }
     if (model.messagesOpen) MessagesSheet(model) { model.messagesOpen = false }
     model.mailOpen?.let { MailSheet(model, it) { model.mailOpen = null } }
+}
+
+/** `▤ desk · 2 panes · row`: the hub's desk, the view its clients share; dim and still while it holds nothing. */
+@Composable
+private fun DeskRow(desk: app.muxway.android.protocol.Desk?, onTap: () -> Unit) {
+    val p = LocalPalette.current
+    val holds = Desks.holds(desk)
+    Row(
+        Modifier.fillMaxWidth().clickable(enabled = holds, onClick = onTap).padding(horizontal = 4.dp, vertical = 6.dp).testTag("desk-row"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("▤ ", color = if (holds) p.accent else p.faint, maxLines = 1)
+        Text(Desks.words(desk), color = if (holds) p.ink else p.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+    Rule()
 }
 
 /** `═══ work ═══`, a hub's line over its hosts, with its trouble when it has any. */

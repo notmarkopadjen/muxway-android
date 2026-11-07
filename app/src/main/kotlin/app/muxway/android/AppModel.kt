@@ -23,8 +23,11 @@ import app.muxway.android.protocol.ApiException
 import app.muxway.android.files.Attachment
 import app.muxway.android.files.Attachments
 import app.muxway.android.protocol.Commands
+import app.muxway.android.protocol.Desk
+import app.muxway.android.protocol.Desks
 import app.muxway.android.protocol.Feed
 import app.muxway.android.protocol.Files
+import app.muxway.android.protocol.Follow
 import app.muxway.android.protocol.Host
 import app.muxway.android.protocol.Inbox
 import app.muxway.android.protocol.HubUrl
@@ -42,6 +45,7 @@ import app.muxway.android.protocol.Share
 import app.muxway.android.protocol.TalkEntry
 import app.muxway.android.protocol.Wheel
 import app.muxway.android.protocol.WheelQueue
+import app.muxway.android.protocol.WindowLayout
 import app.muxway.android.store.Hub
 import app.muxway.android.store.Hubs
 import app.muxway.android.store.Settings
@@ -88,9 +92,19 @@ class PaneState(val key: String) {
     /** When the content last changed, in seconds; the lens counts a recent change as working. */
     var changedAt by mutableLongStateOf(0L)
 
-    /** Whether anything has been read yet, and when this client last typed into or sized the pane. */
-    var read = false
+    /** Whether a frame of its own has been read yet (the warm-up ends with it), and when this client last typed into or sized the pane. */
+    var read by mutableStateOf(false)
     var ownAt = 0L
+
+    /**
+     * The pane this state is for, by the host's id (see [Follow]): learnt from the listing when the
+     * view opened, or from the first read; "" until then. A read that names another pane at the
+     * address is a stranger's and is not taken.
+     */
+    var paneId = ""
+
+    /** A read found no pane at the address: the next listing says whether the pane moved or is gone. */
+    var missing = false
 
     /** Fit: the last size sent to the host, when, and whether a release is owed. */
     var fitKey = ""
@@ -102,7 +116,7 @@ class PaneState(val key: String) {
     /** What another state of the same pane carries over when its key changes. */
     fun take(o: PaneState) {
         pane = o.pane; content = o.content; trimmed = o.trimmed; etag = o.etag; error = o.error; updated = o.updated
-        changedAt = o.changedAt; read = o.read; ownAt = o.ownAt
+        changedAt = o.changedAt; read = o.read; ownAt = o.ownAt; paneId = o.paneId
         fitKey = o.fitKey; fitAt = o.fitAt; fitRetried = o.fitRetried; fitted = o.fitted
     }
 
@@ -155,6 +169,25 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         var cursor: Long? = null
         var probed = false
 
+        /** When a read last asked for the listing (a stranger, a 404), so a window of tiles asks once. */
+        var askedAt = 0L
+
+        /**
+         * The hub's desk, the view its clients share: as last read (the list's row and the view
+         * watch it), its tag, what the hub has as last read by the view or answered to a write (the
+         * phone writes nothing the hub has and applies nothing it shows), the revision of the
+         * phone's own last write, whether the hub has desks at all, and whether the token may
+         * write it (not after `read_only`).
+         */
+        var desk by mutableStateOf<Desk?>(null)
+        var deskEtag: String? = null
+        var deskKnown: Desk? = null
+        var deskRev = 0L
+        var deskAsked = false
+        var deskWritable = true
+        var deskJob: Job? = null
+        var deskPending: Desk? = null
+
         /** Whether the hub has a transcriber, asked once per connection with the first listing. */
         var transcriber by mutableStateOf(false)
 
@@ -200,6 +233,13 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             shares = emptyList()
             listError = null
             cursor = null
+            desk = null
+            deskEtag = null
+            deskKnown = null
+            deskRev = 0L
+            deskAsked = false
+            deskWritable = true
+            deskPending = null
         }
     }
 
@@ -483,7 +523,196 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         shareOpen = null
         if (s is Screen.Panes) { selected.clear(); refreshList() }
         if (s !is Screen.Share) sharing = emptyList()
-        screen = s
+        if (s is Screen.View) store.saveLastPlace("view") else if (s is Screen.Panes) store.saveLastPlace("list")
+        if (s is Screen.View) setView(s.addresses) else screen = s
+    }
+
+    /**
+     * An opening the view takes once, the desk laid out for the tiles about to open: the
+     * arrangement, the tree and the shares, the minimised row and, when the desk is opened on
+     * purpose, the focus (a desk followed moves no focus).
+     */
+    class Opening(val keys: List<String>, val arrangement: String, val tree: WindowLayout.Node?, val weights: Map<String, List<Float>>, val minimised: List<String>, val focused: String?)
+    var opening: Opening? = null
+
+    /** The desk the view opened from, in the view's own words: a view equal to it writes nothing back. */
+    private var deskBaseline: Desk? = null
+    fun noteDeskBaseline(d: Desk) { deskBaseline = d }
+
+    /** Whether the app, started on the list after being closed in a view, still owes the desk its opening. */
+    private var startOnDesk = store.lastPlace() == "view"
+    private val startedAt = System.currentTimeMillis()
+
+    fun deskOf(hub: String): Desk? = connections.firstOrNull { it.id == hub }?.desk
+
+    /** Whether the hub has desks: a hub older than them answered `404` and shows no row. */
+    fun hasDesk(hub: String): Boolean = connections.firstOrNull { it.id == hub }?.let { it.deskAsked && it.desk != null } == true
+
+    /** Whether the view should follow [d]: not what it already applied or wrote, and not older than the phone's own last write. */
+    fun deskFollowable(hub: String, d: Desk): Boolean {
+        val c = connections.firstOrNull { it.id == hub } ?: return false
+        return d.rev >= c.deskRev && !Desks.same(d, c.deskKnown)
+    }
+
+    /** The view applied [d]: the hub shows it, nothing to follow or write. */
+    fun noteDeskKnown(hub: String, d: Desk) {
+        connections.firstOrNull { it.id == hub }?.deskKnown = d
+    }
+
+    private suspend fun fetchDesk(c: Conn) {
+        try {
+            val got = withContext(Dispatchers.IO) { c.api().desk(c.deskEtag) }
+            c.deskAsked = true
+            if (got != null) {
+                c.desk = got.first
+                c.deskEtag = got.second.ifEmpty { null }
+            }
+        } catch (e: ApiException) {
+            if (e.code == "unauthorized") tokenRefused(c)
+            // A hub older than desks: no row, nothing written.
+            if (e.code == "not_found") { c.desk = null; c.deskAsked = true; c.deskWritable = false }
+        }
+        startOnDesk()
+    }
+
+    // Started on the list after a view: the first hub's desk that holds panes opens, within the
+    // first moments; with every desk read and none holding anything, the list it is.
+    private fun startOnDesk() {
+        if (!startOnDesk) return
+        if (screen !is Screen.Panes || pendingOpen != null || System.currentTimeMillis() - startedAt > 20_000) { startOnDesk = false; return }
+        val cs = connections
+        val with = cs.firstOrNull { Desks.holds(it.desk) }
+        if (with != null) { startOnDesk = false; openDesk(with.id); return }
+        if (cs.all { it.deskAsked }) { startOnDesk = false; store.saveLastPlace("list") }
+    }
+
+    /**
+     * Opens the hub's desk: its tiles in their arrangement with the minimised row and, with
+     * [focus], the focused one; a window desk opens the window's panes from the listing, four at
+     * most, as the zoom from a lone pane does. A desk without panes opens nothing.
+     */
+    fun openDesk(hub: String, focus: Boolean = true) {
+        val c = connections.firstOrNull { it.id == hub } ?: return
+        val d = c.desk ?: return
+        c.deskKnown = d
+        val keys: List<String>
+        var minimised: List<String> = emptyList()
+        var arrangement = ""
+        var tree: WindowLayout.Node? = null
+        var weights: Map<String, List<Float>> = emptyMap()
+        val focused: String?
+        if (d.view == "window" && d.window.isNotEmpty()) {
+            val mates = c.panes.filter { "${it.host}/${it.session}/${it.windowIndex}" == d.window || "${it.host}/${it.session}/${it.window}" == d.window }.map { it.key }.take(AddMenu.MAX_TILES)
+            if (mates.isEmpty()) { told = "the desk's window has no pane here"; return }
+            keys = mates
+            focused = Keys.make(c.id, d.focused).takeIf { d.focused.isNotEmpty() && it in mates }
+        } else {
+            val panes = Desks.panesOf(d).map { Keys.make(c.id, it) }
+            if (panes.isEmpty()) return
+            keys = (panes + d.minimised.map { Keys.make(c.id, it) }).distinct().take(AddMenu.MAX_TILES)
+            minimised = keys.drop(panes.size)
+            arrangement = d.arrangement
+            tree = d.tree
+            weights = d.weights
+            focused = Keys.make(c.id, d.focused).takeIf { d.focused.isNotEmpty() && it in panes }
+        }
+        opening = Opening(keys, arrangement, tree, weights, minimised, if (focus) focused else null)
+        open(Screen.View(keys))
+    }
+
+    /**
+     * The view as a desk, for the focused tile's hub, sent half a second after the last change
+     * unless the hub has it already or the view opened from it; the newest change supersedes
+     * the pending one. Nothing is written for a token without a writable pane, after a
+     * `read_only` refusal, or to a hub older than desks.
+     */
+    fun writeDesk(hub: String, d: Desk) {
+        val c = connections.firstOrNull { it.id == hub } ?: return
+        if (Desks.same(d, deskBaseline) || Desks.same(d, c.deskKnown)) {
+            c.deskPending = null
+            c.deskJob?.cancel()
+            return
+        }
+        if (!c.deskWritable || c.panes.none { it.writable }) return
+        c.deskPending = d
+        c.deskJob?.cancel()
+        c.deskJob = viewModelScope.launch {
+            delay(Desks.DEBOUNCE_MS)
+            val next = c.deskPending ?: return@launch
+            c.deskPending = null
+            if (Desks.same(next, deskBaseline) || Desks.same(next, c.deskKnown)) return@launch
+            try {
+                val stored = withContext(Dispatchers.IO) { c.api().putDesk(next) }
+                c.deskKnown = stored
+                c.desk = stored
+                c.deskRev = stored.rev
+                c.deskEtag = null
+            } catch (e: ApiException) {
+                if (e.code == "unauthorized") tokenRefused(c)
+                if (e.code == "read_only" || e.code == "not_found") c.deskWritable = false
+            } catch (e: IllegalArgumentException) {
+                // A desk the client itself refuses never leaves the phone.
+            }
+        }
+    }
+
+    /**
+     * The view's addresses, each tile claimed for the pane the listing has at its address: a
+     * state kept for another pane is dropped first, so no tile starts with a borrowed screen;
+     * a key the listing lacks learns its pane from its first read.
+     */
+    private fun setView(addresses: List<String>) {
+        for (k in addresses) {
+            val listed = panes.firstOrNull { it.key == k }?.paneId.orEmpty()
+            if (listed.isEmpty()) continue
+            views[k]?.let { if (it.paneId.isNotEmpty() && it.paneId != listed) views.remove(k) }
+            view(k).paneId = listed
+        }
+        screen = Screen.View(addresses)
+    }
+
+    /**
+     * The tiles the last listing moved, old key to new, and a count of the moves, for the view
+     * to carry its own per-key state (the minimised row, fit off) along.
+     */
+    var moved by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+    var moves by mutableIntStateOf(0)
+        private set
+
+    /**
+     * A listing of [c] arrived: every open tile of that hub is checked against it (see
+     * [Follow.reconcile]): a tile whose pane moved follows it, its state carried to the new key;
+     * a tile whose pane is gone closes with a word; the rest stay.
+     */
+    private fun reconcile(c: Conn) {
+        val view = screen as? Screen.View ?: return
+        val online = { host: String -> c.hosts.any { it.name == host && it.online } }
+        val missing = view.addresses.filter { views[it]?.missing == true }.toSet()
+        val out = Follow.reconcile(c.id, view.addresses, { views[it]?.paneId ?: "" }, missing, c.panes, online)
+        for (k in out.gone) {
+            told = "${views[k]?.pane?.label ?: Keys.address(k).substringAfter('/')} is gone"
+            drop(k)
+        }
+        if (out.moved.isEmpty()) return
+        val now = screen as? Screen.View ?: return
+        val states = out.moved.keys.associateWith { views.remove(it) }
+        for ((old, next) in out.moved) {
+            states[old]?.let { view(next).take(it) }
+            view(next).missing = false
+            lastKind.remove(old)?.let { lastKind[next] = it }
+        }
+        moved = out.moved
+        moves++
+        screen = Screen.View(now.addresses.map { out.moved[it] ?: it })
+    }
+
+    /** The listing of [c], asked at once but once per two seconds: a read saw another pane, or none, at a tile's address. */
+    private fun listSoon(c: Conn) {
+        val now = System.currentTimeMillis()
+        if (now - c.askedAt < 2_000) return
+        c.askedAt = now
+        refreshList(c)
     }
 
     /** Back: pane view, settings and the share chooser return to the list; false when there is nowhere to go. */
@@ -672,7 +901,10 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                     c.admin = withContext(Dispatchers.IO) { c.api().isAdmin() }
                     c.probed = true
                 }
+                reconcile(c)
+                // A link's pane first: a link to a view goes where it points, the desk waits.
                 openPending()
+                fetchDesk(c)
             } catch (e: ApiException) {
                 c.listError = e.message
                 if (e.code == "unauthorized") tokenRefused(c)
@@ -740,6 +972,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             try {
                 val pane = withContext(Dispatchers.IO) { action(c.api()) }.copy(hub = c.id)
                 naming = null
+                // The answer names the pane before any listing does: the tile knows it from the start.
+                if (pane.paneId.isNotEmpty()) { views.remove(pane.key); view(pane.key).paneId = pane.paneId }
                 open(Screen.View(addTile(into.orEmpty(), pane.key)))
             } catch (e: ApiException) {
                 if (inDialog) createError = e.message else c.listError = e.message
@@ -768,6 +1002,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 val ev = withContext(Dispatchers.IO) { c.api().events(c.cursor, 30) }
                 c.cursor = ev.next
                 for (e in ev.events) if (e.address.isNotEmpty() && e.kind.isNotEmpty()) lastKind[Keys.make(c.id, e.address)] = e.kind
+                // The desk changed on the hub: it is asked for at once, so a view follows within the second.
+                if (ev.events.any { it.kind == "desk" }) fetchDesk(c)
                 if (ev.events.isNotEmpty()) refreshList(c)
             } catch (e: ApiException) {
                 if (e.code == "unauthorized") { tokenRefused(c); return }
@@ -797,6 +1033,10 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         try {
             val r = withContext(Dispatchers.IO) { api(key).read(v.address, settings.lines, v.etag) }
             if (r != null) {
+                // Another pane answers at this address: nothing of it is taken, and the listing says
+                // where this tile's pane went.
+                if (!Follow.own(v.paneId, r.pane.paneId)) { listSoon(conn(key)); return }
+                if (v.paneId.isEmpty()) v.paneId = r.pane.paneId
                 val at = System.currentTimeMillis() / 1000
                 v.pane = r.pane.copy(hub = Keys.hub(key))
                 if (r.content != v.content && Lens.changeCounts(!v.read, v.ownAt, at)) v.changedAt = at
@@ -805,13 +1045,17 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 v.etag = r.etag
                 v.read = true
             }
+            v.missing = false
             v.error = null
             v.updated = LocalTime.now().format(CLOCK)
         } catch (e: ApiException) {
             v.error = e.message
             if (e.code == "unauthorized") tokenRefused(conn(key))
-            // The pane exited on the host: its tile has nothing left to show.
-            if (e.code == "not_found") drop(key)
+            // No pane at the address: a tile that knows its pane asks the listing whether it moved
+            // or is gone; one that never learnt it has nothing left to show.
+            if (e.code == "not_found") {
+                if (v.paneId.isEmpty()) drop(key) else { v.missing = true; listSoon(conn(key)) }
+            }
         }
     }
 
@@ -949,6 +1193,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         if (moved.isEmpty()) return moved
         val states = moved.keys.associateWith { views.remove(it) }
         for ((old, next) in moved) states[old]?.let { view(next).take(it) }
+        this.moved = moved
+        moves++
         screen = Screen.View(view.addresses.map { moved[it] ?: it })
         return moved
     }
@@ -1333,18 +1579,18 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         val i = addresses.indexOf(a)
         val j = addresses.indexOf(b)
         if (i < 0 || j < 0 || i == j) return
-        screen = Screen.View(addresses.toMutableList().also { it[i] = b; it[j] = a })
+        setView(addresses.toMutableList().also { it[i] = b; it[j] = a })
     }
 
     /** Replaces one open pane by another, keeping the others. */
     fun swap(addresses: List<String>, at: Int, key: String) {
-        screen = Screen.View(addresses.mapIndexed { i, a -> if (i == at) key else a })
+        setView(addresses.mapIndexed { i, a -> if (i == at) key else a })
     }
 
     /** One more tile: [key] joins the view, or, with four tiles on screen ([full]), takes the focused tile's place. */
     fun addPane(addresses: List<String>, focusedAt: Int, key: String, full: Boolean) {
         if (key in addresses) return
-        screen = Screen.View(if (!full) addresses + key else addresses.mapIndexed { i, a -> if (i == focusedAt) key else a })
+        setView(if (!full) addresses + key else addresses.mapIndexed { i, a -> if (i == focusedAt) key else a })
     }
 
     private fun send(key: String, action: (Api, String) -> Unit): Boolean {

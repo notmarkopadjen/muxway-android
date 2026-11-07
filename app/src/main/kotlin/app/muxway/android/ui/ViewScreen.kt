@@ -141,6 +141,8 @@ import app.muxway.android.protocol.Beside
 import app.muxway.android.protocol.Clip
 import app.muxway.android.protocol.Commands
 import app.muxway.android.protocol.Complete
+import app.muxway.android.protocol.Desk
+import app.muxway.android.protocol.Desks
 import app.muxway.android.protocol.Files
 import app.muxway.android.protocol.Groups
 import app.muxway.android.protocol.Input
@@ -196,11 +198,56 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     var layout by rememberSaveable { mutableStateOf(preset) }
     var custom by remember { mutableStateOf<WindowLayout.Node?>(null) }
     val weights = remember { mutableStateMapOf<String, List<Float>>() }
-    val kept = remember { Remembered() }
+    val kept = remember { Remembered().also { it.moves = model.moves } }
+    // The host renumbered a tile's pane and the model moved the tile: the minimised row and the
+    // fit-off set, kept here by key, follow it.
+    LaunchedEffect(model.moves) {
+        if (model.moves == kept.moves) return@LaunchedEffect
+        kept.moves = model.moves
+        val by = model.moved
+        parked = parked.map { by[it] ?: it }
+        fitOff = fitOff.map { by[it] ?: it }.toSet()
+    }
     // A made tree is drawn only while it has a leaf per tile: for the frame between a tile
     // leaving or arriving and the effect below catching up, the preset stands in.
     val shape = if (layout == Layout.CUSTOM) custom?.takeIf { Tiles.leaves(it).size == tiles.size } ?: preset.tree(tiles.size) else layout.tree(tiles.size)
+    // This view as a desk, for the focused tile's hub: that hub's tiles, the focus, the arrangement
+    // (with its tree and shares when every tile is on the hub) and the minimised panes of the hub.
+    fun deskOf(parkedNow: List<String>, focusKey: String, layoutNow: Layout, customNow: WindowLayout.Node?, weightsNow: Map<String, List<Float>>): Desk {
+        val hub = Keys.hub(focusKey)
+        val shown = addresses.filter { it !in parkedNow }.ifEmpty { addresses.take(1) }
+        val onHub = shown.filter { Keys.hub(it) == hub }
+        val whole = onHub.size == shown.size
+        val made = customNow?.takeIf { layoutNow == Layout.CUSTOM && whole && Tiles.leaves(it).size == shown.size }
+        return Desk(
+            view = "panes",
+            panes = onHub.map { Keys.address(it) },
+            focused = Keys.address(focusKey),
+            arrangement = if (whole && shown.size > 1 && (layoutNow != Layout.CUSTOM || made != null)) layoutNow.word else "",
+            tree = made,
+            weights = if (whole && shown.size > 1) weightsNow.filter { (k, ws) -> Desks.validWeights(mapOf(k to ws)) } else emptyMap(),
+            minimised = addresses.filter { it in parkedNow && Keys.hub(it) == hub }.map { Keys.address(it) },
+        )
+    }
     LaunchedEffect(addresses, tiles.size) {
+        // A desk opened: its arrangement, minimised row and focus, taken once; what the view then
+        // is becomes the baseline the model writes nothing for.
+        model.opening?.takeIf { it.keys == addresses }?.let { o ->
+            model.opening = null
+            val shown = addresses.filter { it !in o.minimised }.ifEmpty { addresses.take(1) }
+            val l = Layout.from(o.arrangement, shown.size)?.takeIf { it != Layout.CUSTOM || o.tree != null } ?: preset
+            layout = l
+            custom = o.tree.takeIf { l == Layout.CUSTOM }
+            weights.clear()
+            weights.putAll(o.weights)
+            parked = o.minimised
+            kept.carried = null
+            kept.count = shown.size
+            val f = o.focused?.let { shown.indexOf(it) }?.takeIf { it >= 0 }
+            if (f != null) focusedIndex = f
+            model.noteDeskBaseline(deskOf(o.minimised, shown[(f ?: focusedIndex).coerceIn(0, shown.lastIndex)], l, custom, weights.toMap()))
+            return@LaunchedEffect
+        }
         val back = listOf(kept.carried, kept.unzoomed).firstOrNull { it != null && it.panes == addresses }
         if (back != null) {
             kept.carried = null
@@ -217,6 +264,37 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         kept.focusNext?.let { f -> tiles.indexOf(f).takeIf { it >= 0 }?.let { focusedIndex = it }; kept.focusNext = null }
     }
     fun touch() { kept.touched = System.currentTimeMillis() }
+    // The desk: this view, written half a second after a change (the model skips what the hub
+    // has), and the hub's desk followed when another client changed it: the same tiles take
+    // the arrangement, the shares and the minimised row here; other tiles open through the
+    // model, the focus staying where it is.
+    val deskHub = Keys.hub(focused)
+    val mine = deskOf(parked, focused, layout, custom, weights.toMap())
+    LaunchedEffect(Desks.body(mine), deskHub) { model.writeDesk(deskHub, mine) }
+    val theirs = model.deskOf(deskHub)
+    LaunchedEffect(theirs, deskHub) {
+        val d = theirs ?: return@LaunchedEffect
+        if (!model.deskFollowable(deskHub, d)) return@LaunchedEffect
+        model.noteDeskKnown(deskHub, d)
+        if (Desks.same(d, mine)) return@LaunchedEffect
+        if (d.view == "window") { if (d.window.isNotEmpty()) model.openDesk(deskHub, focus = false); return@LaunchedEffect }
+        val panes = Desks.panesOf(d).map { Keys.make(deskHub, it) }
+        if (panes.isEmpty()) return@LaunchedEffect
+        val wanted = (panes + d.minimised.map { Keys.make(deskHub, it) }).distinct().take(AddMenu.MAX_TILES)
+        if (panes == tiles && wanted.toSet() == addresses.toSet()) {
+            val l = Layout.from(d.arrangement, tiles.size)?.takeIf { it != Layout.CUSTOM || d.tree != null } ?: layout
+            layout = l
+            custom = d.tree.takeIf { l == Layout.CUSTOM }
+            weights.clear()
+            weights.putAll(d.weights)
+            parked = wanted.drop(panes.size)
+            // The focus stays this view's: what the view now is, with its own focus, is the
+            // baseline, so the other client's change is not answered with a write of the focus.
+            model.noteDeskBaseline(deskOf(parked, focused, l, custom, weights.toMap()))
+            return@LaunchedEffect
+        }
+        model.openDesk(deskHub, focus = false)
+    }
     // Tiles that are every pane of one window fit it as one, laid out as the tiles are, and
     // follow the host's layout; moving its panes needs every one writable. Tiles that are only
     // some of a window's panes share one fit and the others are held.
@@ -316,26 +394,6 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         if (row == null || pane.cursorY < 1) null
         else Suggest.suggest(row, pane.cursorX, shadow, model.recent + Suggest.screenCommands(rows, at) + Commands.SHELL.map { it.text }, state.listing?.let { Names.index(it.entries) })
     } else null
-    fun hardKey(e: KeyEvent): Boolean {
-        if (e.type != KeyEventType.KeyDown || !writable) return false
-        HardKeys.name(e)?.let { name ->
-            if (direct && ghost != null && (name == "Right" || name == "C-Right")) {
-                val taken = if (name == "Right") ghost else Suggest.firstWord(ghost)
-                if (taken.isNotEmpty() && model.type(focused, taken, enter = false)) shadow = Suggest.nextShadow(shadow, Suggest.Body.Text(taken))
-                return true
-            }
-            model.key(focused, name)
-            if (direct) shadow = Suggest.nextShadow(shadow, Suggest.Body.Key(name))
-            return true
-        }
-        if (!direct) return false
-        when (val d = HardKeys.direct(e) ?: return false) {
-            is HardKeys.Direct.Chord -> { model.key(focused, d.name); shadow = Suggest.nextShadow(shadow, Suggest.Body.Key(d.name)) }
-            is HardKeys.Direct.Text -> { model.type(focused, d.text, enter = false); shadow = Suggest.nextShadow(shadow, Suggest.Body.Text(d.text)) }
-        }
-        return true
-    }
-
     fun show(key: String) {
         val at = tiles.indexOf(key)
         // A parked tab's tap wakes it: the owner came back.
@@ -352,6 +410,49 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             else -> model.swap(addresses, addresses.indexOf(focused), key)
         }
         focus.requestFocus()
+    }
+
+    // With several tiles the focus moves to the next one; with one, the strip's next awake pane
+    // takes the tile. Either comes round at the end, as ] and [ do in the browser.
+    fun neighbour(step: Int) {
+        if (tiles.size > 1) {
+            focusedIndex = (index + step + tiles.size) % tiles.size
+            focus.requestFocus()
+            return
+        }
+        val at = order.indexOf(focused)
+        if (at < 0 || order.size < 2) return
+        show(order[(at + step + order.size) % order.size])
+    }
+
+    fun hardKey(e: KeyEvent): Boolean {
+        if (e.type != KeyEventType.KeyDown) return false
+        // Ctrl+] and Ctrl+[ go to the next and the previous pane from anywhere, the line and
+        // direct typing included, read-only or not, and never reach the pane; the line, when it
+        // had the focus, follows the pane.
+        HardKeys.paneChord(e).takeIf { it != 0 }?.let { step ->
+            val fromLine = lineFocused
+            neighbour(step)
+            if (fromLine) fieldFocus.request()
+            return true
+        }
+        if (!writable) return false
+        HardKeys.name(e)?.let { name ->
+            if (direct && ghost != null && (name == "Right" || name == "C-Right")) {
+                val taken = if (name == "Right") ghost else Suggest.firstWord(ghost)
+                if (taken.isNotEmpty() && model.type(focused, taken, enter = false)) shadow = Suggest.nextShadow(shadow, Suggest.Body.Text(taken))
+                return true
+            }
+            model.key(focused, name)
+            if (direct) shadow = Suggest.nextShadow(shadow, Suggest.Body.Key(name))
+            return true
+        }
+        if (!direct) return false
+        when (val d = HardKeys.direct(e) ?: return false) {
+            is HardKeys.Direct.Chord -> { model.key(focused, d.name); shadow = Suggest.nextShadow(shadow, Suggest.Body.Key(d.name)) }
+            is HardKeys.Direct.Text -> { model.type(focused, d.text, enter = false); shadow = Suggest.nextShadow(shadow, Suggest.Body.Text(d.text)) }
+        }
+        return true
     }
 
     // An existing pane from the menu: one more tile, focused; at four open, the minimised
@@ -424,19 +525,6 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         if (mates.isEmpty()) return
         kept.focusNext = focused
         model.open(Screen.View(model.panes.map { it.key }.filter { it == focused || it in mates }))
-    }
-
-    // With several tiles the focus moves to the next one; with one, the strip's next awake pane
-    // takes the tile. Either comes round at the end, as ] and [ do in the browser.
-    fun neighbour(step: Int) {
-        if (tiles.size > 1) {
-            focusedIndex = (index + step + tiles.size) % tiles.size
-            focus.requestFocus()
-            return
-        }
-        val at = order.indexOf(focused)
-        if (at < 0 || order.size < 2) return
-        show(order[(at + step + order.size) % order.size])
     }
 
     val swipe = with(LocalDensity.current) { 72.dp.toPx() }
@@ -588,13 +676,17 @@ private class Remembered {
     var touched = 0L
     var sent = ""
     var count = 0
+    var moves = 0
 }
 
 /** How several panes share the screen: a preset by count, or a tree made here ([CUSTOM]). */
-enum class Layout {
-    ROW, COLUMN, GRID, MAIN_LEFT, MAIN_TOP, CUSTOM;
+enum class Layout(val word: String) {
+    ROW("row"), COLUMN("column"), GRID("grid"), MAIN_LEFT("main-left"), MAIN_TOP("main-top"), CUSTOM("custom");
 
     companion object {
+        /** The arrangement a desk names, when it is one of ours and fits [n] tiles; null otherwise. */
+        fun from(word: String, n: Int): Layout? = entries.firstOrNull { it.word == word }?.takeIf { it == CUSTOM || it in options(n) }
+
         /** Two panes split one way or the other; three and four add a main pane and, for four, a grid. */
         fun options(n: Int): List<Layout> = when {
             n <= 2 -> listOf(ROW, COLUMN)
@@ -1454,6 +1546,9 @@ private fun PaneTile(
                     }
                 }
             }
+            // While the tile has nothing of its own to draw, the tube warms up over the box; the
+            // first frame comes up under it. Never a borrowed screen, never a spinner.
+            Warmup(hasOwn = state.read, Modifier.matchParentSize())
         }
     }
 }

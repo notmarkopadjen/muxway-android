@@ -58,6 +58,45 @@ class ApiTest {
     }
 
     @Test
+    fun theDeskIsAskedWithTheTagWrittenWithoutTheHubsFieldsAndReadDefensively() {
+        val desk = """{"view":"panes","panes":["alice-laptop/work/0.0","alice-laptop/work/0.1"],"focused":"alice-laptop/work/0.1","arrangement":"row","minimised":[],"updated":1767225600,"by":"web","rev":12}"""
+        answer = { r -> if (r.header("If-None-Match") == "\"abc\"") Response(304) else Response(200, """{"desk":$desk}""".toByteArray(), mapOf("Content-Type" to "application/json", "ETag" to "\"abc\"")) }
+        val (d, etag) = api().desk(null)!!
+        assertEquals("/v1/desk", seen[0].path)
+        assertEquals(12L, d.rev)
+        assertEquals("web", d.by)
+        assertEquals("alice-laptop/work/0.1", d.focused)
+        assertEquals("\"abc\"", etag)
+        assertNull(api().desk(etag))
+        assertEquals("\"abc\"", seen[1].header("If-None-Match"))
+        // A write sends the view without updated, by and rev, and takes the stored desk back.
+        answer = { json(200, """{"desk":$desk}""") }
+        val mine = Desk(panes = listOf("alice-laptop/work/0.0", "alice-laptop/work/0.1"), focused = "alice-laptop/work/0.1", arrangement = "row", by = "phone", rev = 99, updated = 5)
+        val stored = api().putDesk(mine)
+        assertEquals("PUT", seen[2].method)
+        val sent = org.json.JSONObject(String(seen[2].body))
+        assertEquals("panes", sent.getString("view"))
+        assertEquals(2, sent.getJSONArray("panes").length())
+        assertFalse(sent.has("rev"))
+        assertFalse(sent.has("by"))
+        assertFalse(sent.has("updated"))
+        assertEquals(12L, stored.rev)
+        // A hostile answer: a fifth pane, an odd address, a wrong tree, a weight of two, a long key, a control character in by.
+        answer = { json(200, """{"desk":{"view":"panes","panes":["alice-laptop/work/0.0","alice laptop/x/0.0"],"arrangement":"custom","tree":{"kind":"h","key":"r","children":[0]},"weights":{"${"k".repeat(40)}":[2,0.5]},"by":"we\u0007b","rev":3}}""") }
+        val odd = api().desk(null)!!.first
+        assertEquals(listOf("alice-laptop/work/0.0"), odd.panes)
+        assertEquals("", odd.arrangement)
+        assertNull(odd.tree)
+        assertTrue(odd.weights.isEmpty())
+        assertEquals("web", odd.by)
+        // A read-only token's write is refused with the code, and a hub older than desks says not found.
+        answer = { json(403, """{"error":"read_only"}""") }
+        assertEquals("read_only", assertThrows(ApiException::class.java) { api().putDesk(mine) }.code)
+        answer = { json(404, """{"error":"not_found"}""") }
+        assertEquals("not_found", assertThrows(ApiException::class.java) { api().desk(null) }.code)
+    }
+
+    @Test
     fun resizeSendsColsAndRowsAndReleaseSendsFitAuto() {
         answer = { json(200, """{"pane":{"address":"h/w/0.0","width":40,"height":12,"mode":"write"}}""") }
         val p = api().resize("h/w/0.0", 40, 12).pane
