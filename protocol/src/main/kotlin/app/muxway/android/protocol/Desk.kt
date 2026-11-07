@@ -33,7 +33,7 @@ object Desks {
     const val MAX_BY = 64
     /** How long after the last change the view's desk is written, the web's. */
     const val DEBOUNCE_MS = 500L
-    private const val MAX_DEPTH = 8
+    const val MAX_DEPTH = 8
 
     /** What a desk says, without who and when: equal desks need no write and no following. */
     fun body(d: Desk): String = listOf(

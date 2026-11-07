@@ -579,7 +579,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     // first moments; with every desk read and none holding anything, the list it is.
     private fun startOnDesk() {
         if (!startOnDesk) return
-        if (screen !is Screen.Panes || System.currentTimeMillis() - startedAt > 20_000) { startOnDesk = false; return }
+        if (screen !is Screen.Panes || pendingOpen != null || System.currentTimeMillis() - startedAt > 20_000) { startOnDesk = false; return }
         val cs = connections
         val with = cs.firstOrNull { Desks.holds(it.desk) }
         if (with != null) { startOnDesk = false; openDesk(with.id); return }
@@ -902,8 +902,9 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                     c.probed = true
                 }
                 reconcile(c)
-                fetchDesk(c)
+                // A link's pane first: a link to a view goes where it points, the desk waits.
                 openPending()
+                fetchDesk(c)
             } catch (e: ApiException) {
                 c.listError = e.message
                 if (e.code == "unauthorized") tokenRefused(c)

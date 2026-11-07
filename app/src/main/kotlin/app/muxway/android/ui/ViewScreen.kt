@@ -288,6 +288,9 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             weights.clear()
             weights.putAll(d.weights)
             parked = wanted.drop(panes.size)
+            // The focus stays this view's: what the view now is, with its own focus, is the
+            // baseline, so the other client's change is not answered with a write of the focus.
+            model.noteDeskBaseline(deskOf(parked, focused, l, custom, weights.toMap()))
             return@LaunchedEffect
         }
         model.openDesk(deskHub, focus = false)

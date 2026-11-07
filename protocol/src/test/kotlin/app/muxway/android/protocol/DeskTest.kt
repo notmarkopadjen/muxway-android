@@ -89,6 +89,9 @@ class DeskTest {
         // A long key, a deep nest, an unknown kind: no tree.
         assertNull(Json.desk("""{"desk":{"view":"panes","panes":["$a","$b"],"tree":{"kind":"h","key":"${"k".repeat(40)}","children":[0,1]}}}""").tree)
         assertNull(Json.desk("""{"desk":{"view":"panes","panes":["$a","$b"],"tree":{"kind":"x","key":"r","children":[0,1]}}}""").tree)
+        // A nest deeper than the hub takes is no tree, and does not run the reader out of stack.
+        val deep = (1..200).fold("0") { inner, _ -> """{"kind":"h","key":"r","children":[$inner,1]}""" }
+        assertNull(Json.desk("""{"desk":{"view":"panes","panes":["$a","$b"],"tree":$deep}}""").tree)
         // by is cleaned and bounded; a view the phone does not know is panes; rev never negative.
         val by = Json.desk("""{"desk":{"view":"board","by":"we\u0007b${"x".repeat(100)}","rev":-3}}""")
         assertEquals("panes", by.view)

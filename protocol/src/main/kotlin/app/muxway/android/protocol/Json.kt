@@ -207,8 +207,9 @@ object Json {
     /** A window address, `host/session/window`. */
     private val WINDOW = Regex("^[a-z0-9-]{1,32}/[A-Za-z0-9._-]{1,64}/[A-Za-z0-9._-]{1,64}$")
 
-    /** The web's tile tree: a number for a leaf, `{kind: h|v, key, children}` for a split; null for anything else. */
-    private fun treeOf(x: Any?): WindowLayout.Node? {
+    /** The web's tile tree: a number for a leaf, `{kind: h|v, key, children}` for a split; null for anything else, or a nest deeper than the hub takes. */
+    private fun treeOf(x: Any?, depth: Int = 0): WindowLayout.Node? {
+        if (depth > Desks.MAX_DEPTH) return null
         return when (x) {
             is Int -> WindowLayout.Node.Leaf(x)
             is Number -> x.toDouble().let { if (it == Math.floor(it) && it in 0.0..3.0) WindowLayout.Node.Leaf(it.toInt()) else null }
@@ -217,7 +218,7 @@ object Json {
                 val kids = x.optJSONArray("children")
                 if ((kind != "h" && kind != "v") || kids == null || kids.length() < 2 || kids.length() > Desks.MAX_PANES) return null
                 val children = ArrayList<WindowLayout.Node>()
-                for (i in 0 until kids.length()) children.add(treeOf(kids.opt(i)) ?: return null)
+                for (i in 0 until kids.length()) children.add(treeOf(kids.opt(i), depth + 1) ?: return null)
                 WindowLayout.Node.Split(kind == "h", children, x.optString("key"))
             }
             else -> null

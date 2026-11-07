@@ -85,6 +85,8 @@ class FlowTest {
     fun seed() {
         assumeTrue("hub and token come from scripts/ui-tests.sh", hub.isNotEmpty() && token.isNotEmpty())
         SettingsStore(context).save(Settings(hubs = listOf(Hub("test", "test", hub)), current = "test", refreshSeconds = 1))
+        // A test that ended in a view would start the next on the desk: every test starts on the list.
+        SettingsStore(context).saveLastPlace("list")
         Vault(context).store("test", token)
         File(context.getExternalFilesDir(null), "screens").deleteRecursively()
     }
@@ -778,7 +780,7 @@ class FlowTest {
         rule.waitUntil(15_000) { tiles() == 2 }
         // The new tile is focused; the line's hint names the focused pane.
         await("direct")
-        rule.onNodeWithText("work/0.1").assertExists()
+        rule.waitUntil(5_000) { rule.onAllNodesWithText("work/0.1").fetchSemanticsNodes().isNotEmpty() }
         // Ctrl+] comes round to the first tile, Ctrl+] again to the second, Ctrl+[ back to the first.
         rule.onRoot().performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.RightBracket) } }
         rule.waitUntil(5_000) { rule.onAllNodesWithText("work/0.0").fetchSemanticsNodes().isNotEmpty() }
@@ -816,9 +818,10 @@ class FlowTest {
     @Test
     fun theDeskIsWrittenOpenedFromItsRowAndFollowed() {
         scenario = ActivityScenario.launch(MainActivity::class.java)
-        // Nothing yet: the row says so and opens nothing.
-        await("desk · empty")
-        shot("desk-empty")
+        // The row is there, whatever an earlier test left on the desk.
+        await("▤ ")
+        rule.onNodeWithTag("desk-row").assertExists()
+        shot("desk-row-at-start")
         await("work/0.0").performClick()
         await("$ ")
         rule.onNodeWithTag("add").performClick()
