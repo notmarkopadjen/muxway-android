@@ -188,6 +188,11 @@ focused pane.
   area, `<name> is gone` (on the list, when it was the last), and no
   other tile changes pane. `Follow` in the protocol module decides,
   from each listing, which tiles move and which are gone; unit-tested.
+- The view is the **desk** (see [desk](desk.md)): half a second after a
+  change of the tiles, the focus, the arrangement, a split's shares or
+  the minimised row it is written to the focused tile's hub, and another
+  client's change to the desk is followed within a second, the focus
+  excepted.
 - The line under the input shows the time of the last successful read, or
   the error.
 

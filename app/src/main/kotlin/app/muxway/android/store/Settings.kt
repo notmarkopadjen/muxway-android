@@ -95,6 +95,13 @@ class SettingsStore(context: Context) {
             .apply()
     }
 
+    /** Where the app was last: `view` or `list`; started on the list after a view, it opens the desk. */
+    fun lastPlace(): String = prefs.getString("last_place", "list") ?: "list"
+
+    fun saveLastPlace(place: String) {
+        prefs.edit().putString("last_place", place).apply()
+    }
+
     /** The last lines sent to a shell, newest first, for the command row. */
     fun recent(): List<String> = prefs.getString("recent", "")!!.split('\n').filter { it.isNotEmpty() }
 

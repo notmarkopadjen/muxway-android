@@ -270,6 +270,21 @@ class Api(private val baseUrl: String, private val token: String, private val us
         call("DELETE", "admin/sessions/$id", null, null, null)
     }
 
+    /** The desk, the view the owner's clients share; null when unchanged since [etag]. A hub older than desks answers `404`. */
+    fun desk(etag: String?): Pair<Desk, String>? {
+        val r = get("desk", etag)
+        if (r.status == 304) return null
+        return Json.desk(r.body) to r.etag
+    }
+
+    /** Replaces the desk with [d]; the desk as the hub stored it, with its `rev`. A writer's call. */
+    fun putDesk(d: Desk): Desk {
+        require(d.panes.size <= Desks.MAX_PANES && d.minimised.size <= Desks.MAX_MINIMISED && d.order.size <= Desks.MAX_ORDER) { "desk" }
+        val body = Json.deskBody(d)
+        require(body.length <= 8 * 1024) { "desk size" }
+        return Json.desk(call("PUT", "desk", body.toByteArray(Charsets.UTF_8), "application/json", null).body)
+    }
+
     fun events(after: Long?, wait: Int, limit: Int = 50): Events {
         val q = StringBuilder("events?wait=$wait&limit=$limit")
         if (after != null) q.append("&after=$after")

@@ -13,6 +13,8 @@ import app.muxway.android.protocol.Board
 import app.muxway.android.protocol.Changes
 import app.muxway.android.protocol.Clip
 import app.muxway.android.protocol.Files
+import app.muxway.android.protocol.Desk
+import app.muxway.android.protocol.Desks
 import app.muxway.android.protocol.Follow
 import app.muxway.android.protocol.Inbox
 import app.muxway.android.protocol.Json
@@ -98,6 +100,17 @@ class E2ETest {
     private fun post(tok: String, address: String, body: String, op: String = "input"): Int {
         val c = java.net.URL("${core.url}/v1/panes/$address/$op").openConnection() as java.net.HttpURLConnection
         c.requestMethod = "POST"
+        c.doOutput = true
+        c.setRequestProperty("Authorization", "Bearer $tok")
+        c.setRequestProperty("Content-Type", "application/json")
+        c.outputStream.use { it.write(body.toByteArray()) }
+        return c.responseCode
+    }
+
+    /** A raw request to any path with the bearer token, as a hostile or odd client would send it; the status. */
+    private fun raw(tok: String, method: String, path: String, body: String): Int {
+        val c = java.net.URL("${core.url}$path").openConnection() as java.net.HttpURLConnection
+        c.requestMethod = method
         c.doOutput = true
         c.setRequestProperty("Authorization", "Bearer $tok")
         c.setRequestProperty("Content-Type", "application/json")
@@ -1615,6 +1628,81 @@ class E2ETest {
         val out = Follow.reconcile("", listOf(first.key, second.key), { ids[it] ?: "" }, emptySet(), api.panes()) { h -> api.hosts().any { it.name == h && it.online } }
         assertEquals(listOf(first.key), out.gone)
         assertEquals(mapOf(second.key to first.key), out.moved)
+    }
+
+    private val deskTwo get() = Desk(
+        panes = listOf("$HOST/work/0.0", "$HOST/work/0.1"), focused = "$HOST/work/0.1", arrangement = "custom",
+        tree = WindowLayout.Node.Split(true, listOf(WindowLayout.Node.Leaf(0), WindowLayout.Node.Leaf(1)), "r"), weights = mapOf("r" to listOf(0.6f, 0.4f)),
+    )
+
+    @Test
+    fun s43_theDeskNeedsAWriteGrantAndNamesOnlyWhatTheWriterReads() {
+        val (api, tok) = setup()
+        api.split(HOST, "work", 0, "h")
+        waitFor("two panes") { api.panes().size == 2 }
+        val a = "$HOST/work/0.0"
+        val reader = Api(relay.url, core.token(write = null), "muxway-android-e2e")
+        val narrow = Api(relay.url, core.token(read = a, write = a), "muxway-android-e2e")
+        // Nothing yet: an empty desk, readable by a reader, with a tag.
+        val (empty, etag) = reader.desk(null)!!
+        assertEquals("panes", empty.view)
+        assertTrue(empty.panes.isEmpty())
+        assertTrue(etag.isNotEmpty())
+        assertFalse(Desks.holds(empty))
+        // A read-only token writes nothing; a token with one pane's grants names no other pane.
+        assertEquals("read_only", assertThrows(ApiException::class.java) { reader.putDesk(deskTwo) }.code)
+        assertEquals("not_yours", assertThrows(ApiException::class.java) { narrow.putDesk(deskTwo) }.code)
+        // Odd bodies the client would not build: the hub refuses each.
+        for (body in listOf(
+            """{"view":"panes","panes":["$a","$HOST/work/0.1","$HOST/work/0.2","$HOST/work/0.3","$HOST/work/0.4"]}""",
+            """{"view":"panes","panes":["$a","$a"]}""",
+            """{"view":"panes","panes":["alice laptop/work/0.0"]}""",
+            """{"view":"board","panes":["$a"]}""",
+            """{"view":"panes","panes":["$a","$HOST/work/0.1"],"tree":{"kind":"h","key":"r","children":[0]}}""",
+            """{"view":"panes","panes":["$a"],"weights":{"r":[2,0.5]}}""",
+            "nope",
+        )) assertEquals(body, 400, raw(tok, "PUT", "/v1/desk", body))
+        // Nothing of that landed.
+        assertTrue(api.desk(null)!!.first.panes.isEmpty())
+        // The full token's desk, read by the narrow one: the other pane left out, the tree and the focus with it.
+        api.putDesk(deskTwo)
+        val seen = narrow.desk(null)!!.first
+        assertEquals(listOf(a), seen.panes)
+        assertNull(seen.tree)
+        assertEquals("", seen.arrangement)
+        assertEquals("", seen.focused)
+        assertTrue(Desks.holds(seen))
+    }
+
+    @Test
+    fun f43_theDeskIsSharedTellsEveryClientAndCountsItsWrites() {
+        val (api, _) = setup()
+        api.split(HOST, "work", 0, "h")
+        waitFor("two panes") { api.panes().size == 2 }
+        val other = Api(relay.url, core.token(), "muxway-android-e2e")
+        val cursor = other.events(null, 0).next
+        val stored = api.putDesk(deskTwo)
+        assertEquals("phone", stored.by)
+        assertTrue(stored.rev >= 1)
+        assertTrue(stored.updated > 0)
+        assertTrue(Desks.same(stored, deskTwo))
+        assertEquals("desk · 2 panes · custom · by phone", Desks.words(stored))
+        // Read back by another client, with the tag; the desk event reached its long poll, naming no pane.
+        val (read, etag) = other.desk(null)!!
+        assertTrue(Desks.same(read, stored))
+        assertEquals(stored.rev, read.rev)
+        assertNull(other.desk(etag))
+        val ev = other.events(cursor, 2).events.first { it.kind == "desk" }
+        assertEquals("", ev.address)
+        assertEquals(stored.rev.toString(), ev.text)
+        // A second write counts up; a window desk round-trips.
+        val w = api.putDesk(Desk(view = "window", window = "$HOST/work/0", focused = "$HOST/work/0.0"))
+        assertTrue(w.rev > stored.rev)
+        val again = other.desk(null)!!.first
+        assertEquals("window", again.view)
+        assertEquals("$HOST/work/0", again.window)
+        assertEquals("$HOST/work/0.0", again.focused)
+        assertEquals("desk · the window $HOST/work/0", Desks.words(again))
     }
 
     @Test

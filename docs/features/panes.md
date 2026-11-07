@@ -19,6 +19,11 @@ grouped by hub (with more than one) and by host.
   tap to open · hold to pick several
 ```
 
+- The **desk row**, `▤ desk · 2 panes · row · by web`, sits at the top
+  of each hub's panes: the view the owner's clients share, kept by the
+  hub (see [desk](desk.md)). A tap opens it; while it holds nothing the
+  row is dim and says `desk · empty`; a hub older than desks has no row.
+
 - With several hubs each has a line, `══ name ══`, over its hosts, and
   its own trouble at the line's end; one hub has no line, and its trouble
   shows above the list as before. Hosts of one hub never mix with

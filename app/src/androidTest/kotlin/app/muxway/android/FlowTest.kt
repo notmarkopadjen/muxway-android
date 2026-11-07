@@ -802,6 +802,52 @@ class FlowTest {
         shot("chord-from-line")
     }
 
+    /** A desk written through the hub by the test, as another client would; the status. */
+    private fun putDesk(body: String): Int {
+        val c = java.net.URL("$hub/v1/desk").openConnection() as java.net.HttpURLConnection
+        c.requestMethod = "PUT"
+        c.doOutput = true
+        c.setRequestProperty("Authorization", "Bearer $token")
+        c.setRequestProperty("Content-Type", "application/json")
+        c.outputStream.use { it.write(body.toByteArray()) }
+        return c.responseCode
+    }
+
+    @Test
+    fun theDeskIsWrittenOpenedFromItsRowAndFollowed() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        // Nothing yet: the row says so and opens nothing.
+        await("desk · empty")
+        shot("desk-empty")
+        await("work/0.0").performClick()
+        await("$ ")
+        rule.onNodeWithTag("add").performClick()
+        await("+ pane").performClick()
+        rule.waitUntil(15_000) { tiles() == 2 }
+        // Half a second after the change the view is the desk: the row names it.
+        Thread.sleep(1_500)
+        rule.onNodeWithText("panes").performClick()
+        await("desk · 2 panes · column")
+        shot("desk-row")
+        rule.onNodeWithTag("desk-row").performClick()
+        rule.waitUntil(15_000) { tiles() == 2 }
+        shot("desk-opened")
+        // Another client leaves one pane on the desk: the view follows within the second, and the
+        // view does not write it back (it shows what the hub has).
+        assertEquals(200, putDesk("""{"view":"panes","panes":["alice-laptop/work/0.0"],"focused":"alice-laptop/work/0.0"}"""))
+        rule.waitUntil(15_000) { tiles() == 1 }
+        rule.onNodeWithTag("tile:alice-laptop/work/0.0").assertExists()
+        shot("desk-followed")
+        // Started again on the list after a view: the desk opens by itself.
+        scenario!!.close()
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        rule.waitUntil(15_000) { tiles() == 1 }
+        rule.onNodeWithTag("tile:alice-laptop/work/0.0").assertExists()
+        shot("desk-at-start")
+        rule.onNodeWithText("panes").performClick()
+        await("desk · 1 pane")
+    }
+
     @Test
     fun theGhostWordIsOffBySetting() {
         SettingsStore(context).save(SettingsStore(context).load().copy(suggest = false))

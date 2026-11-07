@@ -62,6 +62,7 @@ stateDiagram-v2
     Connect --> Panes: save and connect
     Panes --> View: tap one pane
     Panes --> View: hold several, open side by side
+    Panes --> View: the desk row, or started here after a view
     View --> Panes: panes / back
     Panes --> Connect: settings
     View --> Connect: settings
@@ -165,6 +166,7 @@ client's side of it.
 | transcription | `GET /v1/transcribe` (`204` or `404`) to know there is one, `POST /v1/transcribe` with `audio/wav` | microphone button, the watch's clip |
 | files | `GET /v1/panes/{address}/files` (`204` or a refusal) to know the pane takes them, `POST` the same as `multipart/form-data` with one part `file` of any type, 8 MiB at most, named `file.<ext>` for a kind the host does not know (`protocol/.../Files.kt`; a hub before 2026-11-04 answers `415`); the path answered lands on the input line | `⇪`, a paste into the line, a share from another app |
 | a file shown | `GET /v1/panes/{address}/files/{name}` for one of the inbox, `GET /v1/panes/{address}/preview?path=` for a path a writable pane printed, on a host with `preview`, 8 MiB at most; the answer's `Muxway-File` header, when the host found a relative path above the pane's directory or in another worktree, is the file's path on the host, shown under the sheet's bar | the file sheet |
+| desk | `GET /v1/desk` with `If-None-Match`, with every listing and at once on a `desk` event; `PUT /v1/desk` half a second after a change of the view (the focused tile's hub's panes, the focus, the arrangement with its tree and shares, the minimised row; no `order`), unless the hub has it or the view opened from it; a `404` says the hub is older than desks and hides the row, a `read_only` stops the writes (`protocol/.../Desk.kt`) | the desk row of the list, the pane view |
 | admin | `GET /v1/me` for the grant, `GET /v1/admin/log?limit=200`, `GET /v1/admin/overview`, `DELETE /v1/admin/sessions/{id}` | the admin section of Settings |
 
 Not used: `/v1/auth/*` (the token is pasted or scanned, never exchanged

@@ -23,6 +23,8 @@ import app.muxway.android.protocol.ApiException
 import app.muxway.android.files.Attachment
 import app.muxway.android.files.Attachments
 import app.muxway.android.protocol.Commands
+import app.muxway.android.protocol.Desk
+import app.muxway.android.protocol.Desks
 import app.muxway.android.protocol.Feed
 import app.muxway.android.protocol.Files
 import app.muxway.android.protocol.Follow
@@ -43,6 +45,7 @@ import app.muxway.android.protocol.Share
 import app.muxway.android.protocol.TalkEntry
 import app.muxway.android.protocol.Wheel
 import app.muxway.android.protocol.WheelQueue
+import app.muxway.android.protocol.WindowLayout
 import app.muxway.android.store.Hub
 import app.muxway.android.store.Hubs
 import app.muxway.android.store.Settings
@@ -169,6 +172,22 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         /** When a read last asked for the listing (a stranger, a 404), so a window of tiles asks once. */
         var askedAt = 0L
 
+        /**
+         * The hub's desk, the view its clients share: as last read (the list's row and the view
+         * watch it), its tag, what the hub has as last read by the view or answered to a write (the
+         * phone writes nothing the hub has and applies nothing it shows), the revision of the
+         * phone's own last write, whether the hub has desks at all, and whether the token may
+         * write it (not after `read_only`).
+         */
+        var desk by mutableStateOf<Desk?>(null)
+        var deskEtag: String? = null
+        var deskKnown: Desk? = null
+        var deskRev = 0L
+        var deskAsked = false
+        var deskWritable = true
+        var deskJob: Job? = null
+        var deskPending: Desk? = null
+
         /** Whether the hub has a transcriber, asked once per connection with the first listing. */
         var transcriber by mutableStateOf(false)
 
@@ -214,6 +233,13 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             shares = emptyList()
             listError = null
             cursor = null
+            desk = null
+            deskEtag = null
+            deskKnown = null
+            deskRev = 0L
+            deskAsked = false
+            deskWritable = true
+            deskPending = null
         }
     }
 
@@ -497,7 +523,137 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         shareOpen = null
         if (s is Screen.Panes) { selected.clear(); refreshList() }
         if (s !is Screen.Share) sharing = emptyList()
+        if (s is Screen.View) store.saveLastPlace("view") else if (s is Screen.Panes) store.saveLastPlace("list")
         if (s is Screen.View) setView(s.addresses) else screen = s
+    }
+
+    /**
+     * An opening the view takes once, the desk laid out for the tiles about to open: the
+     * arrangement, the tree and the shares, the minimised row and, when the desk is opened on
+     * purpose, the focus (a desk followed moves no focus).
+     */
+    class Opening(val keys: List<String>, val arrangement: String, val tree: WindowLayout.Node?, val weights: Map<String, List<Float>>, val minimised: List<String>, val focused: String?)
+    var opening: Opening? = null
+
+    /** The desk the view opened from, in the view's own words: a view equal to it writes nothing back. */
+    private var deskBaseline: Desk? = null
+    fun noteDeskBaseline(d: Desk) { deskBaseline = d }
+
+    /** Whether the app, started on the list after being closed in a view, still owes the desk its opening. */
+    private var startOnDesk = store.lastPlace() == "view"
+    private val startedAt = System.currentTimeMillis()
+
+    fun deskOf(hub: String): Desk? = connections.firstOrNull { it.id == hub }?.desk
+
+    /** Whether the hub has desks: a hub older than them answered `404` and shows no row. */
+    fun hasDesk(hub: String): Boolean = connections.firstOrNull { it.id == hub }?.let { it.deskAsked && it.desk != null } == true
+
+    /** Whether the view should follow [d]: not what it already applied or wrote, and not older than the phone's own last write. */
+    fun deskFollowable(hub: String, d: Desk): Boolean {
+        val c = connections.firstOrNull { it.id == hub } ?: return false
+        return d.rev >= c.deskRev && !Desks.same(d, c.deskKnown)
+    }
+
+    /** The view applied [d]: the hub shows it, nothing to follow or write. */
+    fun noteDeskKnown(hub: String, d: Desk) {
+        connections.firstOrNull { it.id == hub }?.deskKnown = d
+    }
+
+    private suspend fun fetchDesk(c: Conn) {
+        try {
+            val got = withContext(Dispatchers.IO) { c.api().desk(c.deskEtag) }
+            c.deskAsked = true
+            if (got != null) {
+                c.desk = got.first
+                c.deskEtag = got.second.ifEmpty { null }
+            }
+        } catch (e: ApiException) {
+            if (e.code == "unauthorized") tokenRefused(c)
+            // A hub older than desks: no row, nothing written.
+            if (e.code == "not_found") { c.desk = null; c.deskAsked = true; c.deskWritable = false }
+        }
+        startOnDesk()
+    }
+
+    // Started on the list after a view: the first hub's desk that holds panes opens, within the
+    // first moments; with every desk read and none holding anything, the list it is.
+    private fun startOnDesk() {
+        if (!startOnDesk) return
+        if (screen !is Screen.Panes || System.currentTimeMillis() - startedAt > 20_000) { startOnDesk = false; return }
+        val cs = connections
+        val with = cs.firstOrNull { Desks.holds(it.desk) }
+        if (with != null) { startOnDesk = false; openDesk(with.id); return }
+        if (cs.all { it.deskAsked }) { startOnDesk = false; store.saveLastPlace("list") }
+    }
+
+    /**
+     * Opens the hub's desk: its tiles in their arrangement with the minimised row and, with
+     * [focus], the focused one; a window desk opens the window's panes from the listing, four at
+     * most, as the zoom from a lone pane does. A desk without panes opens nothing.
+     */
+    fun openDesk(hub: String, focus: Boolean = true) {
+        val c = connections.firstOrNull { it.id == hub } ?: return
+        val d = c.desk ?: return
+        c.deskKnown = d
+        val keys: List<String>
+        var minimised: List<String> = emptyList()
+        var arrangement = ""
+        var tree: WindowLayout.Node? = null
+        var weights: Map<String, List<Float>> = emptyMap()
+        val focused: String?
+        if (d.view == "window" && d.window.isNotEmpty()) {
+            val mates = c.panes.filter { "${it.host}/${it.session}/${it.windowIndex}" == d.window || "${it.host}/${it.session}/${it.window}" == d.window }.map { it.key }.take(AddMenu.MAX_TILES)
+            if (mates.isEmpty()) { told = "the desk's window has no pane here"; return }
+            keys = mates
+            focused = Keys.make(c.id, d.focused).takeIf { d.focused.isNotEmpty() && it in mates }
+        } else {
+            val panes = Desks.panesOf(d).map { Keys.make(c.id, it) }
+            if (panes.isEmpty()) return
+            keys = (panes + d.minimised.map { Keys.make(c.id, it) }).distinct().take(AddMenu.MAX_TILES)
+            minimised = keys.drop(panes.size)
+            arrangement = d.arrangement
+            tree = d.tree
+            weights = d.weights
+            focused = Keys.make(c.id, d.focused).takeIf { d.focused.isNotEmpty() && it in panes }
+        }
+        opening = Opening(keys, arrangement, tree, weights, minimised, if (focus) focused else null)
+        open(Screen.View(keys))
+    }
+
+    /**
+     * The view as a desk, for the focused tile's hub, sent half a second after the last change
+     * unless the hub has it already or the view opened from it; the newest change supersedes
+     * the pending one. Nothing is written for a token without a writable pane, after a
+     * `read_only` refusal, or to a hub older than desks.
+     */
+    fun writeDesk(hub: String, d: Desk) {
+        val c = connections.firstOrNull { it.id == hub } ?: return
+        if (Desks.same(d, deskBaseline) || Desks.same(d, c.deskKnown)) {
+            c.deskPending = null
+            c.deskJob?.cancel()
+            return
+        }
+        if (!c.deskWritable || c.panes.none { it.writable }) return
+        c.deskPending = d
+        c.deskJob?.cancel()
+        c.deskJob = viewModelScope.launch {
+            delay(Desks.DEBOUNCE_MS)
+            val next = c.deskPending ?: return@launch
+            c.deskPending = null
+            if (Desks.same(next, deskBaseline) || Desks.same(next, c.deskKnown)) return@launch
+            try {
+                val stored = withContext(Dispatchers.IO) { c.api().putDesk(next) }
+                c.deskKnown = stored
+                c.desk = stored
+                c.deskRev = stored.rev
+                c.deskEtag = null
+            } catch (e: ApiException) {
+                if (e.code == "unauthorized") tokenRefused(c)
+                if (e.code == "read_only" || e.code == "not_found") c.deskWritable = false
+            } catch (e: IllegalArgumentException) {
+                // A desk the client itself refuses never leaves the phone.
+            }
+        }
     }
 
     /**
@@ -746,6 +902,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                     c.probed = true
                 }
                 reconcile(c)
+                fetchDesk(c)
                 openPending()
             } catch (e: ApiException) {
                 c.listError = e.message
@@ -844,6 +1001,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
                 val ev = withContext(Dispatchers.IO) { c.api().events(c.cursor, 30) }
                 c.cursor = ev.next
                 for (e in ev.events) if (e.address.isNotEmpty() && e.kind.isNotEmpty()) lastKind[Keys.make(c.id, e.address)] = e.kind
+                // The desk changed on the hub: it is asked for at once, so a view follows within the second.
+                if (ev.events.any { it.kind == "desk" }) fetchDesk(c)
                 if (ev.events.isNotEmpty()) refreshList(c)
             } catch (e: ApiException) {
                 if (e.code == "unauthorized") { tokenRefused(c); return }

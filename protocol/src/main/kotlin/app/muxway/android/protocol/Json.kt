@@ -156,6 +156,96 @@ object Json {
     /** The transcriber's text, cleaned as typed text is. */
     fun transcript(body: String): String = parse(body) { o -> Input.typed(o.optString("text")) }
 
+    /**
+     * The desk as the hub keeps it, read defensively: addresses by the grammar and bounded in
+     * number, the focus among the panes, an arrangement of the six, a tree whose leaves are the
+     * panes and whose keys are bounded (else none, and no `custom`), weights in range (else none),
+     * `by` cleaned and bounded. A hub's answer that is no desk is a bad answer.
+     */
+    fun desk(body: String): Desk = parse(body) { o -> deskOf(o.getJSONObject("desk")) }
+
+    private fun deskOf(o: JSONObject): Desk {
+        fun addresses(name: String, max: Int): List<String> {
+            val arr = o.optJSONArray(name) ?: return emptyList()
+            val out = ArrayList<String>()
+            for (i in 0 until arr.length()) {
+                val a = arr.optString(i)
+                if (Address.valid(a) && a !in out) out.add(a)
+            }
+            return if (out.size > max) emptyList() else out
+        }
+        val view = o.optString("view").takeIf { it == "panes" || it == "window" } ?: "panes"
+        val panes = if (view == "panes") addresses("panes", Desks.MAX_PANES) else emptyList()
+        var arrangement = o.optString("arrangement").takeIf { it in Desks.ARRANGEMENTS } ?: ""
+        var tree = o.opt("tree")?.let { treeOf(it) }
+        if (tree != null && !Desks.validTree(tree, panes.size)) tree = null
+        if (tree == null && arrangement == "custom") arrangement = ""
+        val weights = HashMap<String, List<Float>>()
+        o.optJSONObject("weights")?.let { w ->
+            for (k in w.keys()) {
+                val arr = w.optJSONArray(k) ?: continue
+                weights[k] = List(arr.length()) { arr.optDouble(it, -1.0).toFloat() }
+            }
+        }
+        val window = o.optString("window").takeIf { view == "window" && WINDOW.matches(it) } ?: ""
+        return Desk(
+            view = view,
+            panes = panes,
+            focused = o.optString("focused").takeIf { Address.valid(it) && (view == "window" || it in panes) } ?: "",
+            arrangement = if (panes.size > 1) arrangement else "",
+            tree = tree,
+            weights = if (Desks.validWeights(weights)) weights else emptyMap(),
+            minimised = addresses("minimised", Desks.MAX_MINIMISED),
+            order = addresses("order", Desks.MAX_ORDER),
+            window = window,
+            updated = o.optLong("updated").coerceAtLeast(0),
+            by = Input.printable(o.optString("by")).take(Desks.MAX_BY),
+            rev = o.optLong("rev").coerceAtLeast(0),
+        )
+    }
+
+    /** A window address, `host/session/window`. */
+    private val WINDOW = Regex("^[a-z0-9-]{1,32}/[A-Za-z0-9._-]{1,64}/[A-Za-z0-9._-]{1,64}$")
+
+    /** The web's tile tree: a number for a leaf, `{kind: h|v, key, children}` for a split; null for anything else. */
+    private fun treeOf(x: Any?): WindowLayout.Node? {
+        return when (x) {
+            is Int -> WindowLayout.Node.Leaf(x)
+            is Number -> x.toDouble().let { if (it == Math.floor(it) && it in 0.0..3.0) WindowLayout.Node.Leaf(it.toInt()) else null }
+            is JSONObject -> {
+                val kind = x.optString("kind")
+                val kids = x.optJSONArray("children")
+                if ((kind != "h" && kind != "v") || kids == null || kids.length() < 2 || kids.length() > Desks.MAX_PANES) return null
+                val children = ArrayList<WindowLayout.Node>()
+                for (i in 0 until kids.length()) children.add(treeOf(kids.opt(i)) ?: return null)
+                WindowLayout.Node.Split(kind == "h", children, x.optString("key"))
+            }
+            else -> null
+        }
+    }
+
+    /** The desk the phone writes: the view without `updated`, `by` and `rev`, the fields the hub sets. */
+    fun deskBody(d: Desk): String {
+        val o = JSONObject().put("view", d.view)
+        if (d.view == "window") {
+            o.put("window", d.window)
+        } else {
+            o.put("panes", JSONArray(d.panes))
+            if (d.arrangement.isNotEmpty()) o.put("arrangement", d.arrangement)
+            d.tree?.let { o.put("tree", treeJson(it)) }
+            if (d.weights.isNotEmpty()) o.put("weights", JSONObject().also { w -> for ((k, ws) in d.weights) w.put(k, JSONArray(ws.map { it.toDouble() })) })
+            if (d.minimised.isNotEmpty()) o.put("minimised", JSONArray(d.minimised))
+            if (d.order.isNotEmpty()) o.put("order", JSONArray(d.order))
+        }
+        if (d.focused.isNotEmpty()) o.put("focused", d.focused)
+        return o.toString()
+    }
+
+    private fun treeJson(n: WindowLayout.Node): Any = when (n) {
+        is WindowLayout.Node.Leaf -> n.index
+        is WindowLayout.Node.Split -> JSONObject().put("kind", if (n.horizontal) "h" else "v").put("key", n.key).put("children", JSONArray(n.children.map { treeJson(it) }))
+    }
+
     fun error(body: String): String = try {
         JSONObject(body).optString("error")
     } catch (e: JSONException) {

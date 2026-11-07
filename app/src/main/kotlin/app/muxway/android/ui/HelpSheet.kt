@@ -25,6 +25,7 @@ private class Part(val title: String, val rows: List<Pair<String, String>>)
 // The guideline's actions in its order, the Android column: what a gesture or a key does here.
 private val PARTS = listOf(
     Part("the list", listOf(
+        "the desk: the view every client shares" to "the ▤ desk row at the top of the list opens it; the app opens it when started here after a view; the view writes it as you change it and follows the other clients",
         "open a pane" to "tap its row",
         "pick several, up to four" to "hold a row; with a pick on, a tap adds or removes; open N side by side",
         "one more pane in a window" to "the + pane row under its panes",
