@@ -1409,8 +1409,12 @@ private fun PaneTile(
             LaunchedEffect(fitting, visibleCols, visibleRows, imeUp, fitAgain, listed, fitWindow, fitZoom, windowFit, shared, touch, focused) {
                 val now = System.currentTimeMillis()
                 val refit = touchedNow && !imeUp && Refit.wanted(holder, lastRefit, now)
-                seenTouch = touch
-                wasFocused = focused
+                // A touch made while the keyboard is up waits for it to go: the fit is deferred
+                // then, so the touch is not spent until it can be acted on.
+                if (!imeUp) {
+                    seenTouch = touch
+                    wasFocused = focused
+                }
                 when {
                     windowFit -> {}
                     !fitting -> if (shared && fitAsked) model.keep(address) else model.release(address)
