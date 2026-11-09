@@ -280,7 +280,7 @@ fun Line(
     onFocus: (Boolean) -> Unit,
     maxLines: Int = 6,
     ghost: String = "",
-    onGhost: () -> Unit = {},
+    onGhost: (String) -> Unit = {},
     onSend: () -> Unit,
     onContent: (List<Uri>) -> Unit,
 ) {
@@ -289,7 +289,8 @@ fun Line(
     val content by rememberUpdatedState(onContent)
     val take by rememberUpdatedState(onGhost)
     // The ghost is drawn after the text from the field's layout, never part of its value; a tap
-    // on it, or a swipe right across the field, takes it into the field.
+    // on it, a swipe right across the field, or Right on a hardware keyboard with the caret at
+    // the end takes it into the field, Ctrl+Right its first word (Ghost).
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val measurer = rememberTextMeasurer()
     val ghostStyle = LocalTextStyle.current.copy(color = p.dim)
@@ -327,7 +328,7 @@ fun Line(
                             if (!ch.pressed) break
                             dx += ch.positionChange().x
                             dy += ch.positionChange().y
-                            if (dx > swipe && abs(dy) < dx / 2) { ch.consume(); take(); break }
+                            if (dx > swipe && abs(dy) < dx / 2) { ch.consume(); take(ghost); break }
                         }
                     }
                 },
@@ -343,7 +344,12 @@ fun Line(
                     }
                     .contentReceiver(receiver)
                     .onPreviewKeyEvent { e ->
-                        val enter = e.type == KeyEventType.KeyDown && (e.key == Key.Enter || e.key == Key.NumPadEnter)
+                        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        // Before the field moves its caret: Right at the end of the text takes the
+                        // ghost whole, Ctrl+Right its first word; the field never sees those.
+                        val atEnd = state.selection.collapsed && state.selection.end == state.text.length
+                        Ghost.take(HardKeys.name(e), atEnd, ghost)?.let { take(it); return@onPreviewKeyEvent true }
+                        val enter = e.key == Key.Enter || e.key == Key.NumPadEnter
                         when {
                             !enter -> false
                             e.isShiftPressed -> {
@@ -367,7 +373,7 @@ fun Line(
                 Box(
                     Modifier.offset { IntOffset(end.right.toInt(), end.top.toInt()) }
                         .size(with(LocalDensity.current) { w.toDp() }, with(LocalDensity.current) { end.height.toDp() })
-                        .clickable { take() }
+                        .clickable { take(ghost) }
                         .testTag("ghost"),
                 )
             }
