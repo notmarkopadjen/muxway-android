@@ -221,6 +221,22 @@ with the logs and screenshots, as `docs/testing.md` says.
    steps after it keep their window).
 6. Docs (§7), the run, the test-run issue, the pull request.
 
+## Amendment, 2026-11-09 evening: siblings from the layout
+
+The owner's next screenshots, on a wider screen, read `31×42 held`
+with the pane in the left half of the tile: the host gave the pane
+half the window. The pane was alone in the view and the view asked for
+the window's size without the zoom, because it counted siblings among
+the panes the token can see and the pane's neighbour was not exposed;
+the hub unzooms on a window resize without `zoom`, so the pane kept
+its share of the two-column layout. `TileFit.siblings` now counts the
+panes the listing's `window_layout` names as well as the listed ones,
+so the zoom is asked for whenever the window holds more than one pane.
+Three unit tests; the guideline is unchanged (a pane alone fits its
+window zoomed over its siblings); the pane view page says where the
+siblings are counted. No protocol change, nothing new sent: the same
+`resize` with `zoom: true` where it was `false` before.
+
 ## Review (after implementation)
 
 - [x] Diff matches the plan. Deviations: the header's *held* compared

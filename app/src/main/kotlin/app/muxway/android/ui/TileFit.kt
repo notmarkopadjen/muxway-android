@@ -37,6 +37,20 @@ object TileFit {
     }
 
     fun movable(open: List<String>, panes: List<Pane>): Boolean = open.all { k -> panes.firstOrNull { it.key == k }?.writable == true }
+
+    /**
+     * Whether the pane at [key] has siblings in its tmux window: another listed pane of the
+     * window, or the window's layout in the listing naming more than one pane. The layout counts
+     * the panes the token cannot see; a window resized without the zoom is unzoomed by the host,
+     * which leaves the pane its share beside neighbours this phone never heard of, half the
+     * width beside one, and the tile reads held.
+     */
+    fun siblings(key: String, panes: List<Pane>, windowOf: (String) -> String): Boolean {
+        if (panes.any { it.key != key && windowOf(it.key) == windowOf(key) }) return true
+        val layout = panes.firstOrNull { it.key == key }?.windowLayout?.takeIf { it.isNotEmpty() } ?: return false
+        val host = WindowLayout.parse(layout) ?: return false
+        return WindowLayout.panes(host).size > 1
+    }
 }
 
 /**

@@ -47,6 +47,29 @@ class TileFitTest {
         assertEquals(setOf("a/w/0.1"), held(listOf("a/w/0.0", "a/w/0.1"), "a/w/0.0"))
     }
 
+    private fun siblings(key: String, panes: List<Pane>) = TileFit.siblings(key, panes, windowOf = { it.substringBeforeLast('.') })
+
+    @Test
+    fun aListedPaneOfTheSameWindowIsASibling() {
+        assertEquals(true, siblings("a/w/0.0", listOf(pane("a/w/0.0", "%1"), pane("a/w/0.1", "%2"))))
+        assertEquals(false, siblings("a/w/0.0", listOf(pane("a/w/0.0", "%1"), pane("a/w/1.0", "%4"))))
+    }
+
+    @Test
+    fun theWindowsLayoutCountsThePanesTheTokenCannotSee() {
+        val two = pane("a/w/0.3", "%7").copy(windowLayout = "c3a1,62x42,0,0{31x42,0,0,7,30x42,32,0,8}")
+        assertEquals(true, siblings("a/w/0.3", listOf(two)))
+        val one = pane("a/w/0.0", "%1").copy(windowLayout = "c3a1,62x42,0,0,1")
+        assertEquals(false, siblings("a/w/0.0", listOf(one)))
+    }
+
+    @Test
+    fun noLayoutOrABrokenOneMeansNoSiblingsKnown() {
+        assertEquals(false, siblings("a/w/0.0", listOf(pane("a/w/0.0", "%1"))))
+        assertEquals(false, siblings("a/w/0.0", listOf(pane("a/w/0.0", "%1").copy(windowLayout = "not a layout"))))
+        assertEquals(false, siblings("a/w/0.0", emptyList()))
+    }
+
     @Test
     fun withTheFocusElsewhereTheFirstOfTheWindowFits() {
         assertEquals(setOf("a/w/0.1"), held(listOf("a/w/1.0", "a/w/0.0", "a/w/0.1"), "a/w/1.0"))

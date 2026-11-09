@@ -562,8 +562,9 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         Rule()
         Box(Modifier.weight(1f)) {
             val held = if (ids != null) emptySet() else TileFit.held(tiles, focused, windowOf)
-            // A pane alone in the view sizes its window, zoomed over its siblings when it has any.
-            val siblings = { a: String -> model.panes.any { it.key != a && windowOf(it.key) == windowOf(a) } }
+            // A pane alone in the view sizes its window, zoomed over its siblings when it has any:
+            // listed ones, or the ones its window's layout names that the token cannot see.
+            val siblings = { a: String -> TileFit.siblings(a, model.panes, windowOf) }
             // The tiles and their window are kept the same both ways: the tiles take the host's
             // layout when it changes there (not over a change made here in the last three
             // seconds, nor the layout this view sent, which comes back with the headers' rows
