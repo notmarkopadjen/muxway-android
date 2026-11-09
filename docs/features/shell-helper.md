@@ -90,8 +90,10 @@ screen shows was typed at a prompt, one of the command row's starters,
 or, after a command that takes a file (`cd`, `cat`, `ls`, `vim` and
 their kind), a name of the pane's directory, a directory with its
 slash. On the line the ghost sits inside the field after the text; a
-tap on it or a swipe right across the field takes it into the field,
-and `⏎` sends the text as typed, never the ghost. The completion row
+tap on it, a swipe right across the field or `→` in the key row takes
+it into the field, and so does a hardware keyboard's `Right` with the
+caret at the end of the text, `Ctrl+Right` its first word; `⏎` sends
+the text as typed, never the ghost. The completion row
 above the line stays as it is.
 
 With direct typing the ghost is drawn in the pane after the cursor.
@@ -126,7 +128,7 @@ sequenceDiagram
     participant H as Hub
     P->>A: types echo o on the line
     A->>A: pool has echo one two, ghost ne two drawn dim in the field
-    P->>A: tap on the ghost (or swipe right)
+    P->>A: tap on the ghost (or swipe right, or → in the key row)
     A->>A: field reads echo one two, nothing sent
     P->>A: send
     A->>H: POST input {text echo one two}

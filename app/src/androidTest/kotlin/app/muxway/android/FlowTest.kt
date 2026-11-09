@@ -688,6 +688,51 @@ class FlowTest {
     }
 
     @Test
+    fun theArrowInTheKeyRowTakesTheGhostAndSendsNothing() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        rule.onNode(hasSetTextAction()).performTextInput("echo one two")
+        rule.onNodeWithText("⏎").performClick()
+        await("one two")
+        // The screen's rows and the command row's recent line that read the whole, before.
+        val shown = hasText("echo one two", substring = true) and !hasSetTextAction()
+        val before = rule.onAllNodes(shown).fetchSemanticsNodes().size
+        rule.onNode(hasSetTextAction()).performTextInput("echo o")
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("ghost").fetchSemanticsNodes().isNotEmpty() }
+        // → in the key row: the field holds the whole line, the ghost is gone, the pane heard nothing.
+        rule.onNodeWithText("→").performClick()
+        rule.onNode(hasSetTextAction()).assert(hasText("echo one two"))
+        rule.onAllNodesWithTag("ghost").assertCountEquals(0)
+        SystemClock.sleep(2_000)
+        assertEquals(before, rule.onAllNodes(shown).fetchSemanticsNodes().size)
+        shot("ghost-right")
+        // ⏎ sends what the field holds; then, with no ghost, → is a console key and the field stays empty.
+        rule.onNodeWithText("⏎").performClick()
+        rule.waitUntil(10_000) { rule.onAllNodes(shown).fetchSemanticsNodes().size > before }
+        rule.onNodeWithText("→").performClick()
+        SystemClock.sleep(1_000)
+        rule.onNode(hasSetTextAction()).assert(hasText(""))
+        shot("ghost-right-sent")
+    }
+
+    @Test
+    fun aTileTheHostWouldNotSizeSaysHeldAndIsDrawnScaledNotReCut() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        // The wide window holds five panes side by side: its floor is 104 columns, more than any tile fits.
+        await("wide/0.0").performClick()
+        await("$ ")
+        rule.waitUntil(15_000) { rule.onAllNodes(hasText("104×", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("size").assert(hasText("held", substring = true))
+        shot("held-scaled")
+        // A row of the pane's width is one row of the tile, scaled, not cut again at the tile's columns.
+        rule.onNode(hasSetTextAction()).performTextInput("printf '%104s\\n' | tr ' ' -")
+        rule.onNodeWithText("⏎").performClick()
+        await("-".repeat(104))
+        shot("held-row")
+    }
+
+    @Test
     fun thePartnerIsLaidBesideWithTheChainFitIsPerTileAndHelpListsTheGestures() {
         scenario = ActivityScenario.launch(MainActivity::class.java)
         // The seeded mail made the first pane and the asking one a group.

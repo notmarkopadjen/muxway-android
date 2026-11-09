@@ -224,7 +224,16 @@ flowchart LR
   keyboard goes. If another terminal sizes the window meanwhile, the
   phone sends its size once more after twenty seconds and then leaves it,
   because two clients fitting one tmux window can only fight: the header
-  shows the host's size in the alert colour with "held". Tapping `⤢`
+  shows the host's size in the alert colour with "held". A held tile is
+  drawn scaled to the tile, as with fit off: the text shrinks until the
+  host's columns fit and no row is cut twice; what the phone asks of
+  the host stays the cells that fit at the **text** setting, so a tile
+  scaled to the host's columns never asks for them (`TileScale`). The
+  usual cause is the host's floor: a fit never takes a neighbour under
+  20 columns or 5 rows, so a pane whose window holds three panes side
+  by side is never under 62 columns (three floors and two dividers),
+  whatever the phone fits; a lower **text** setting or a thinner window
+  on the host is the way round it. Tapping `⤢`
   while it is on sends the size again at once, and holding it turns fit
   off for the focused tile alone; the others keep theirs, and `⤢` shows
   the focused tile's state. A pane shorter than the tile sits at the bottom with empty rows
@@ -255,7 +264,11 @@ flowchart LR
   A pane **alone in the view** sizes its whole window instead
   (`"scope": "window"`), with the pane zoomed over its siblings
   (`"zoom": true`, tmux's own zoom) when the window holds any, so no
-  neighbour is squeezed to make room for the phone's screen. A pane that
+  neighbour is squeezed to make room for the phone's screen. The
+  siblings are counted from the window's layout in the listing
+  (`window_layout`), so a pane the token cannot see counts too: a window
+  resized without the zoom is unzoomed by the host and the pane keeps
+  its share, half the width beside one neighbour, and reads *held*. A pane that
   **gives way to another** in the view keeps the size it was given and is
   not sized again when it comes back at that size; every pane the view
   sized is given back when the view is left.
@@ -268,9 +281,9 @@ flowchart LR
   without fit.
 - **Zoom.** Pinch zooms between half and four times the fitted size; when
   the text is wider than the tile it scrolls sideways.
-- **Reflow.** The **reflow** setting applies when fit is off: rows reflow
-  to the columns that fit at the current size instead of the pane being
-  scaled; pinch then changes the margins. For shells and logs; a
+- **Reflow.** The **reflow** setting applies when fit is off, and to a
+  held tile: rows reflow to the columns that fit at the current size
+  instead of the pane being scaled; pinch then changes the margins. For shells and logs; a
   full-screen program's layout breaks under it, so it is off by default.
 - **Colour.** The 16 base colours come from the theme (darker variants on
   paper), 16–255 are xterm's cube and grey ramp, true colour is passed
@@ -498,7 +511,10 @@ it is writable:
   phone sent before, a command the screen shows was typed at a prompt,
   a starter of the command row, or after a command that takes a file a
   name of the pane's directory (a directory with its slash). A tap on
-  it or a swipe right across the field takes it into the field; `⏎`
+  it, a swipe right across the field, or `→` in the key row while it is
+  drawn takes it into the field (`→` is the console key when none is);
+  on a hardware keyboard, with the caret at the end of the text, `Right`
+  takes it whole and `Ctrl+Right` its first word, into the field. `⏎`
   sends the text as typed, never the ghost. With direct typing the
   ghost is drawn in the pane after the cursor, where the screen's
   cursor row confirms what was typed, and `Right` takes it whole,

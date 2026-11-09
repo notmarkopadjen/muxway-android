@@ -562,8 +562,9 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         Rule()
         Box(Modifier.weight(1f)) {
             val held = if (ids != null) emptySet() else TileFit.held(tiles, focused, windowOf)
-            // A pane alone in the view sizes its window, zoomed over its siblings when it has any.
-            val siblings = { a: String -> model.panes.any { it.key != a && windowOf(it.key) == windowOf(a) } }
+            // A pane alone in the view sizes its window, zoomed over its siblings when it has any:
+            // listed ones, or the ones its window's layout names that the token cannot see.
+            val siblings = { a: String -> TileFit.siblings(a, model.panes, windowOf) }
             // The tiles and their window are kept the same both ways: the tiles take the host's
             // layout when it changes there (not over a change made here in the last three
             // seconds, nor the layout this view sent, which comes back with the headers' rows
@@ -991,7 +992,8 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
     val line = key(state.address) { rememberTextFieldState() }
     val text = line.text.toString()
     // The ghost word on the line: the rest of a known line after the text, for a shell pane,
-    // taken by a tap on it or a swipe right; send sends the text as typed.
+    // taken by a tap on it, a swipe right, → in the key row or a hardware Right at the end of
+    // the text; send sends the text as typed.
     val shellPane = state.pane?.let { Commands.isShell(it.command) && it.writable } == true
     val ghost = if (shellPane && model.settings.suggest && text.isNotEmpty() && '\n' !in text) {
         val rows = remember(state.content) { state.content.lines().map { Ansi.plain(it) } }
@@ -1001,6 +1003,11 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
         if (text.isEmpty() && !enter) return
         model.type(state.key, text, enter)
         line.clearText()
+    }
+    // A ghost, or its first word, taken into the field: the caret after it, the line focused, nothing sent.
+    fun take(part: String) {
+        line.setTextAndPlaceCursorAtEnd(text + part)
+        fieldFocus.request()
     }
     val busy = state.busy
 
@@ -1081,7 +1088,8 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
         Btn("Esc", { model.key(state.key, "Escape") }, enabled = !busy, tint = p.tint(Input.group("Escape")))
         LazyRow(Modifier.weight(1f)) {
             items(Input.KEYS.filter { it.first != "Escape" && it.first != "Enter" }, key = { it.first }) { (name, label) ->
-                Btn(label, { model.key(state.key, name) }, enabled = !busy, tint = p.tint(Input.group(name)))
+                // → takes the line's ghost into the field while one is drawn; a console key otherwise.
+                Btn(label, { Ghost.take(name, atEnd = true, ghost = ghost)?.let(::take) ?: model.key(state.key, name) }, enabled = !busy, tint = p.tint(Input.group(name)))
             }
         }
         Btn("Enter", { model.key(state.key, "Enter") }, enabled = !busy, tint = p.tint(Input.group("Enter")))
@@ -1153,7 +1161,7 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
                     onFocus = onFieldFocus,
                     maxLines = 6,
                     ghost = ghost,
-                    onGhost = { line.setTextAndPlaceCursorAtEnd(text + ghost); fieldFocus.request() },
+                    onGhost = ::take,
                     onSend = { send(true) },
                     onContent = ::files,
                 )
@@ -1287,6 +1295,15 @@ private fun PaneTile(
             .background(back).padding(horizontal = 4.dp, vertical = 2.dp)
             .pointerInput(address) { detectTapGestures(onDoubleTap = { onZoom() }, onTap = { onFocus() }) }
             .testTag("header")
+        // Held: the host did not keep this phone's size. Another terminal holds the window, its
+        // floor (20 columns a pane) is wider than the tile, another tile of the window carries the
+        // fit, or a one-window fit gave this pane another share. The header says so, in the alert
+        // colour, and the screen is drawn scaled to the tile, as with fit off (TileScale).
+        val heldSize = fitAsked && pane?.writable == true && when {
+            shared -> true
+            windowFit -> expected != null && (pane.width != expected.cols || pane.height != expected.rows)
+            else -> state.fitKey.isNotEmpty() && state.fitKey.substringBefore(' ') != "${pane.width}x${pane.height}"
+        }
         Row(header, verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 if (pane != null) {
@@ -1313,14 +1330,7 @@ private fun PaneTile(
             }
             if (menu) PaneMenu(model, address, onBeside = null, onClose = onMenuClose, onPartner = onPartner, onAcross = onAcross, acrossNow = acrossNow)
             if (fitAsked && pane?.writable == true) {
-                // Alert colour when the host did not keep this phone's size: another terminal holds
-                // it, or another tile of the window carries the fit.
-                val held = when {
-                    shared -> true
-                    windowFit -> expected != null && (pane.width != expected.cols || pane.height != expected.rows)
-                    else -> state.fitKey.isNotEmpty() && state.fitKey != "${pane.width}x${pane.height}"
-                }
-                Text(" ${pane.width}×${pane.height}${if (held) " held" else ""} ", color = if (held) p.alert else ink, maxLines = 1, modifier = Modifier.testTag("size"))
+                Text(" ${pane.width}×${pane.height}${if (heldSize) " held" else ""} ", color = if (heldSize) p.alert else ink, maxLines = 1, modifier = Modifier.testTag("size"))
             }
             // The pane's live shares made by this token, counted and dim; a tap opens the share sheet.
             if (pane != null && pane.shared > 0) {
@@ -1362,14 +1372,21 @@ private fun PaneTile(
             val unwrapped = remember(state.content) { Ansi.rows(state.content, 0) }
             val paneCols = pane?.width?.takeIf { it > 0 } ?: unwrapped.maxOf { r -> r.sumOf { it.text.length } }.coerceIn(1, 400)
             val fitSp = widthPx * 100f / (advance100 * paneCols)
-            val sizeSp = ((if (fitting || reflow) maxSp else minOf(maxSp, fitSp)) * zoom).coerceAtLeast(2f)
+            // A held tile is drawn scaled to the pane's columns, as with fit off; the cells the fit
+            // asks for are measured at the text setting whatever the tile is drawn at, so a tile
+            // scaled to the host's columns never asks for them.
+            val scale = TileScale.of(fitting, heldSize, reflow, maxSp, fitSp, zoom)
+            val sizeSp = scale.drawSp
             val lineSp = sizeSp * 1.2f
             val colPx = advance100 * sizeSp / 100f
             val rowPx = with(density) { lineSp.sp.toPx() }
-            val visibleCols = (widthPx / colPx).toInt().coerceAtLeast(8)
+            val cellPx = advance100 * scale.cellSp / 100f
+            val cellRowPx = with(density) { (scale.cellSp * 1.2f).sp.toPx() }
+            val visibleCols = (widthPx / cellPx).toInt().coerceAtLeast(8)
             // The rows the text line took while a message is written are counted as if they were here.
-            val visibleRows = ((heightPx + slackPx) / rowPx).toInt().coerceAtLeast(1)
-            val cols = if (fitting || reflow) visibleCols else paneCols
+            val visibleRows = ((heightPx + slackPx) / cellRowPx).toInt().coerceAtLeast(1)
+            val shownRows = ((heightPx + slackPx) / rowPx).toInt().coerceAtLeast(1)
+            val cols = if (scale.paneCols) paneCols else visibleCols
             val rows = remember(state.content, cols) { if (cols == paneCols && pane?.width == null) unwrapped else Ansi.rows(state.content, cols) }
             // The on-screen keyboard halves the tile for a moment; the host keeps its size then.
             val imeUp = WindowInsets.isImeVisible
@@ -1394,7 +1411,7 @@ private fun PaneTile(
             val lines = remember(rows, p, previews) { rows.map { styled(it, p, previews) }.asReversed() }
             val dash = with(density) { 2.dp.toPx() }
             val style = base.copy(fontSize = sizeSp.sp, lineHeight = lineSp.sp)
-            val sideways = !fitting && !reflow
+            val sideways = scale.paneCols
             val horizontal = rememberScrollState()
             val body = Modifier.fillMaxHeight().then(if (sideways) Modifier.width(with(density) { (cols * colPx).toDp() } + 4.dp) else Modifier.fillMaxWidth())
             // A program that has the mouse gets the wheel on a vertical drag: a notch per row,
@@ -1404,7 +1421,7 @@ private fun PaneTile(
             // history the hub sent. The list takes no drags that are the program's, and never
             // its stretch effect, so the gesture reaches us and sideways swipes reach the page.
             val wheel = pane?.mouse == true
-            val scrolls = rows.size > visibleRows && !wheel
+            val scrolls = rows.size > shownRows && !wheel
             val paging = pane?.writable == true && (wheel || !scrolls)
             val page = if (wheel) rowPx else heightPx / 3f
             // A tap is a click at the cell under the finger; the rows sit at the bottom, and the
