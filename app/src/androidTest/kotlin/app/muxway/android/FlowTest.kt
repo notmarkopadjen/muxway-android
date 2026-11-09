@@ -78,6 +78,7 @@ class FlowTest {
     private val adminToken = args.getString("adminToken") ?: ""
     private val hub2 = args.getString("hub2") ?: ""
     private val token2 = args.getString("token2") ?: ""
+    private val webToken = args.getString("webToken") ?: ""
     private var scenario: ActivityScenario<MainActivity>? = null
     private var step = 0
 
@@ -714,6 +715,40 @@ class FlowTest {
         SystemClock.sleep(1_000)
         rule.onNode(hasSetTextAction()).assert(hasText(""))
         shot("ghost-right-sent")
+    }
+
+    /** Another client, the browser, fits the pane's window: the hub's resize as the web token with its label. */
+    private fun holdAsWeb(address: String, cols: Int, rows: Int, client: String): Int {
+        val c = java.net.URL("$hub/v1/panes/$address/resize").openConnection() as java.net.HttpURLConnection
+        c.requestMethod = "POST"
+        c.setRequestProperty("Authorization", "Bearer $webToken")
+        c.setRequestProperty("Content-Type", "application/json")
+        c.doOutput = true
+        c.outputStream.use { it.write("{\"cols\":$cols,\"rows\":$rows,\"scope\":\"window\",\"client\":\"$client\"}".toByteArray()) }
+        return c.responseCode.also { c.disconnect() }
+    }
+
+    @Test
+    fun aPaneAnotherClientHoldsSaysWhoAndTypingTakesTheSizeBack() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        // This phone's fit landed: a size, no held.
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("size").fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(15_000) { rule.onAllNodes(hasText("held", substring = true)).fetchSemanticsNodes().isEmpty() }
+        // The browser fits the window to a size this tile never asked: the header names it.
+        assertEquals(200, holdAsWeb("alice-laptop/work/0.0", 120, 20, "Chrome"))
+        rule.waitUntil(15_000) { rule.onAllNodes(hasText("held by web · Chrome", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        shot("held-by")
+        // Idle, nothing is sent: three seconds later the browser still holds.
+        SystemClock.sleep(3_000)
+        rule.onAllNodes(hasText("held by web · Chrome", substring = true)).onFirst().assertExists()
+        // Typing into the pane here is the touch: this phone's fit lands and the header clears.
+        rule.onNode(hasSetTextAction()).performTextInput("echo touched")
+        rule.onNodeWithText("⏎").performClick()
+        await("touched")
+        rule.waitUntil(15_000) { rule.onAllNodes(hasText("held", substring = true)).fetchSemanticsNodes().isEmpty() }
+        shot("held-by-taken")
     }
 
     @Test

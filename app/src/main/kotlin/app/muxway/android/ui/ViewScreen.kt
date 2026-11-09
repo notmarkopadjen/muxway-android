@@ -1304,6 +1304,8 @@ private fun PaneTile(
             windowFit -> expected != null && (pane.width != expected.cols || pane.height != expected.rows)
             else -> state.fitKey.isNotEmpty() && state.fitKey.substringBefore(' ') != "${pane.width}x${pane.height}"
         }
+        // Who holds it: another client's fit is named, and the client touched last wins (below).
+        val holder = Held.of(heldSize && !shared, pane?.sizedBy, model.clientLabel)
         Row(header, verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 if (pane != null) {
@@ -1330,7 +1332,7 @@ private fun PaneTile(
             }
             if (menu) PaneMenu(model, address, onBeside = null, onClose = onMenuClose, onPartner = onPartner, onAcross = onAcross, acrossNow = acrossNow)
             if (fitAsked && pane?.writable == true) {
-                Text(" ${pane.width}×${pane.height}${if (heldSize) " held" else ""} ", color = if (heldSize) p.alert else ink, maxLines = 1, modifier = Modifier.testTag("size"))
+                Text(" ${pane.width}×${pane.height}${if (heldSize) " " + Held.words(holder) else ""} ", color = if (heldSize) p.alert else ink, maxLines = 1, modifier = Modifier.testTag("size"))
             }
             // The pane's live shares made by this token, counted and dim; a tap opens the share sheet.
             if (pane != null && pane.shared > 0) {
@@ -1396,11 +1398,26 @@ private fun PaneTile(
             val fitZoom = fitWindow && siblings
             LaunchedEffect(visibleCols, visibleRows) { onMeasured(WindowLayout.Size(visibleCols, visibleRows)) }
             // A held tile keeps the size it has; fit turned off gives it back.
-            LaunchedEffect(fitting, visibleCols, visibleRows, imeUp, fitAgain, listed, fitWindow, fitZoom, windowFit, shared) {
+            // The client touched last wins: typing into the pane here, a key sent, the tile taken
+            // into focus or the keyboard going away with it focused sends this phone's fit again
+            // while another client holds the window, two seconds apart at most (Refit).
+            var lastRefit by remember(address) { mutableLongStateOf(0L) }
+            var wasFocused by remember(address) { mutableStateOf(false) }
+            val touch = state.touchedAt
+            var seenTouch by remember(address) { mutableLongStateOf(touch) }
+            val touchedNow = touch != seenTouch || (focused && !wasFocused)
+            LaunchedEffect(fitting, visibleCols, visibleRows, imeUp, fitAgain, listed, fitWindow, fitZoom, windowFit, shared, touch, focused) {
+                val now = System.currentTimeMillis()
+                val refit = touchedNow && !imeUp && Refit.wanted(holder, lastRefit, now)
+                seenTouch = touch
+                wasFocused = focused
                 when {
                     windowFit -> {}
                     !fitting -> if (shared && fitAsked) model.keep(address) else model.release(address)
-                    !imeUp -> model.fit(address, visibleCols.coerceIn(20, 500), visibleRows.coerceIn(5, 300), again = fitAgain > 0 && listed != null, window = fitWindow, zoom = fitZoom)
+                    !imeUp -> {
+                        if (refit) lastRefit = now
+                        model.fit(address, visibleCols.coerceIn(20, 500), visibleRows.coerceIn(5, 300), again = (fitAgain > 0 && listed != null) || refit, window = fitWindow, zoom = fitZoom)
+                    }
                 }
             }
             // A tile that gives way to another pane leaves its own at size; the view gives them

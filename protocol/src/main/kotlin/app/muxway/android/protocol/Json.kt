@@ -268,9 +268,10 @@ object Json {
      * A resize: the pane alone, or its whole window, with the pane zoomed over its siblings or
      * laid out as [layout] says.
      */
-    fun size(cols: Int, rows: Int, window: Boolean = false, zoom: Boolean = false, layout: String? = null): String =
+    fun size(cols: Int, rows: Int, window: Boolean = false, zoom: Boolean = false, layout: String? = null, client: String? = null): String =
         JSONObject().put("cols", cols).put("rows", rows)
             .apply { if (window) { put("scope", "window"); if (zoom) put("zoom", true); if (layout != null) put("layout", layout) } }
+            .apply { if (!client.isNullOrEmpty()) put("client", client) }
             .toString()
 
     fun fitAuto(): String = JSONObject().put("fit", "auto").toString()
@@ -319,6 +320,9 @@ object Json {
             laterAt = o.optLong("later_at").coerceAtLeast(0),
             shared = o.optInt("shared").coerceAtLeast(0),
             last = o.optBoolean("last"),
+            sizedBy = o.optJSONObject("sized_by")?.let { s ->
+                SizedBy(Input.printable(s.optString("token")).take(64), Input.printable(s.optString("client")).take(Label.MAX), s.optLong("at").coerceAtLeast(0), s.optBoolean("mine"))
+            },
         )
     }
 

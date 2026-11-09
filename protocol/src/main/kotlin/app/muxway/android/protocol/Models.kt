@@ -75,6 +75,8 @@ data class Pane(
     val shared: Int = 0,
     /** The only pane of its session, exposed or not: closing it ends the session. */
     val last: Boolean = false,
+    /** The last muxway fit that sized the pane's window, while one holds it; null when nobody does, or from an older hub. */
+    val sizedBy: SizedBy? = null,
 ) {
     val writable get() = mode == "write"
 
@@ -93,6 +95,12 @@ data class Pane(
     /** The tmux address, `host/session/window.pane`, second to the name. */
     val place get() = "$host/$session/$windowIndex.$paneIndex"
 }
+
+/**
+ * Who holds a window's size: the fitting principal's name as the hub names tokens, the label its
+ * client gave itself (may be empty), when the fit landed, and whether this token sent it.
+ */
+data class SizedBy(val token: String, val client: String, val at: Long, val mine: Boolean)
 
 /** A resize's answer: the pane as listed, and every pane of its window when the host moved them. */
 data class Resized(val pane: Pane, val panes: List<Pane> = emptyList())
