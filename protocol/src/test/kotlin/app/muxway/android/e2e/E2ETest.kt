@@ -315,6 +315,27 @@ class E2ETest {
     }
 
     @Test
+    fun f08c_aKeysEchoRidesOnTheInputsAnswer() {
+        val (api, _) = setup()
+        val address = "$HOST/work/0.0"
+        waitFor("the prompt") { core.pane().contains("$") }
+        relay.seen.clear()
+        // The text's echo comes back on the input's own answer: one request, no read between.
+        val typed = api.type(address, "echo ride", 20)
+        assertNotNull("the input answered with the screen", typed)
+        assertTrue(typed!!.content, typed.content.contains("echo ride"))
+        assertTrue(typed.etag.startsWith("\""))
+        val reqs = relay.seen.toList()
+        assertEquals(reqs.joinToString { "${'$'}{it.method} ${'$'}{it.path}" }, 1, reqs.size)
+        assertEquals("POST", reqs[0].method)
+        assertEquals("/v1/panes/$address/input?read=1&lines=20&ansi=1", reqs[0].path)
+        // Enter the same way; what the command prints later is for the next read.
+        assertNotNull(api.key(address, "Enter", 20))
+        waitPane("ride")
+        waitFor("read shows the output") { api.read(address, 20, null)!!.content.lines().any { it.trim() == "ride" } }
+    }
+
+    @Test
     fun f08b_twoLinesArePastedAsOneBlockThatEnterRuns() {
         val (api, _) = setup()
         val address = "$HOST/work/0.0"

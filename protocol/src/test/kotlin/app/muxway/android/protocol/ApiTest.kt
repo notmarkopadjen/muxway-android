@@ -235,6 +235,34 @@ class ApiTest {
     }
 
     @Test
+    fun typingWithLinesAsksForTheScreenAndTakesItOrReadsAsBeforeOnNoContent() {
+        answer = { Response(200, """{"pane":{"address":"a/w/0.0","pane_id":"%3","mode":"write","width":80,"height":24},"content":"$ e\u001b[31m!\u001b[0m","trimmed":2}""".toByteArray(), mapOf("Content-Type" to "application/json", "ETag" to "\"abc\"")) }
+        val f = api().type("a/w/0.0", "e", lines = 40)!!
+        assertEquals("$ e\u001b[31m!\u001b[0m", f.content)
+        assertEquals("\"abc\"", f.etag)
+        assertEquals(2, f.trimmed)
+        assertEquals("%3", f.pane.paneId)
+        val r = seen.single()
+        assertEquals("POST", r.method)
+        assertEquals("/v1/panes/a/w/0.0/input", r.path)
+        assertTrue(r.uri, r.uri.endsWith("?read=1&lines=40&ansi=1"))
+        assertEquals("""{"text":"e"}""", String(r.body))
+        // No screen from an older hub: null, and the caller reads as before.
+        seen.clear()
+        answer = { Response(204, ByteArray(0), emptyMap()) }
+        assertNull(api().key("a/w/0.0", "Enter", lines = 40))
+        assertTrue(seen.single().uri.contains("read=1&lines=40"))
+        // Without lines the input goes as it always did.
+        seen.clear()
+        assertNull(api().key("a/w/0.0", "Enter"))
+        assertFalse(seen.single().uri.contains("read"))
+        // Lines the hub would refuse never leave.
+        seen.clear()
+        assertThrows(IllegalArgumentException::class.java) { api().type("a/w/0.0", "e", lines = Api.MAX_LINES + 1) }
+        assertTrue(seen.isEmpty())
+    }
+
+    @Test
     fun inputIsFilteredBeforeItLeaves() {
         answer = { Response(204) }
         api().type("h/w/0.0", "echo\u0000 hi\r\n")
