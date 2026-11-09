@@ -2,8 +2,10 @@
 
 > Status: written 2026-11-09 from the owner's report in the console (a
 > screenshot of a pane reading `62×48 held` with every row cut twice,
-> and no way to take the line's ghost from the key row). Waiting for
-> the owner's approval; no code before it.
+> and no way to take the line's ghost from the key row), approved the
+> same day in the console and implemented on the branch
+> `held-scale-ghost-right`; the guideline's rows are the core's
+> [PR 325](https://github.com/notmarkopadjen/muxway/pull/325).
 
 ## 1. Goal
 
@@ -218,3 +220,36 @@ with the logs and screenshots, as `docs/testing.md` says.
    window into three panes for step 7 (and joins them back, so the
    steps after it keep their window).
 6. Docs (§7), the run, the test-run issue, the pull request.
+
+## Review (after implementation)
+
+- [x] Diff matches the plan. Deviations: the header's *held* compared
+  the size it sent against a key that also carries the fit's scope
+  (`49x48 window zoom`), so a pane alone in the view always read
+  *held*; the compare is on the size alone now, which the plan did not
+  foresee and the owner's screenshot did not show, because there the
+  host really did keep 62. The UI fixture's held window has five panes
+  on 120 columns (a floor of 104) rather than three, so no emulator is
+  wide enough to take the fit; the text setting is left at its default.
+  Nothing else.
+- [x] Security rules (AGENTS.md section 2) hold: the fit request and
+  its cells are unchanged, a scaled tile sends nothing new; taking a
+  ghost sends nothing, and `→` without a ghost sends `Right` by name
+  through the same whitelist; nothing is logged.
+- [x] Privacy check passed: the secret scan and the deny-list grep over
+  the branch's commits are clean, and the diff read; the tests name
+  `alice-laptop`, `work`, `wide`, `echo one two` and a row of dashes.
+  The owner's screenshot is not committed.
+- [x] Docs and diagrams updated: the pane view page's fit, reflow and
+  suggestion bullets, the shell helper page's ghost section and its
+  diagram, the testing page's UI row, the core's guideline rows.
+
+## Test run
+
+The full suite without the UI run, 361 tests, 0 failed, at `6013270`
+against the core's `7df9fee`
+([#102](https://github.com/notmarkopadjen/muxway-android/issues/102),
+`20261109-160632-6013270`); the secret search found nothing in 196
+logs. The twelve new unit tests (`TileScaleTest`, `GhostTest`) are in
+it. The two UI steps wait for a device: this machine has no `adb` and
+no emulator, so `ui-skipped.txt` says so and the pull request does too.
