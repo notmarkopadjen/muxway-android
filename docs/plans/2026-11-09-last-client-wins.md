@@ -5,7 +5,8 @@
 > left a pane at 197 columns on a phone that fits 49, because the
 > owner's browser fitted the same pane. The protocol half is the core's
 > `docs/plans/2026-11-09-size-holder.md`, merged and deployed first.
-> Waiting for the owner's approval; no code before it.
+> Approved 2026-11-09 evening in the console ("го") and implemented
+> on the branch `held-scale-ghost-right`, after the two plans before it.
 
 ## 1. Goal
 
@@ -112,3 +113,35 @@ label `Chrome`; the owner's screenshots are described, not committed.
 3. `PaneTile` header and the four interactions; `Api.resize` label.
 4. FlowTest steps 5 and 6, the fixture's second token with the `web`
    name; docs; the run; the pull request, after the core is deployed.
+
+## Review (after implementation)
+
+- [x] Diff matches the plan. Deviations: a touch made while the soft
+  keyboard is up is not spent until the keyboard goes, since no fit is
+  sent while it is up (found in the review, fixed before the run); a
+  drag that pages the pane sends `PageUp` and counts as a touch too,
+  which the plan did not list and is an interaction all the same;
+  `Held.of` takes *shared* out (another tile of this view holds the
+  axis), so such a tile says `held` alone. The label is checked once
+  more on the way out (`Api.resize` refuses what `Label.of` would not
+  give). Nothing else.
+- [x] Security rules hold: the label is the device model, ASCII, 32
+  characters at most; what the hub gives back is kept printable and
+  bounded before it is drawn; a refit is one resize on the owner's own
+  interaction, two seconds apart at most, inside the host's bucket;
+  nothing is sent while idle; nothing logged.
+- [x] Privacy check passed: the secret scan and the deny-list grep are
+  clean, the diff read; the tests name `alice-laptop`, tokens `phone`
+  and `web`, the labels `Pixel 9`, `SM-F956B` and `Chrome`.
+- [x] Docs updated: the pane view page's fit bullet, the architecture
+  page's fit row, the testing page's UI row.
+
+## Test run
+
+The full suite without the UI run, 376 tests, 0 failed, at `1e20fb6`
+against the core's `4a8b6c9` on its `size-holder` branch (the hub that
+lists `sized_by`; the core's main does not yet)
+([#106](https://github.com/notmarkopadjen/muxway-android/issues/106),
+`20261109-175450-1e20fb6`); the secret search found nothing in 196
+logs. The UI step waits for a device, as the ones before it. The build
+from the run went to the owner's phone.
