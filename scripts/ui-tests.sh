@@ -53,6 +53,16 @@ tmux -L "$tmuxname" new-session -d -s ask -x 80 -y 24
 tmux -L "$tmuxname" new-session -d -s codex -x 80 -y 24 "exec -a codex bash --norc --noprofile"
 "$bin" expose --tmux-name "$tmuxname" -t ask:0.0 --write
 "$bin" expose --tmux-name "$tmuxname" -t codex:0.0
+# A window of five panes side by side on 120 columns: its floor of 20 a pane plus the dividers is
+# 104, more than any phone's tile fits, so its first pane opened alone is held, for the scaled tile.
+tmux -L "$tmuxname" new-session -d -s wide -x 120 -y 24 \
+    "env -i PATH=/usr/bin:/bin TERM=xterm LANG=C.UTF-8 PS1='$ ' bash --norc --noprofile"
+for _ in 1 2 3 4; do
+    tmux -L "$tmuxname" split-window -h -t wide:0 "env -i PATH=/usr/bin:/bin TERM=xterm LANG=C.UTF-8 PS1='$ ' bash --norc --noprofile"
+    tmux -L "$tmuxname" select-layout -t wide:0 even-horizontal
+done
+"$bin" expose --tmux-name "$tmuxname" -t wide:0.0 --write
+"$bin" expose --tmux-name "$tmuxname" -t wide:0.1
 askpane=$(tmux -L "$tmuxname" display-message -p -t ask:0.0 '#{pane_id}')
 ( while kill -0 "$hub_pid" 2>/dev/null; do
     "$bin" ask --dir "$tmp/agent" --pane "$askpane" --text "deploy to staging?" --choice yes --choice no --timeout 10m >/dev/null 2>&1 || true
