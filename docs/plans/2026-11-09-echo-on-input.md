@@ -108,3 +108,27 @@ the owner's appears.
 2. `AppModel.send` with the frame, `take` shared with `pollOnce`; the
    four callers.
 3. The e2e flow; docs; the run (UI skipped, no device); the pull request.
+
+## Review (after implementation)
+
+- [x] Diff matches the plan. Deviations: none. A frame that names
+  another pane at the address falls back to the read, which asks the
+  listing once more; harmless and the same word twice.
+- [x] Security rules hold: the same input body, the same read parser
+  with its caps, the pane-id check kept, one request where there were
+  two; nothing logged.
+- [x] Privacy check passed: the secret scan and the deny-list grep over
+  the branch's commits are clean, the diff read; the tests name
+  `alice-laptop` and `echo ride`.
+- [x] Docs updated: the pane view page's send bullets, the architecture
+  page's typing row.
+
+## Test run
+
+The full suite without the UI run (`MUXWAY_UI=0`; this machine has no
+device), 366 tests, 0 failed, at `e8fe9ba` against the core's main at
+`e347b0c` (which carries #327)
+([#109](https://github.com/notmarkopadjen/muxway-android/issues/109),
+`20261109-181229-e8fe9ba`); the secret search found nothing in 199
+logs. `f08c` is in it: one request for the typed text, the input
+asking for the screen, no read between, the screen showing the text.
