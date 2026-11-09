@@ -269,3 +269,10 @@ against the core's `7df9fee`
 logs. The twelve new unit tests (`TileScaleTest`, `GhostTest`) are in
 it. The two UI steps wait for a device: this machine has no `adb` and
 no emulator, so `ui-skipped.txt` says so and the pull request does too.
+
+After the amendment, the full suite once more without the UI run, 364
+tests, 0 failed, at `04d1128` against the core's `7df9fee`
+([#104](https://github.com/notmarkopadjen/muxway-android/issues/104),
+`20261109-165423-04d1128`); the secret search clean again; the three
+sibling tests are in it. The build from that run went to the owner's
+phone for the check on the wide screen.
