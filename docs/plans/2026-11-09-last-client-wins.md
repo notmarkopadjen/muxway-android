@@ -145,3 +145,9 @@ lists `sized_by`; the core's main does not yet)
 `20261109-175450-1e20fb6`); the secret search found nothing in 196
 logs. The UI step waits for a device, as the ones before it. The build
 from the run went to the owner's phone.
+
+After main (with #110, the echo on the input's answer) was merged into
+the branch on 2026-11-10, the full suite once more without the UI run,
+378 tests, 0 failed, at `ff5780c` against the core's `cb5560c`
+([#112](https://github.com/notmarkopadjen/muxway-android/issues/112),
+`20261110-085013-ff5780c`); the secret search clean.
