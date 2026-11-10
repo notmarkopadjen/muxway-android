@@ -468,6 +468,14 @@ it is writable:
 - **type** sends the text as typed, without `Enter`;
 - **`⏎`** (send), the keyboard's send action, or a hardware `Enter` sends the
   text and then `Enter`;
+- what was sent shows **one round trip later**: text, keys and `Enter`
+  go with `?read=1` and the view's own `lines` and colours, so the
+  pane's screen comes back on the send's own answer and is drawn at
+  once, its `ETag` kept for the next conditional read and the pane's
+  identity checked as on a read; with `Enter` after text, `Enter`'s
+  frame is the one taken. A hub that answers `204` (older than
+  2026-11-09) is read as before, and the regular read goes on either
+  way. A mouse input is read as before;
 - the **keyboard**: `⌨` opens the web client's board over the bottom of
   the pane view, for the focused pane: F1 to F24 (F13 and up go as
   Shift+F1 to F12), the main block with its shifted legends, latching
