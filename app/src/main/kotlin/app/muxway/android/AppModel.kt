@@ -41,6 +41,7 @@ import app.muxway.android.protocol.ChangeSet
 import app.muxway.android.protocol.Listing
 import app.muxway.android.protocol.Diff
 import app.muxway.android.protocol.Pane
+import app.muxway.android.protocol.PaneRead
 import app.muxway.android.protocol.Setup
 import app.muxway.android.protocol.Share
 import app.muxway.android.protocol.TalkEntry
@@ -1037,19 +1038,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         val v = view(key)
         try {
             val r = withContext(Dispatchers.IO) { api(key).read(v.address, settings.lines, v.etag) }
-            if (r != null) {
-                // Another pane answers at this address: nothing of it is taken, and the listing says
-                // where this tile's pane went.
-                if (!Follow.own(v.paneId, r.pane.paneId)) { listSoon(conn(key)); return }
-                if (v.paneId.isEmpty()) v.paneId = r.pane.paneId
-                val at = System.currentTimeMillis() / 1000
-                v.pane = r.pane.copy(hub = Keys.hub(key))
-                if (r.content != v.content && Lens.changeCounts(!v.read, v.ownAt, at)) v.changedAt = at
-                v.content = r.content
-                v.trimmed = r.trimmed
-                v.etag = r.etag
-                v.read = true
-            }
+            if (r != null && !take(key, r)) return
             v.missing = false
             v.error = null
             v.updated = LocalTime.now().format(CLOCK)
@@ -1064,11 +1053,33 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * A frame of the pane, from a read or from an input's answer, taken as the view's: the pane,
+     * the change mark, the content, the trimmed rows and the etag for the next conditional read.
+     * False when another pane answers at the address: nothing of it is taken, and the listing says
+     * where this tile's pane went.
+     */
+    private fun take(key: String, r: PaneRead): Boolean {
+        val v = view(key)
+        if (!Follow.own(v.paneId, r.pane.paneId)) { listSoon(conn(key)); return false }
+        if (v.paneId.isEmpty()) v.paneId = r.pane.paneId
+        val at = System.currentTimeMillis() / 1000
+        v.pane = r.pane.copy(hub = Keys.hub(key))
+        if (r.content != v.content && Lens.changeCounts(!v.read, v.ownAt, at)) v.changedAt = at
+        v.content = r.content
+        v.trimmed = r.trimmed
+        v.etag = r.etag
+        v.read = true
+        return true
+    }
+
     fun type(key: String, text: String, enter: Boolean): Boolean {
         val clean = Input.typed(text)
+        // The screen comes back with the send, the view's own lines; with Enter, Enter's frame is
+        // the later one and the text's own is let go.
         val sent = send(key) { api, address ->
-            if (clean.isNotEmpty()) api.type(address, clean)
-            if (enter) api.key(address, "Enter")
+            val typed = if (clean.isNotEmpty()) api.type(address, clean, settings.lines) else null
+            if (enter) api.key(address, "Enter", settings.lines) else typed
         }
         if (sent) touched(key)
         if (sent && enter && '\n' !in clean && view(key).pane?.let { Commands.isShell(it.command) } == true) remember(clean)
@@ -1274,6 +1285,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         } catch (e: ApiException) {
             throw ApiException(e.status, mouseCode(e))
         }
+        null
     }
 
     // An older hub refuses the field; a pane without mouse mode refuses the input.
@@ -1287,7 +1299,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     /** False when the pane is still busy with the previous send. */
     fun key(key: String, name: String): Boolean {
-        val sent = send(key) { api, address -> api.key(address, name) }
+        val sent = send(key) { api, address -> api.key(address, name, settings.lines) }
         if (sent) touched(key)
         return sent
     }
@@ -1301,7 +1313,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
      * One of the fixed answers of the question the pane asked: a write, nothing typed into the
      * pane. The hub lists the pane without its attention afterwards, so its hub is listed again.
      */
-    fun answer(key: String, choice: String) = send(key) { api, address -> api.answer(address, choice) }.also { if (it) refreshList(conn(key)) }
+    fun answer(key: String, choice: String) = send(key) { api, address -> api.answer(address, choice); null }.also { if (it) refreshList(conn(key)) }
 
     /**
      * A spoken clip to the pane's hub's transcriber; [heard] gets the words, which the bar
@@ -1608,7 +1620,12 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         setView(if (!full) addresses + key else addresses.mapIndexed { i, a -> if (i == focusedAt) key else a })
     }
 
-    private fun send(key: String, action: (Api, String) -> Unit): Boolean {
+    /**
+     * Sends through [action], which answers the pane's screen when the hub gave it with the input
+     * (`?read=1`): that frame is the view's at once, one round trip after the send; without one
+     * the pane is read as before.
+     */
+    private fun send(key: String, action: (Api, String) -> PaneRead?): Boolean {
         val v = view(key)
         if (v.busy) return false
         // What the pane prints next is this client's doing, not the program working on its own.
@@ -1617,9 +1634,15 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             v.busy = true
             sendError = null
             try {
-                withContext(Dispatchers.IO) { action(api(key), v.address) }
-                v.etag = null
-                pollOnce(key)
+                val frame = withContext(Dispatchers.IO) { action(api(key), v.address) }
+                if (frame != null && take(key, frame)) {
+                    v.missing = false
+                    v.error = null
+                    v.updated = LocalTime.now().format(CLOCK)
+                } else {
+                    v.etag = null
+                    pollOnce(key)
+                }
             } catch (e: ApiException) {
                 sendError = e.message
                 if (e.code == "unauthorized") tokenRefused(conn(key))

@@ -22,6 +22,8 @@ class Api(private val baseUrl: String, private val token: String, private val us
         /** The largest file the inbox or a preview root serves. */
         private const val MAX_FILE = 8 * 1024 * 1024
         private const val MAX_PATH = 1024
+        /** The rows a read may ask for, as the hub bounds them. */
+        const val MAX_LINES = 2000
         /** What a client may name a session it starts. */
         val SESSION_NAME = Regex("^[a-z0-9_-]{1,32}$")
 
@@ -41,15 +43,31 @@ class Api(private val baseUrl: String, private val token: String, private val us
         return Json.read(r.body, r.etag)
     }
 
-    fun type(address: String, text: String) {
+    /**
+     * Types [text]. With [lines] the pane's screen comes back on the answer (`?read=1`, the view's
+     * lines, colours kept), the frame a read would give; null when the hub answered no screen
+     * (`204`: a hub older than 2026-11-09), and the caller reads as before.
+     */
+    fun type(address: String, text: String, lines: Int = 0): PaneRead? {
         val clean = Input.typed(text)
         require(clean.isNotEmpty() && Input.utf8Length(clean) <= Input.MAX_TEXT_BYTES) { "text length" }
-        post("panes/${encode(address)}/input", Json.text(clean))
+        return input(address, Json.text(clean), lines)
     }
 
-    fun key(address: String, name: String) {
+    /** Sends the named key; with [lines] the screen comes back as [type] says. */
+    fun key(address: String, name: String, lines: Int = 0): PaneRead? {
         require(Input.isKey(name)) { "unknown key" }
-        post("panes/${encode(address)}/input", Json.key(name))
+        return input(address, Json.key(name), lines)
+    }
+
+    private fun input(address: String, json: String, lines: Int): PaneRead? {
+        if (lines <= 0) {
+            post("panes/${encode(address)}/input", json)
+            return null
+        }
+        require(lines in 1..MAX_LINES) { "lines" }
+        val r = post("panes/${encode(address)}/input?read=1&lines=$lines&ansi=1", json)
+        return if (r.status == 200 && r.body.isNotEmpty()) Json.read(r.body, r.etag) else null
     }
 
     /** One of the fixed answers of the question the pane asked; a write, the choice as the listing carried it. */
