@@ -135,12 +135,13 @@ class Api(private val baseUrl: String, private val token: String, private val us
      * scope only, lays the window's panes out as the tiles are: a tmux layout string naming
      * exactly the window's panes; when it moves them the answer lists them all.
      */
-    fun resize(address: String, cols: Int, rows: Int, window: Boolean = false, zoom: Boolean = false, layout: String? = null): Resized {
+    fun resize(address: String, cols: Int, rows: Int, window: Boolean = false, zoom: Boolean = false, layout: String? = null, client: String? = null): Resized {
         require(cols in 20..500 && rows in 5..300) { "size" }
         if (layout != null) {
             require(window && layout.length <= WindowLayout.MAX_BYTES && LAYOUT.matches(layout)) { "layout" }
         }
-        return Json.resized(post("panes/${encode(address)}/resize", Json.size(cols, rows, window, zoom, layout)).body)
+        if (client != null) require(client == Label.of(client)) { "client" }
+        return Json.resized(post("panes/${encode(address)}/resize", Json.size(cols, rows, window, zoom, layout, client)).body)
     }
 
     /** Lays the pane's window out as [layout] at the size it has, with fit off; the window's panes when they moved. */

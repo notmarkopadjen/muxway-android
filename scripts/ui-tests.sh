@@ -78,6 +78,8 @@ codexpane=$(tmux -L "$tmuxname" display-message -p -t codex:0.0 '#{pane_id}')
 work_pid=$!
 token=$("$bin" hub token create --dir "$tmp/hub" --name phone --read 'alice-laptop/*' --write 'alice-laptop/*')
 admin=$("$bin" hub token create --dir "$tmp/hub" --name owner --read 'alice-laptop/*' --write 'alice-laptop/*' --admin)
+# A second client's token, the browser's, for the fit another client holds.
+web=$("$bin" hub token create --dir "$tmp/hub" --name web --read 'alice-laptop/*' --write 'alice-laptop/*')
 # A mail from the first pane to the asking one, for the envelope on its row and the mail sheet.
 workpane=$(tmux -L "$tmuxname" display-message -p -t work:0.0 '#{pane_id}')
 curl -sS -o /dev/null -X POST -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
@@ -105,12 +107,13 @@ ANDROID_SERIAL="$serial" ./gradlew --no-daemon -q :app:connectedDebugAndroidTest
     "-Pandroid.testInstrumentationRunnerArguments.hub=http://127.0.0.1:$port" \
     "-Pandroid.testInstrumentationRunnerArguments.token=$token" \
     "-Pandroid.testInstrumentationRunnerArguments.adminToken=$admin" \
+    "-Pandroid.testInstrumentationRunnerArguments.webToken=$web" \
     "-Pandroid.testInstrumentationRunnerArguments.hub2=http://127.0.0.1:$port2" \
     "-Pandroid.testInstrumentationRunnerArguments.token2=$token2" \
     > "$logs/gradle.log" 2>&1 || status=$?
 adb -s "$serial" pull /sdcard/Android/data/app.muxway.android/files/screens/. "$run/screens/FlowTest/" >> "$logs/adb.log" 2>&1 || true
 adb -s "$serial" logcat -d -t 2000 > "$logs/logcat.log" 2>&1 || true
-if grep -qE "$token|$admin|$token2" "$logs"/*.log "$run"/screens -r 2>/dev/null; then
+if grep -qE "$token|$admin|$token2|$web" "$logs"/*.log "$run"/screens -r 2>/dev/null; then
     echo "the token leaked into a UI test log" >&2
     status=1
 fi

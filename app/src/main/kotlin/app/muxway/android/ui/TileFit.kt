@@ -1,6 +1,7 @@
 package app.muxway.android.ui
 
 import app.muxway.android.protocol.Pane
+import app.muxway.android.protocol.SizedBy
 import app.muxway.android.protocol.WindowLayout
 
 /**
@@ -64,6 +65,44 @@ object TileFit {
  * the tile is drawn at, the fit is measured at the text setting ([Drawn.cellSp]), so a tile
  * scaled to the host's columns never asks the host for them.
  */
+/**
+ * Who holds a tile's size, for its header and for the touched-last rule: [NONE] when the host
+ * took this phone's size; [HOST] when it did not and nobody is named (the host's floor, a
+ * terminal, an older hub), or the holder is this very client (this token from this device);
+ * [OTHER] when another client's fit holds the window: another token, or this token from
+ * another device, which its label tells apart.
+ */
+sealed class Held {
+    data object NONE : Held()
+    data object HOST : Held()
+    data class OTHER(val token: String, val client: String) : Held()
+
+    companion object {
+        fun of(heldSize: Boolean, sized: SizedBy?, label: String): Held = when {
+            !heldSize -> NONE
+            sized == null -> HOST
+            sized.mine && sized.client == label -> HOST
+            else -> OTHER(sized.token, sized.client)
+        }
+
+        /** The header's word: `held`, or `held by <token> · <client>`. */
+        fun words(h: Held): String = when (h) {
+            is OTHER -> if (h.client.isEmpty()) "held by ${h.token}" else "held by ${h.token} · ${h.client}"
+            else -> "held"
+        }
+    }
+}
+
+/**
+ * The client touched last wins: an interaction with a pane another client holds sends this
+ * phone's fit again, two seconds apart at most; nobody's hold, or this phone's own, sends nothing.
+ */
+object Refit {
+    const val GAP_MS = 2_000L
+
+    fun wanted(held: Held, lastAt: Long, now: Long): Boolean = held is Held.OTHER && now - lastAt >= GAP_MS
+}
+
 object TileScale {
     /** [drawSp] draws the rows; [cellSp] measures the cells the fit asks for; [paneCols] cuts the rows at the pane's columns, else the tile's. */
     data class Drawn(val drawSp: Float, val cellSp: Float, val paneCols: Boolean)

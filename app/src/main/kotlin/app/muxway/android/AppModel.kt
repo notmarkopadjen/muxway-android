@@ -32,6 +32,7 @@ import app.muxway.android.protocol.Host
 import app.muxway.android.protocol.Inbox
 import app.muxway.android.protocol.HubUrl
 import app.muxway.android.protocol.Input
+import app.muxway.android.protocol.Label
 import app.muxway.android.protocol.Keys
 import app.muxway.android.protocol.Lens
 import app.muxway.android.protocol.Letter
@@ -113,12 +114,14 @@ class PaneState(val key: String) {
     var fitRetried = false
     var fitted by mutableStateOf(false)
     var fitJob: Job? = null
+    /** When the person last typed into or sent a key to the pane from this phone: a touch, for the touched-last rule. */
+    var touchedAt by mutableStateOf(0L)
 
     /** What another state of the same pane carries over when its key changes. */
     fun take(o: PaneState) {
         pane = o.pane; content = o.content; trimmed = o.trimmed; etag = o.etag; error = o.error; updated = o.updated
         changedAt = o.changedAt; read = o.read; ownAt = o.ownAt; paneId = o.paneId
-        fitKey = o.fitKey; fitAt = o.fitAt; fitRetried = o.fitRetried; fitted = o.fitted
+        fitKey = o.fitKey; fitAt = o.fitAt; fitRetried = o.fitRetried; fitted = o.fitted; touchedAt = o.touchedAt
     }
 
     /** Git's view of the pane's repository, when the host shows one; when it said there is none, until when not to ask again. */
@@ -148,6 +151,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     private val store = SettingsStore(app)
     private val vault = Vault(app)
     private val userAgent = "muxway-android/" + BuildConfig.VERSION_NAME
+    /** This device's label on the fits it sends, for the other clients' headers. */
+    val clientLabel = Label.of(Build.MODEL)
 
     var settings by mutableStateOf(store.load())
         private set
@@ -1076,6 +1081,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             val typed = if (clean.isNotEmpty()) api.type(address, clean, settings.lines) else null
             if (enter) api.key(address, "Enter", settings.lines) else typed
         }
+        if (sent) touched(key)
         if (sent && enter && '\n' !in clean && view(key).pane?.let { Commands.isShell(it.command) } == true) remember(clean)
         return sent
     }
@@ -1123,7 +1129,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
             while (true) {
                 try {
                     v.ownAt = System.currentTimeMillis() / 1000
-                    val r = withContext(Dispatchers.IO) { api(key).resize(v.address, cols, rows, window, zoom, layout) }
+                    val r = withContext(Dispatchers.IO) { api(key).resize(v.address, cols, rows, window, zoom, layout, clientLabel) }
                     v.fitKey = sizeKey
                     v.fitAt = System.currentTimeMillis()
                     v.fitted = true
@@ -1292,7 +1298,16 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     private fun mouseError(e: ApiException) = ApiException.messageFor(e.status, mouseCode(e))
 
     /** False when the pane is still busy with the previous send. */
-    fun key(key: String, name: String) = send(key) { api, address -> api.key(address, name, settings.lines) }
+    fun key(key: String, name: String): Boolean {
+        val sent = send(key) { api, address -> api.key(address, name, settings.lines) }
+        if (sent) touched(key)
+        return sent
+    }
+
+    /** The person used the pane here: a tile another client holds sends its fit again on it. */
+    fun touched(key: String) {
+        views[key]?.touchedAt = System.currentTimeMillis()
+    }
 
     /**
      * One of the fixed answers of the question the pane asked: a write, nothing typed into the

@@ -233,7 +233,18 @@ flowchart LR
   20 columns or 5 rows, so a pane whose window holds three panes side
   by side is never under 62 columns (three floors and two dividers),
   whatever the phone fits; a lower **text** setting or a thinner window
-  on the host is the way round it. Tapping `⤢`
+  on the host is the way round it. When the size the host kept is
+  **another client's** fit, the header says so instead, `held by web ·
+  Chrome`: the listing's `sized_by` names the token and the label that
+  client gave itself (this phone sends its device model as its label,
+  `Label` in the protocol module), and **the client touched last
+  wins**: typing into the pane here, a key sent to it, its tile tapped
+  into focus or the keyboard going away with it focused sends this
+  phone's fit once more, two seconds apart at most, so the pane you are
+  using takes its size back, while a browser tab left open at the desk,
+  which nobody touches, keeps still and says who has it. `held` alone
+  means nobody is named: the floor, a terminal at the host, or this very
+  phone's own fit the host could not keep. Tapping `⤢`
   while it is on sends the size again at once, and holding it turns fit
   off for the focused tile alone; the others keep theirs, and `⤢` shows
   the focused tile's state. A pane shorter than the tile sits at the bottom with empty rows
