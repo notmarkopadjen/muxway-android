@@ -116,11 +116,28 @@ with `MUXWAY_UI=0` and says so.
 
 ## Review (after implementation)
 
-- [ ] Diff matches the plan, deviations explained here
-- [ ] Security rules (AGENTS.md section 2) hold
-- [ ] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
-- [ ] Docs and diagrams updated
+- [x] Diff matches the plan, deviations explained here
+- [x] Security rules (AGENTS.md section 2) hold: minimise is the later
+      write the hub and the agent check as before; a reader's `_` is dim
+      and the row is the listing the token may read
+- [x] Privacy check passed: `scripts/prepush-check.sh` clean and diff read
+- [x] Docs and diagrams updated
+
+Deviations:
+
+- The hub's `list` desk (merged in #115 while this was written) keeps
+  `order` alone; `Json.deskBody` writes no `minimised` for it either.
+- A wake asked for is remembered (`waking`) until the listing shows the
+  pane awake, so a parked pane brought back from the row is not woken
+  twice by the effect that wakes a pane opened parked.
+- The row's tabs carry `minimised:<address>` test tags, which the UI test
+  uses; the row itself keeps `minimised`.
 
 ## Test run
 
-Link to the recorded run: result, commit, logs, screenshots.
+The full suite without the UI run, 379 tests, 0 failed, on `e08b310`
+against a hub built from the core's `minimise-is-later` branch
+([#117](https://github.com/notmarkopadjen/muxway-android/issues/117),
+`20261111-130126-e08b310`); the secret search found nothing. This
+machine has no `adb` and no emulator, so the instrumented steps wait for
+a device (`ui-skipped.txt`), as the pull request says.
