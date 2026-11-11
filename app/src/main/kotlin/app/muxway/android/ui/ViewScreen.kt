@@ -167,11 +167,16 @@ import kotlin.math.abs
  * input bar serves the focused pane. [addresses] are keys, every open pane of the view.
  */
 @Composable
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 fun ViewScreen(model: AppModel, addresses: List<String>) {
     val p = LocalPalette.current
     // Minimised panes are open but not tiles: their tabs wait in the row above the keys.
     var parked by rememberSaveable(saver = listSaver<MutableState<List<String>>, String>({ it.value }, { mutableStateOf(it) })) { mutableStateOf(listOf()) }
+    // The row is the desk's: a view the desk's row opened, or one that came back to its tiles,
+    // carries it; any other opening (a pane from the list) settles it from the hub's desk once
+    // read, less the tiles here, and writes no desk before that, so a view that opens never
+    // empties every client's row.
+    var rowSettled by rememberSaveable { mutableStateOf(false) }
     val minimised = parked.filter { it in addresses }
     val tiles = addresses.filter { it !in minimised }.ifEmpty { addresses.take(1) }
     var focusedIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -246,10 +251,12 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             val f = o.focused?.let { shown.indexOf(it) }?.takeIf { it >= 0 }
             if (f != null) focusedIndex = f
             model.noteDeskBaseline(deskOf(o.minimised, shown[(f ?: focusedIndex).coerceIn(0, shown.lastIndex)], l, custom, weights.toMap()))
+            rowSettled = true
             return@LaunchedEffect
         }
         val back = listOf(kept.carried, kept.unzoomed).firstOrNull { it != null && it.panes == addresses }
         if (back != null) {
+            rowSettled = true
             kept.carried = null
             layout = back.layout
             custom = back.custom
@@ -270,7 +277,18 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     // model, the focus staying where it is.
     val deskHub = Keys.hub(focused)
     val mine = deskOf(parked, focused, layout, custom, weights.toMap())
-    LaunchedEffect(Desks.body(mine), deskHub) { model.writeDesk(deskHub, mine) }
+    val asked = model.deskAsked(deskHub)
+    val hubDesk = model.deskOf(deskHub)
+    LaunchedEffect(asked, hubDesk, deskHub) {
+        if (rowSettled || !asked) return@LaunchedEffect
+        rowSettled = true
+        val row = if (hubDesk != null && hubDesk.view != "window") hubDesk.minimised.map { Keys.make(deskHub, it) }.filter { it !in addresses && model.panes.any { p -> p.key == it } } else emptyList()
+        if (row.isEmpty()) return@LaunchedEffect
+        val keys = (addresses + row).take(AddMenu.MAX_TILES)
+        model.opening = AppModel.Opening(keys, if (tiles.size > 1) layout.word else "", custom, weights.toMap(), keys.drop(addresses.size), focused)
+        model.open(Screen.View(keys))
+    }
+    LaunchedEffect(Desks.body(mine), deskHub, rowSettled) { if (rowSettled) model.writeDesk(deskHub, mine) }
     val theirs = model.deskOf(deskHub)
     LaunchedEffect(theirs, deskHub) {
         val d = theirs ?: return@LaunchedEffect
@@ -363,6 +381,20 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     var adding by remember { mutableStateOf(false) }
     var tabMenu by remember { mutableStateOf<String?>(null) }
     var headerMenu by remember { mutableStateOf<String?>(null) }
+    // A header or a tab dragged and let go where nothing takes it (its own tile, the strip, the
+    // keys) changed nothing: the drag ends as the hold does, with the pane's menu where it
+    // started. The root takes every pane drag but no drop, and reads the session's end.
+    val ended = remember {
+        object : DragAndDropTarget {
+            override fun onDrop(event: DragAndDropEvent): Boolean = false
+            override fun onEnded(event: DragAndDropEvent) {
+                val e = event.toAndroidDragEvent()
+                if (e.result) return
+                val d = e.localState as? Dragged ?: return
+                if (d.tab) tabMenu = d.address else headerMenu = d.address
+            }
+        }
+    }
     model.naming?.takeIf { it.into != null }?.let { SessionDialog(it, model) }
     // A file of the host over the pane; the height the text line takes beyond one row, which
     // the tiles lose and the fit must not take for a resize.
@@ -496,10 +528,25 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         weights.clear()
     }
 
-    // `_`: the tile leaves for the row above the keys and gives its size back; the last tile stays.
-    // A made tree closes up around the tile that left.
+    // `_`: the tile leaves for the row above the keys and gives its size back. A made tree closes
+    // up around the tile that left. The last tile makes way: the next awake pane of the strip
+    // takes it, or, with none, the pane joins the row and the app goes back to the list, the
+    // desk saying `list` with the row.
     fun minimise(key: String) {
-        if (tiles.size < 2) return
+        if (tiles.size < 2) {
+            val at = order.indexOf(key)
+            val next = (1 until order.size).map { order[(at + it + order.size) % order.size] }.firstOrNull { it !in addresses }
+            val row = minimised + key
+            if (next != null) {
+                val keys = (listOf(next) + row).take(AddMenu.MAX_TILES)
+                model.opening = AppModel.Opening(keys, "", null, emptyMap(), keys.drop(1), next)
+                model.open(Screen.View(keys))
+            } else {
+                model.writeDesk(deskHub, Desk(view = "list", minimised = row.filter { Keys.hub(it) == deskHub }.map { Keys.address(it) }, order = mine.order))
+                model.open(Screen.Panes)
+            }
+            return
+        }
         if (layout == Layout.CUSTOM) kept.carried = Saved(addresses, layout, Tiles.prune(shape, tiles.indexOf(key)), emptyMap())
         model.release(key)
         parked = minimised + key
@@ -530,6 +577,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val swipe = with(LocalDensity.current) { 72.dp.toPx() }
     Column(
         Modifier.fillMaxSize().onKeyEvent(::hardKey).focusRequester(focus).focusable()
+            .dragAndDropTarget(shouldStartDragAndDrop = { it.mimeTypes().contains(MIME) }, target = ended)
             .pointerInput(order, focused, addresses) {
                 var total = 0f
                 detectHorizontalDragGestures(
@@ -624,7 +672,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
                         onZoom = ::zoom,
                         onClose = { model.closePane(tiles[i]) },
                         onCloseTile = { closeTile(tiles[i]) },
-                        onMinimise = if (tiles.size > 1) ({ minimise(tiles[i]) }) else null,
+                        onMinimise = { minimise(tiles[i]) },
                         onFile = { shown = it },
                         onChanges = { changesOf = tiles[i] },
                         onName = { namingPane = tiles[i] },
@@ -848,12 +896,13 @@ private fun Tabs(
                             .clickable { onTap(address) }
                             .dragAndDropSource {
                                 // The drag starts with the first movement after the long press; let
-                                // go in place, the hold opens the pane's menu.
+                                // go in place, the hold opens the pane's menu, as does a drag nothing
+                                // took (the view's root reads how it ended).
                                 var moved = false
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = { moved = false },
                                     onDragEnd = { if (!moved) hold(address) },
-                                ) { _, _ -> if (!moved) { moved = true; startTransfer(DragAndDropTransferData(paneClip(address))) } }
+                                ) { _, _ -> if (!moved) { moved = true; startTransfer(DragAndDropTransferData(paneClip(address), localState = Dragged(address, tab = true))) } }
                             }
                             .border(border, if (isOpen) p.ink else p.faint).background(back)
                             .padding(horizontal = 8.dp, vertical = 5.dp)
@@ -1252,7 +1301,8 @@ private fun PaneTile(
     val names = remember(state.listing, cwd) { if (cwd != null) state.listing?.let { Names.index(it.entries) } ?: Names.Index.EMPTY else Names.Index.EMPTY }
     // A header or a tab dropped here: on the middle it swaps the two panes, on an edge it splits
     // this tile's place that way. The target outlives the view it was made for: it drops into
-    // the latest one.
+    // the latest one. Its own pane it refuses: that drag changed nothing, and the view's root
+    // opens the menu where it started.
     var bounds by remember { mutableStateOf<Rect?>(null) }
     val dropped by rememberUpdatedState(onDrop)
     val target = remember(address) {
@@ -1260,6 +1310,7 @@ private fun PaneTile(
             override fun onDrop(event: DragAndDropEvent): Boolean {
                 val e = event.toAndroidDragEvent()
                 val from = dragged(e) ?: return false
+                if (from == address) return false
                 val b = bounds
                 val zone = if (b == null || b.width <= 0f || b.height <= 0f) Tiles.Zone.SWAP else Tiles.zoneAt((e.x - b.left) / b.width, (e.y - b.top) / b.height)
                 dropped(from, zone)
@@ -1279,7 +1330,8 @@ private fun PaneTile(
             .testTag("tile:${Keys.address(address)}"),
     ) {
         // The header drags by a long press, with another tile to drop it on, the whole painted
-        // header under the finger; held and let go in place, it opens the pane's menu; a double tap zooms the pane.
+        // header under the finger; held and let go in place, it opens the pane's menu, as does a
+        // drag nothing took (the view's root reads how it ended); a double tap zooms the pane.
         val held by rememberUpdatedState(onMenu)
         val header = Modifier.fillMaxWidth()
             .then(if (several) Modifier.dragAndDropSource {
@@ -1287,10 +1339,10 @@ private fun PaneTile(
                 detectDragGesturesAfterLongPress(
                     onDragStart = { moved = false },
                     onDragEnd = { if (!moved) held() },
-                ) { _, _ -> if (!moved) { moved = true; startTransfer(DragAndDropTransferData(paneClip(address))) } }
+                ) { _, _ -> if (!moved) { moved = true; startTransfer(DragAndDropTransferData(paneClip(address), localState = Dragged(address, tab = false))) } }
             } else Modifier.pointerInput(address) {
-                var moved = false
-                detectDragGesturesAfterLongPress(onDragStart = { moved = false }, onDragEnd = { if (!moved) held() }) { _, _ -> moved = true }
+                // Alone, the header has nowhere to go: the hold opens the menu when let go, moved or not.
+                detectDragGesturesAfterLongPress(onDragEnd = { held() }) { _, _ -> }
             })
             .background(back).padding(horizontal = 4.dp, vertical = 2.dp)
             .pointerInput(address) { detectTapGestures(onDoubleTap = { onZoom() }, onTap = { onFocus() }) }
@@ -1595,6 +1647,9 @@ private fun PaneTile(
 private const val MIME = "application/x-muxway-pane"
 
 private fun paneClip(address: String) = ClipData("pane", arrayOf(MIME), ClipData.Item(address))
+
+/** What a drag carries inside the app: the pane's key and whether a tab or a tile's header started it. */
+private class Dragged(val address: String, val tab: Boolean)
 
 private fun dragged(e: DragEvent): String? =
     e.clipData?.takeIf { it.description.hasMimeType(MIME) && it.itemCount > 0 }?.getItemAt(0)?.text?.toString()

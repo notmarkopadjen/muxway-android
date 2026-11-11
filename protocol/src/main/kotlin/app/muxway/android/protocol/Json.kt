@@ -174,7 +174,7 @@ object Json {
             }
             return if (out.size > max) emptyList() else out
         }
-        val view = o.optString("view").takeIf { it == "panes" || it == "window" } ?: "panes"
+        val view = o.optString("view").takeIf { it == "panes" || it == "window" || it == "list" } ?: "panes"
         val panes = if (view == "panes") addresses("panes", Desks.MAX_PANES) else emptyList()
         var arrangement = o.optString("arrangement").takeIf { it in Desks.ARRANGEMENTS } ?: ""
         var tree = o.opt("tree")?.let { treeOf(it) }
@@ -230,6 +230,11 @@ object Json {
         val o = JSONObject().put("view", d.view)
         if (d.view == "window") {
             o.put("window", d.window)
+        } else if (d.view == "list") {
+            // Nothing open, the row and the order kept.
+            if (d.minimised.isNotEmpty()) o.put("minimised", JSONArray(d.minimised))
+            if (d.order.isNotEmpty()) o.put("order", JSONArray(d.order))
+            return o.toString()
         } else {
             o.put("panes", JSONArray(d.panes))
             if (d.arrangement.isNotEmpty()) o.put("arrangement", d.arrangement)
