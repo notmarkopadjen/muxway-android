@@ -12,14 +12,14 @@ class DeskTest {
     private val a = "alice-laptop/work/0.0"
     private val b = "alice-laptop/work/0.1"
     private val c = "alice-laptop/work/0.2"
-    private val two = Desk(panes = listOf(a, b), focused = b, arrangement = "custom", tree = Split(true, listOf(Leaf(0), Leaf(1)), "r"), weights = mapOf("r" to listOf(0.6f, 0.4f)), minimised = listOf(c), by = "web", rev = 12, updated = 1767225600)
+    private val two = Desk(panes = listOf(a, b), focused = b, arrangement = "custom", tree = Split(true, listOf(Leaf(0), Leaf(1)), "r"), weights = mapOf("r" to listOf(0.6f, 0.4f)), order = listOf(b, a), by = "web", rev = 12, updated = 1767225600)
 
     @Test
     fun equalDesksSayTheSameWhoeverWroteThemAndWhen() {
         assertTrue(Desks.same(two, two.copy(by = "phone", rev = 13, updated = 1)))
         assertFalse(Desks.same(two, two.copy(focused = a)))
         assertFalse(Desks.same(two, two.copy(weights = mapOf("r" to listOf(0.5f, 0.5f)))))
-        assertFalse(Desks.same(two, two.copy(minimised = emptyList())))
+        assertFalse(Desks.same(two, two.copy(order = emptyList())))
         assertFalse(Desks.same(two, null))
         assertEquals(listOf(a, b), Desks.panesOf(two))
         assertEquals(emptyList<String>(), Desks.panesOf(Desk(view = "window", window = "alice-laptop/work/0")))
@@ -33,17 +33,18 @@ class DeskTest {
     fun theRowsWordsAreTheWebs() {
         assertEquals("desk", Desks.words(null))
         assertEquals("desk · empty", Desks.words(Desk()))
-        assertEquals("desk · 2 panes · custom · 1 minimised · by web", Desks.words(two))
+        assertEquals("desk · 2 panes · custom · by web", Desks.words(two))
+        assertEquals("desk · the list", Desks.words(Desk(view = "list", order = listOf(a))))
         assertEquals("desk · 1 pane", Desks.words(Desk(panes = listOf(a), arrangement = "row")))
         assertEquals("desk · the window alice-laptop/work/0", Desks.words(Desk(view = "window", window = "alice-laptop/work/0")))
-        assertEquals("desk · the list · 1 minimised", Desks.words(Desk(view = "list", minimised = listOf(a))))
     }
 
     @Test
-    fun aListDeskKeepsTheRowAndOpensNothing() {
+    fun aListDeskKeepsTheOrderAndOpensNothing() {
+        // An older hub's minimised row is left alone: the row is the listing's parked panes.
         val d = Json.desk("""{"desk":{"view":"list","minimised":["$a"],"order":["$a"],"rev":3}}""")
         assertEquals("list", d.view)
-        assertEquals(listOf(a), d.minimised)
+        assertEquals(listOf(a), d.order)
         assertEquals(emptyList<String>(), Desks.panesOf(d))
         assertEquals(false, Desks.holds(d))
         val back = Json.desk("""{"desk":${Json.deskBody(d)}}""")
@@ -55,6 +56,9 @@ class DeskTest {
         val body = Json.deskBody(two)
         val back = Json.desk("""{"desk":${body.dropLast(1)},"updated":1767225600,"by":"web","rev":12}}""")
         assertEquals(two, back)
+        // An older hub's minimised row is left alone, and none is ever written.
+        assertEquals(two, Json.desk("""{"desk":${body.dropLast(1)},"minimised":["$c"],"updated":1767225600,"by":"web","rev":12}}"""))
+        assertFalse(body.contains("minimised"))
         // Nested, both ways: the main pane left, two stacked beside it.
         val three = Desk(panes = listOf(a, b, c), focused = a, arrangement = "custom", tree = Split(true, listOf(Leaf(0), Split(false, listOf(Leaf(1), Leaf(2)), "r.1")), "r"), weights = mapOf("r" to listOf(0.6f, 0.4f), "r.1" to listOf(0.5f, 0.5f)))
         assertEquals(three, Json.desk("""{"desk":${Json.deskBody(three)}}"""))

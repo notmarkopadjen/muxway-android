@@ -195,7 +195,8 @@ object Json {
             arrangement = if (panes.size > 1) arrangement else "",
             tree = tree,
             weights = if (Desks.validWeights(weights)) weights else emptyMap(),
-            minimised = addresses("minimised", Desks.MAX_MINIMISED),
+            // A `minimised` row from a hub older than 2026-11-11 is left alone: the row is the
+            // listing's parked panes.
             order = addresses("order", Desks.MAX_ORDER),
             window = window,
             updated = o.optLong("updated").coerceAtLeast(0),
@@ -231,8 +232,7 @@ object Json {
         if (d.view == "window") {
             o.put("window", d.window)
         } else if (d.view == "list") {
-            // Nothing open, the row and the order kept.
-            if (d.minimised.isNotEmpty()) o.put("minimised", JSONArray(d.minimised))
+            // Nothing open, the order kept.
             if (d.order.isNotEmpty()) o.put("order", JSONArray(d.order))
             return o.toString()
         } else {
@@ -240,7 +240,6 @@ object Json {
             if (d.arrangement.isNotEmpty()) o.put("arrangement", d.arrangement)
             d.tree?.let { o.put("tree", treeJson(it)) }
             if (d.weights.isNotEmpty()) o.put("weights", JSONObject().also { w -> for ((k, ws) in d.weights) w.put(k, JSONArray(ws.map { it.toDouble() })) })
-            if (d.minimised.isNotEmpty()) o.put("minimised", JSONArray(d.minimised))
             if (d.order.isNotEmpty()) o.put("order", JSONArray(d.order))
         }
         if (d.focused.isNotEmpty()) o.put("focused", d.focused)

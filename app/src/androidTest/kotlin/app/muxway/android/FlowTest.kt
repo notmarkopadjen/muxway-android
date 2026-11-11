@@ -355,30 +355,35 @@ class FlowTest {
     private fun leftOf(tag: String): Float? = rule.onAllNodesWithTag(tag).fetchSemanticsNodes().firstOrNull()?.boundsInWindow?.left
 
     @Test
-    fun theHeaderHeldParksThePaneForLaterAndItsTabTappedWakesIt() {
+    fun theHeadersUnderscoreParksThePaneForLaterAndTheRowsTabTappedWakesIt() {
         scenario = ActivityScenario.launch(MainActivity::class.java)
         await("work/0.0").performClick()
         await("$ ")
         val work = "tab:alice-laptop/work/0.0"
         val ask = "tab:alice-laptop/ask/0.0"
+        val row = "minimised:alice-laptop/work/0.0"
         rule.waitUntil(15_000) { val w = leftOf(work); val a = leftOf(ask); w != null && a != null && w < a }
-        // The header held and let go in place opens the pane menu; *later* parks the pane on the host.
+        // `_` on the header minimises the pane: parked on the host, the next awake pane takes the
+        // tile, its tab leaves the strip for the row above the keys, with the moon; nothing pulses.
+        rule.onNodeWithTag("minimise").performClick()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("tile:alice-laptop/ask/0.0").fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag(row).fetchSemanticsNodes().isNotEmpty() }
+        rule.onAllNodesWithTag(work).assertCountEquals(0)
+        rule.onNodeWithTag(row).assert(hasAnyDescendant(hasText("☾")))
+        shot("later-row")
+        // The header held opens the pane menu, which has no later row: minimise is the way.
         rule.onNodeWithTag("header").performTouchInput { longClick() }
-        rule.onNodeWithTag("menu-later").assertExists()
-        rule.onNodeWithTag("menu-later").performClick()
-        await("later")
-        // The tab goes after every other with the moon; the header says later and nothing pulses.
-        rule.waitUntil(15_000) { val w = leftOf(work); val a = leftOf(ask); w != null && a != null && w > a }
-        rule.onNodeWithTag(work).assert(hasAnyDescendant(hasText("☾")))
-        shot("later-tab")
-        // Hold again: the menu now offers wake. Back closes it.
-        rule.onNodeWithTag("header").performTouchInput { longClick() }
-        await("☾ wake")
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("pane-menu").fetchSemanticsNodes().isNotEmpty() }
+        rule.onAllNodesWithTag("menu-later").assertCountEquals(0)
         Espresso.pressBack()
-        // The parked tab, tapped, wakes the pane: the word goes and the tab takes its place back.
-        rule.onNodeWithTag(work).performClick()
-        rule.waitUntil(15_000) { rule.onAllNodes(hasText("later", substring = true)).fetchSemanticsNodes().isEmpty() }
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("pane-menu").fetchSemanticsNodes().isEmpty() }
+        // The row's tab, tapped, wakes the pane and brings it back beside: two tiles, its tab in
+        // its place and awake, the row gone.
+        rule.onNodeWithTag(row).performClick()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 2 }
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("minimised").fetchSemanticsNodes().isEmpty() }
         rule.waitUntil(15_000) { val w = leftOf(work); val a = leftOf(ask); w != null && a != null && w < a }
+        rule.onAllNodes(hasText("later", substring = true)).assertCountEquals(0)
         rule.onAllNodesWithTag("name-sheet").assertCountEquals(0)
         shot("woken")
     }
@@ -443,7 +448,7 @@ class FlowTest {
     }
 
     @Test
-    fun theLastTileMinimisesToTheNextPaneAndTheRowIsTheDesks() {
+    fun theLastTileMinimisesToTheNextPaneAndTheRowIsTheListings() {
         scenario = ActivityScenario.launch(MainActivity::class.java)
         await("work/0.0").performClick()
         await("$ ")
@@ -453,9 +458,11 @@ class FlowTest {
         rule.onNodeWithTag("minimised").assertExists()
         rule.onAllNodesWithTag("tile:alice-laptop/work/0.0").assertCountEquals(0)
         shot("last-tile-minimised")
-        // Back on the list, the other pane opened from its row: the row comes along, the desk's.
+        // Back on the list, the shell's row has the moon; the other pane opened from its row shows
+        // the minimised row, the listing's.
         Thread.sleep(1_000)
         Espresso.pressBack()
+        await("☾")
         await("ask/0.0").performClick()
         rule.waitUntil(15_000) { rule.onAllNodesWithTag("tile:alice-laptop/ask/0.0").fetchSemanticsNodes().isNotEmpty() }
         rule.waitUntil(15_000) { rule.onAllNodesWithTag("minimised").fetchSemanticsNodes().isNotEmpty() }

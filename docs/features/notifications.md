@@ -75,46 +75,49 @@ Several agents call at once, and some of them can wait. **Later** is the
 owner's own mark on a pane, kept by the host's agent beside the pane's
 attention, so every client sees it (the core's
 [notifications](https://github.com/notmarkopadjen/muxway/blob/main/docs/features/notifications.md#later)).
-On the phone a parked pane is the lens's fourth state, [later](lenses.md):
-`☾` and the word, painted plain, the name in the tile's header in
-italics; its tab goes after every other in the strip, outside its
-group's frame; the pane list keeps its row in place
-with the mark; the [inbox](inbox.md) lists it last and counts it with the
-rest. Nothing calls for it: no notification is posted, the watch shows a
-quiet row with the moon, the face and the complications count it as done.
-A notification that arrives while the pane is parked leaves it parked;
-the tile's header shows the kind under the word, dimmed
-(`☾ later · ! permission`), and the inbox row says `later · permission`.
+On the phone a parked pane is the lens's fourth state, [later](lenses.md),
+and **minimise** is the way into it from a tile: `_` on the header parks
+the pane, its tile leaves and its tab leaves the strip for the
+**minimised row** above the keys, with `☾` and the glyph of what waits
+underneath, dimmed (see [the pane view](pane-view.md)); the pane list
+keeps its row in place with the mark; the [inbox](inbox.md) lists it
+last and counts it with the rest. Nothing calls for it: no notification
+is posted, the watch shows a quiet row with the moon, the face and the
+complications count it as done. A notification that arrives while the
+pane is parked leaves it parked; the row's tab shows the kind's glyph
+after the moon (`☾ · !`), the inbox row says `later · permission`, and
+where a parked pane is still a tile (a reader's) its header shows the
+kind under the word, the name in italics (`☾ later · ! permission`).
 
 ```
-┌ ✳ Claude · fixing the build        ☾ later · ! permission    _  × ┐
+[☾ Claude · fixing the build] [☾ · ! logs]     ← the minimised row
 ```
 
-- **Parking.** A tab or a tile's header **held and let go in place**,
-  the drag's long press without a move, or dragged and let go where
-  nothing takes it, opens the pane menu; *☾ later* parks the pane with `POST
-  /v1/panes/{address}/later {"later": true}`, *☾ wake* wakes it. The row
-  is dim with `read only` on a pane the token cannot write and `host
-  without later` where the host's agent is older than the mark
-  (`hosts[].later` false). On the watch the reply menu's *☾ later* /
-  *☾ wake* sends the same through the phone's gate, as an answer goes.
-- **Waking.** Coming back to the pane wakes it: a tap on its parked tab
-  focuses it and sends `{"later": false}`; opening it from the pane list,
-  the inbox, the add menu, a selection or a `muxway://open` link does the
-  same, for a writable pane on a host that parks. Typing into it, an
-  answer and a mail wake it on the host, as they clear the attention. A
-  reader sees the mark and cannot move it. A swipe across the pane view
-  skips parked panes, so it never wakes one by passing through.
+- **Parking.** `_` on a tile's header parks the pane with `POST
+  /v1/panes/{address}/later {"later": true}` and takes the tile out; it
+  is dim on a pane the token cannot write and where the host's agent is
+  older than the mark (`hosts[].later` false). On the watch the reply
+  menu's *☾ later* / *☾ wake* sends the same through the phone's gate,
+  as an answer goes. A pane parked from any other client, a script or
+  the MCP tool leaves the phone's tiles for the row within a listing.
+- **Waking.** Coming back to the pane wakes it: a tap on its tab in the
+  row sends `{"later": false}` and brings it back as a tile; opening it
+  from the pane list, the inbox, the add menu, a selection or a
+  `muxway://open` link does the same, for a writable pane on a host that
+  parks. Typing into it, an answer and a mail wake it on the host, as
+  they clear the attention. A reader sees the row and the marks and
+  cannot move them. A swipe across the pane view never reaches a parked
+  pane, which is the row's and not the strip's.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Awake
-    Awake --> Later: later in the tab's, the header's or the watch's menu
-    Later --> Awake: a tap on the parked tab
+    Awake --> Later: _ on the header, the watch's menu, another client
+    Later --> Awake: a tap on the row's tab
     Later --> Awake: opened from the list, the inbox, the add menu, a link
-    Later --> Awake: wake in a menu
+    Later --> Awake: wake in the watch's menu
     Later --> Awake: typing, an answer, a mail (the host clears it)
-    Later --> Later: a notification arrives, the kind shows under the word
+    Later --> Later: a notification arrives, the glyph shows after the moon
 ```
 
 ## Questions with fixed answers

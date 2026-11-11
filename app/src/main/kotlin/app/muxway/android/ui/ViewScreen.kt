@@ -163,22 +163,24 @@ import kotlin.math.abs
 /**
  * One or more panes, side by side in landscape and stacked in portrait. The top row is the tab
  * strip, coloured by each pane's state, `+` for one more, and the controls; a swipe across the
- * page moves to the neighbouring pane; a pane minimised waits in a row above the keys; one
- * input bar serves the focused pane. [addresses] are keys, every open pane of the view.
+ * page moves to the neighbouring pane; a pane minimised is parked for later and waits in the
+ * row above the keys; one input bar serves the focused pane. [addresses] are keys, the tiles.
  */
 @Composable
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 fun ViewScreen(model: AppModel, addresses: List<String>) {
     val p = LocalPalette.current
-    // Minimised panes are open but not tiles: their tabs wait in the row above the keys.
-    var parked by rememberSaveable(saver = listSaver<MutableState<List<String>>, String>({ it.value }, { mutableStateOf(it) })) { mutableStateOf(listOf()) }
-    // The row is the desk's: a view the desk's row opened, or one that came back to its tiles,
-    // carries it; any other opening (a pane from the list) settles it from the hub's desk once
-    // read, less the tiles here, and writes no desk before that, so a view that opens never
-    // empties every client's row.
-    var rowSettled by rememberSaveable { mutableStateOf(false) }
-    val minimised = parked.filter { it in addresses }
-    val tiles = addresses.filter { it !in minimised }.ifEmpty { addresses.take(1) }
+    // The minimised row is the panes parked for later, less the tiles: the host's mark, read
+    // from the listing like the strip, oldest parking first. Minimise is that mark.
+    val minimised = model.panes.filter { it.later && it.key !in addresses }.sortedWith(compareBy({ it.laterAt }, { it.key })).map { it.key }
+    val tiles = addresses
+    // Whether the pane may be parked from here: a writer's, on a host whose agent parks.
+    fun canPark(key: String): Boolean = model.panes.any { it.key == key && it.writable } && model.hostParks(key)
+    // The tiles the listing has shown awake: one the listing then says is parked was parked by
+    // another client and leaves for the row; one never seen awake was opened parked, and is
+    // woken, once (waking), for a writer on a host that parks.
+    var awakeTiles by rememberSaveable(saver = listSaver<MutableState<List<String>>, String>({ it.value }, { mutableStateOf(it) })) { mutableStateOf(listOf()) }
+    var waking by remember { mutableStateOf(setOf<String>()) }
     var focusedIndex by rememberSaveable { mutableIntStateOf(0) }
     val index = focusedIndex.coerceIn(0, tiles.lastIndex)
     val focused = tiles[index]
@@ -204,23 +206,24 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     var custom by remember { mutableStateOf<WindowLayout.Node?>(null) }
     val weights = remember { mutableStateMapOf<String, List<Float>>() }
     val kept = remember { Remembered().also { it.moves = model.moves } }
-    // The host renumbered a tile's pane and the model moved the tile: the minimised row and the
-    // fit-off set, kept here by key, follow it.
+    // The host renumbered a tile's pane and the model moved the tile: the fit-off set and the
+    // tiles seen awake, kept here by key, follow it.
     LaunchedEffect(model.moves) {
         if (model.moves == kept.moves) return@LaunchedEffect
         kept.moves = model.moves
         val by = model.moved
-        parked = parked.map { by[it] ?: it }
+        awakeTiles = awakeTiles.map { by[it] ?: it }
         fitOff = fitOff.map { by[it] ?: it }.toSet()
     }
     // A made tree is drawn only while it has a leaf per tile: for the frame between a tile
     // leaving or arriving and the effect below catching up, the preset stands in.
     val shape = if (layout == Layout.CUSTOM) custom?.takeIf { Tiles.leaves(it).size == tiles.size } ?: preset.tree(tiles.size) else layout.tree(tiles.size)
-    // This view as a desk, for the focused tile's hub: that hub's tiles, the focus, the arrangement
-    // (with its tree and shares when every tile is on the hub) and the minimised panes of the hub.
-    fun deskOf(parkedNow: List<String>, focusKey: String, layoutNow: Layout, customNow: WindowLayout.Node?, weightsNow: Map<String, List<Float>>): Desk {
+    // This view as a desk, for the focused tile's hub: that hub's tiles, the focus and the
+    // arrangement (with its tree and shares when every tile is on the hub). The minimised row
+    // is the host's mark, not the desk's.
+    fun deskOf(focusKey: String, layoutNow: Layout, customNow: WindowLayout.Node?, weightsNow: Map<String, List<Float>>): Desk {
         val hub = Keys.hub(focusKey)
-        val shown = addresses.filter { it !in parkedNow }.ifEmpty { addresses.take(1) }
+        val shown = addresses
         val onHub = shown.filter { Keys.hub(it) == hub }
         val whole = onHub.size == shown.size
         val made = customNow?.takeIf { layoutNow == Layout.CUSTOM && whole && Tiles.leaves(it).size == shown.size }
@@ -231,32 +234,28 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             arrangement = if (whole && shown.size > 1 && (layoutNow != Layout.CUSTOM || made != null)) layoutNow.word else "",
             tree = made,
             weights = if (whole && shown.size > 1) weightsNow.filter { (k, ws) -> Desks.validWeights(mapOf(k to ws)) } else emptyMap(),
-            minimised = addresses.filter { it in parkedNow && Keys.hub(it) == hub }.map { Keys.address(it) },
         )
     }
     LaunchedEffect(addresses, tiles.size) {
-        // A desk opened: its arrangement, minimised row and focus, taken once; what the view then
-        // is becomes the baseline the model writes nothing for.
+        // A desk opened: its arrangement and focus, taken once; what the view then is becomes
+        // the baseline the model writes nothing for.
         model.opening?.takeIf { it.keys == addresses }?.let { o ->
             model.opening = null
-            val shown = addresses.filter { it !in o.minimised }.ifEmpty { addresses.take(1) }
+            val shown = addresses
             val l = Layout.from(o.arrangement, shown.size)?.takeIf { it != Layout.CUSTOM || o.tree != null } ?: preset
             layout = l
             custom = o.tree.takeIf { l == Layout.CUSTOM }
             weights.clear()
             weights.putAll(o.weights)
-            parked = o.minimised
             kept.carried = null
             kept.count = shown.size
             val f = o.focused?.let { shown.indexOf(it) }?.takeIf { it >= 0 }
             if (f != null) focusedIndex = f
-            model.noteDeskBaseline(deskOf(o.minimised, shown[(f ?: focusedIndex).coerceIn(0, shown.lastIndex)], l, custom, weights.toMap()))
-            rowSettled = true
+            model.noteDeskBaseline(deskOf(shown[(f ?: focusedIndex).coerceIn(0, shown.lastIndex)], l, custom, weights.toMap()))
             return@LaunchedEffect
         }
         val back = listOf(kept.carried, kept.unzoomed).firstOrNull { it != null && it.panes == addresses }
         if (back != null) {
-            rowSettled = true
             kept.carried = null
             layout = back.layout
             custom = back.custom
@@ -273,22 +272,11 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     fun touch() { kept.touched = System.currentTimeMillis() }
     // The desk: this view, written half a second after a change (the model skips what the hub
     // has), and the hub's desk followed when another client changed it: the same tiles take
-    // the arrangement, the shares and the minimised row here; other tiles open through the
-    // model, the focus staying where it is.
+    // the arrangement and the shares here; other tiles open through the model, the focus
+    // staying where it is.
     val deskHub = Keys.hub(focused)
-    val mine = deskOf(parked, focused, layout, custom, weights.toMap())
-    val asked = model.deskAsked(deskHub)
-    val hubDesk = model.deskOf(deskHub)
-    LaunchedEffect(asked, hubDesk, deskHub) {
-        if (rowSettled || !asked) return@LaunchedEffect
-        rowSettled = true
-        val row = if (hubDesk != null && hubDesk.view != "window") hubDesk.minimised.map { Keys.make(deskHub, it) }.filter { it !in addresses && model.panes.any { p -> p.key == it } } else emptyList()
-        if (row.isEmpty()) return@LaunchedEffect
-        val keys = (addresses + row).take(AddMenu.MAX_TILES)
-        model.opening = AppModel.Opening(keys, if (tiles.size > 1) layout.word else "", custom, weights.toMap(), keys.drop(addresses.size), focused)
-        model.open(Screen.View(keys))
-    }
-    LaunchedEffect(Desks.body(mine), deskHub, rowSettled) { if (rowSettled) model.writeDesk(deskHub, mine) }
+    val mine = deskOf(focused, layout, custom, weights.toMap())
+    LaunchedEffect(Desks.body(mine), deskHub) { model.writeDesk(deskHub, mine) }
     val theirs = model.deskOf(deskHub)
     LaunchedEffect(theirs, deskHub) {
         val d = theirs ?: return@LaunchedEffect
@@ -298,17 +286,15 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         if (d.view == "window") { if (d.window.isNotEmpty()) model.openDesk(deskHub, focus = false); return@LaunchedEffect }
         val panes = Desks.panesOf(d).map { Keys.make(deskHub, it) }
         if (panes.isEmpty()) return@LaunchedEffect
-        val wanted = (panes + d.minimised.map { Keys.make(deskHub, it) }).distinct().take(AddMenu.MAX_TILES)
-        if (panes == tiles && wanted.toSet() == addresses.toSet()) {
+        if (panes == tiles) {
             val l = Layout.from(d.arrangement, tiles.size)?.takeIf { it != Layout.CUSTOM || d.tree != null } ?: layout
             layout = l
             custom = d.tree.takeIf { l == Layout.CUSTOM }
             weights.clear()
             weights.putAll(d.weights)
-            parked = wanted.drop(panes.size)
             // The focus stays this view's: what the view now is, with its own focus, is the
             // baseline, so the other client's change is not answered with a write of the focus.
-            model.noteDeskBaseline(deskOf(parked, focused, l, custom, weights.toMap()))
+            model.noteDeskBaseline(deskOf(focused, l, custom, weights.toMap()))
             return@LaunchedEffect
         }
         model.openDesk(deskHub, focus = false)
@@ -428,16 +414,19 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     } else null
     fun show(key: String) {
         val at = tiles.indexOf(key)
-        // A parked tab's tap wakes it: the owner came back.
+        // A parked pane's tap wakes it: the owner came back.
         val asleep = model.panes.any { it.key == key && it.later }
-        if (asleep) model.wake(key)
+        if (asleep) { waking = waking + key; model.wake(key) }
         when {
             // The focused tab, tapped once more, names its pane.
             key == focused && at >= 0 -> if (!asleep) namingPane = key
             at >= 0 -> focusedIndex = at
+            // The row's tab: back as one more tile, focused; at four open it takes the focused
+            // tile's place, as the add menu's pick does.
             key in minimised -> {
-                parked = minimised - key
-                focusedIndex = addresses.filter { it !in parked }.indexOf(key)
+                val full = addresses.size >= AddMenu.MAX_TILES
+                focusedIndex = if (full) index else tiles.size
+                model.addPane(addresses, index, key, full)
             }
             else -> model.swap(addresses, addresses.indexOf(focused), key)
         }
@@ -487,10 +476,10 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         return true
     }
 
-    // An existing pane from the menu: one more tile, focused; at four open, the minimised
-    // counted, it takes the focused tile's place.
+    // An existing pane from the menu, a parked one woken: one more tile, focused; at four open
+    // it takes the focused tile's place.
     fun add(key: String) {
-        if (key in minimised) { show(key); return }
+        if (model.panes.any { it.key == key && it.later }) waking = waking + key
         model.wake(key)
         val full = addresses.size >= AddMenu.MAX_TILES
         focusedIndex = if (full) index else tiles.size
@@ -528,29 +517,57 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
         weights.clear()
     }
 
-    // `_`: the tile leaves for the row above the keys and gives its size back. A made tree closes
-    // up around the tile that left. The last tile makes way: the next awake pane of the strip
-    // takes it, or, with none, the pane joins the row and the app goes back to the list, the
-    // desk saying `list` with the row.
-    fun minimise(key: String) {
+    // A parked pane's tile leaves, as a closed one, and gives its size back; its tab is the
+    // row's. A made tree closes up around the tile that left. The last tile makes way: the next
+    // awake pane of the strip takes it, or, with none, the app goes back to the list, the desk
+    // saying `list`.
+    fun leave(key: String) {
         if (tiles.size < 2) {
             val at = order.indexOf(key)
             val next = (1 until order.size).map { order[(at + it + order.size) % order.size] }.firstOrNull { it !in addresses }
-            val row = minimised + key
             if (next != null) {
-                val keys = (listOf(next) + row).take(AddMenu.MAX_TILES)
-                model.opening = AppModel.Opening(keys, "", null, emptyMap(), keys.drop(1), next)
-                model.open(Screen.View(keys))
+                model.opening = AppModel.Opening(listOf(next), "", null, emptyMap(), next)
+                model.open(Screen.View(listOf(next)))
             } else {
-                model.writeDesk(deskHub, Desk(view = "list", minimised = row.filter { Keys.hub(it) == deskHub }.map { Keys.address(it) }, order = mine.order))
+                model.writeDesk(deskHub, Desk(view = "list", order = mine.order))
                 model.open(Screen.Panes)
             }
             return
         }
-        if (layout == Layout.CUSTOM) kept.carried = Saved(addresses, layout, Tiles.prune(shape, tiles.indexOf(key)), emptyMap())
-        model.release(key)
-        parked = minimised + key
+        if (layout == Layout.CUSTOM) kept.carried = Saved(addresses - key, layout, Tiles.prune(shape, tiles.indexOf(key)), emptyMap())
         if (key == focused) focusedIndex = 0
+        model.closeTile(key)
+    }
+    // `_`: minimise is the later mark. The pane is parked on its host, which every client sees,
+    // and its tile leaves for the row.
+    fun minimise(key: String) {
+        if (!canPark(key)) return
+        awakeTiles = awakeTiles - key
+        model.later(key, true)
+        leave(key)
+    }
+    // The listing says a tile's pane is parked: parked by another client, the inbox, a script
+    // or the MCP tool (the tile was seen awake), the tile leaves for the row; opened parked
+    // (never seen awake), the pane is woken, once; a reader's parked tile stays, with the mark.
+    LaunchedEffect(model.panes, addresses) {
+        val seen = awakeTiles.filter { it in addresses }.toMutableList()
+        var left = false
+        for (key in addresses) {
+            val pane = model.panes.firstOrNull { it.key == key } ?: continue
+            if (!pane.later) {
+                if (key !in seen) seen.add(key)
+                waking = waking - key
+                continue
+            }
+            if (key in waking) continue
+            if (key in seen) {
+                if (!left) { seen.remove(key); left = true; leave(key) }
+            } else if (canPark(key)) {
+                waking = waking + key
+                model.wake(key)
+            }
+        }
+        awakeTiles = seen
     }
 
     fun closeTile(key: String) {
@@ -672,7 +689,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
                         onZoom = ::zoom,
                         onClose = { model.closePane(tiles[i]) },
                         onCloseTile = { closeTile(tiles[i]) },
-                        onMinimise = { minimise(tiles[i]) },
+                        onMinimise = if (canPark(tiles[i])) ({ minimise(tiles[i]) }) else null,
                         onFile = { shown = it },
                         onChanges = { changesOf = tiles[i] },
                         onName = { namingPane = tiles[i] },
@@ -694,7 +711,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             Tree(shape, weights, Modifier.fillMaxSize(), dropping = tiles.size > 1, onAcross = ::lay, groupOf = { groups[tiles.getOrNull(it) ?: ""] }, tile)
         }
         Rule()
-        if (minimised.isNotEmpty()) MinimisedRow(model, minimised, now) { show(it) }
+        if (minimised.isNotEmpty()) MinimisedRow(model, minimised) { show(it) }
         // Refusals and notices pass, as the browser's toasts do.
         model.sendError?.let { Text(" ! $it", color = p.alert, modifier = Modifier.padding(horizontal = 4.dp)) }
         model.told?.let { Text(" $it", color = p.dim, modifier = Modifier.padding(horizontal = 4.dp)) }
@@ -855,8 +872,8 @@ private fun mailOf(status: Lens.Status?, ink: Color): Color = if (status == Lens
 
 /**
  * Every pane the token may read, each painted with its state: attention colour when it waits for
- * you, plain otherwise with the ring while it works, the parked ones after every other with the
- * moon. Open panes have a thick border, the focused one the thickest and its name in bold.
+ * you, plain otherwise with the ring while it works; the parked panes are the minimised row's,
+ * not the strip's. Open panes have a thick border, the focused one the thickest and its name in bold.
  * Tapping a closed one swaps it into the focused tile; held and let go in place, the
  * drag-and-drop long press without a move, it opens its menu, whose first row opens it beside, as the browser's Shift+click does; held and moved, it drags as a
  * header does, to be dropped on a tile or a divider.
@@ -871,8 +888,8 @@ private fun Tabs(
     val panes = ArrayList<Pair<String, Pane?>>()
     for (pane in model.panes) if (pane.key !in minimised) panes.add(pane.key to pane)
     for (a in open) if (panes.none { it.first == a }) panes.add(a to model.view(a).pane)
-    // The tabs of a group side by side inside one frame in the talk hue, the parked tabs last and
-    // outside any frame; the strip's items are the runs.
+    // The tabs of a group side by side inside one frame in the talk hue; a parked tab (a reader's
+    // open tile) last and outside any frame; the strip's items are the runs.
     val groups = remember(model.panes) { Groups.of(model.panes) }
     val runs = Groups.strip(panes, groups, { it.first }) { it.second?.later == true }
     val list = rememberLazyListState()
@@ -921,35 +938,27 @@ private fun Tabs(
 }
 
 /**
- * The panes minimised out of the tiles, as tabs right above the keys, each still read so its
- * state keeps moving; a tap brings the tile back.
+ * The minimised row: the panes parked for later, less the tiles, as tabs right above the keys,
+ * each with the moon, the glyph of what waits underneath dimmed and its name, painted from the
+ * listing (nothing of its own is read); a tap wakes the pane and brings it back as a tile.
  */
 @Composable
-private fun MinimisedRow(model: AppModel, keys: List<String>, now: Long, onTap: (String) -> Unit) {
+private fun MinimisedRow(model: AppModel, keys: List<String>, onTap: (String) -> Unit) {
     val p = LocalPalette.current
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val every = model.settings.refreshSeconds * 2
     Row(Modifier.fillMaxWidth().background(p.bg).horizontalScroll(rememberScrollState()).testTag("minimised"), verticalAlignment = Alignment.CenterVertically) {
         Text(" _ ", color = p.faint, maxLines = 1)
         for (k in keys) key(k) {
-            LaunchedEffect(k, every) {
-                lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                    while (true) {
-                        model.pollOnce(k)
-                        delay(every * 1000L)
-                    }
-                }
-            }
-            val pane = model.panes.firstOrNull { it.key == k } ?: model.view(k).pane
-            val status = pane?.let { model.status(it, now) }
-            val (back, ink) = stateColours(status)
+            val pane = model.panes.firstOrNull { it.key == k }
+            val kind = pane?.attention?.kind
             Row(
-                Modifier.padding(2.dp).border(1.dp, p.ink).background(back).clickable { onTap(k) }.padding(horizontal = 8.dp, vertical = 4.dp),
+                Modifier.padding(2.dp).border(1.dp, p.ink).background(p.panel).clickable { onTap(k) }.padding(horizontal = 8.dp, vertical = 4.dp).testTag("minimised:${Keys.address(k)}"),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (status != null && status != Lens.Status.QUIET) { Mark(status, pane?.attention?.kind, ink); Text(" ", maxLines = 1) }
-                if (pane != null) PaneName(pane, ink, dimOf(status, ink), tab = true, mail = mailOf(status, ink), onMail = { model.mailOpen = MailTarget(k) })
-                else Text(Keys.address(k).substringAfter('/'), color = ink, maxLines = 1, style = LocalTextStyle.current.copy(shadow = null))
+                Mark(Lens.Status.LATER, kind, p.ink)
+                if (kind != null) Text(" · ${Lens.glyph(Lens.Status.WAITING, kind)}", color = p.dim, maxLines = 1)
+                Text(" ", maxLines = 1)
+                if (pane != null) PaneName(pane, p.ink, p.dim, tab = true, mail = p.talk, onMail = { model.mailOpen = MailTarget(k) })
+                else Text(Keys.address(k).substringAfter('/'), color = p.ink, maxLines = 1, style = LocalTextStyle.current.copy(shadow = null))
             }
         }
     }
@@ -1394,7 +1403,8 @@ private fun PaneTile(
             state.changes?.let { c ->
                 Text(" ⎇ ${Changes.summary(Changes.counts(c.entries))} ", color = ink, maxLines = 1, modifier = Modifier.clickable(onClick = onChanges).testTag("changes-count"))
             }
-            // Minimising keeps the pane open in the row above the keys; off on the last tile.
+            // Minimising parks the pane for later and puts its tab in the row above the keys; dim
+            // where the pane cannot be parked (read-only, or a host without the mark).
             Text(" _ ", color = if (onMinimise != null) ink else p.faint, maxLines = 1, modifier = Modifier.clickable(enabled = onMinimise != null) { onMinimise?.invoke() }.testTag("minimise"))
             // Closing ends what runs in the pane on the host, where the agent allows it and the
             // pane is writable: the header asks first. Elsewhere × closes the tile.
