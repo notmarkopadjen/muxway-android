@@ -6,7 +6,9 @@ import app.muxway.android.protocol.WindowLayout.Node
  * The desk: the view the owner's clients share, kept by the hub (`GET` and `PUT /v1/desk`).
  * [view] is `panes`, with the tiles in [panes], the [focused] one, the [arrangement] (`row`,
  * `column`, `grid`, `main-left`, `main-top`, or `custom` with a [tree] and [weights]), the
- * [minimised] panes and the tab [order]; or `window`, with the [window] the window view shows.
+ * [minimised] panes and the tab [order]; or `window`, with the [window] the window view shows;
+ * or `list`, nothing open and the [minimised] row kept (the last tile minimised with no other
+ * pane awake).
  * [updated], [by] and [rev] are the hub's: [rev] counts the writes and orders two desks.
  */
 data class Desk(
@@ -54,6 +56,7 @@ object Desks {
     fun words(d: Desk?): String {
         if (d == null) return "desk"
         if (d.view == "window" && d.window.isNotEmpty()) return "desk · the window ${d.window}"
+        if (d.view == "list") return "desk · the list" + (if (d.minimised.isNotEmpty()) " · ${d.minimised.size} minimised" else "")
         val n = panesOf(d).size
         if (n == 0) return "desk · empty"
         val parts = ArrayList<String>()

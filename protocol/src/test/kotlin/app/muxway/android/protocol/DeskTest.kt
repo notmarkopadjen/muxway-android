@@ -36,6 +36,18 @@ class DeskTest {
         assertEquals("desk · 2 panes · custom · 1 minimised · by web", Desks.words(two))
         assertEquals("desk · 1 pane", Desks.words(Desk(panes = listOf(a), arrangement = "row")))
         assertEquals("desk · the window alice-laptop/work/0", Desks.words(Desk(view = "window", window = "alice-laptop/work/0")))
+        assertEquals("desk · the list · 1 minimised", Desks.words(Desk(view = "list", minimised = listOf(a))))
+    }
+
+    @Test
+    fun aListDeskKeepsTheRowAndOpensNothing() {
+        val d = Json.desk("""{"desk":{"view":"list","minimised":["$a"],"order":["$a"],"rev":3}}""")
+        assertEquals("list", d.view)
+        assertEquals(listOf(a), d.minimised)
+        assertEquals(emptyList<String>(), Desks.panesOf(d))
+        assertEquals(false, Desks.holds(d))
+        val back = Json.desk("""{"desk":${Json.deskBody(d)}}""")
+        assertEquals(Desks.body(d), Desks.body(back))
     }
 
     @Test

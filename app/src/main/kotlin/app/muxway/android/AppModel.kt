@@ -189,7 +189,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         var deskEtag: String? = null
         var deskKnown: Desk? = null
         var deskRev = 0L
-        var deskAsked = false
+        var deskAsked by mutableStateOf(false)
         var deskWritable = true
         var deskJob: Job? = null
         var deskPending: Desk? = null
@@ -550,6 +550,9 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     private val startedAt = System.currentTimeMillis()
 
     fun deskOf(hub: String): Desk? = connections.firstOrNull { it.id == hub }?.desk
+
+    /** Whether the hub's desk has been asked for once, with or without an answer: a view settles its row then. */
+    fun deskAsked(hub: String): Boolean = connections.firstOrNull { it.id == hub }?.deskAsked == true
 
     /** Whether the hub has desks: a hub older than them answered `404` and shows no row. */
     fun hasDesk(hub: String): Boolean = connections.firstOrNull { it.id == hub }?.let { it.deskAsked && it.desk != null } == true

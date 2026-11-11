@@ -25,8 +25,10 @@ a second.
   unchanged desk costs a few bytes.
 - **Shows** it as the `▤ desk` row at the top of the hub's panes on the
   list: `desk · 2 panes · row · 1 minimised · by web`, `desk · the
-  window alice-laptop/work/0`, or `desk · empty`, dim, while it holds
-  nothing. A hub older than desks (its read answers `404`) has no row.
+  window alice-laptop/work/0`, `desk · the list · 1 minimised` (a
+  `list` desk: nothing open, the minimised row kept, as the last tile
+  minimised with no other pane awake leaves it; dim, it opens nothing),
+  or `desk · empty`, dim, while it holds nothing. A hub older than desks (its read answers `404`) has no row.
 - **Opens** it: a tap on the row opens the desk's tiles in its
   arrangement (a preset, or the tree and shares of a custom one) with
   the minimised row and the focused tile; a window desk opens the
@@ -41,7 +43,11 @@ a second.
   the hub, the focused one, the arrangement with its tree and shares
   (only while every tile is on the hub, since a tree over another hub's
   panes would name leaves the hub cannot check), and the minimised panes
-  of the hub. Nothing is written while the view is what the hub has,
+  of the hub. **The minimised row is the desk's**: a view opened from
+  the list, which has no row of its own, takes the hub's row, less the
+  tiles it opens, once the desk is read, and writes nothing before,
+  so a pane opened on the phone never empties the row the browser
+  made. Nothing is written while the view is what the hub has,
   or what it opened from, so opening a desk never writes it back; a
   read-only token (no writable pane, or a `read_only` refusal) writes
   nothing. The phone's strip has no owner's order, so no `order` is

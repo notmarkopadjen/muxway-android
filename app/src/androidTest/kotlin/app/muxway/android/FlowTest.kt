@@ -118,8 +118,12 @@ class FlowTest {
     }
 
     /** A node's bounds on the screen, for a touch the system sees. */
-    private fun onScreen(tag: String): Rect {
-        val b = rule.onNodeWithTag(tag).fetchSemanticsNode().boundsInWindow
+    private fun onScreen(tag: String): Rect = onScreen(rule.onNodeWithTag(tag).fetchSemanticsNode().boundsInWindow)
+
+    /** The [i]th node of a tag, on the screen. */
+    private fun onScreen(tag: String, i: Int): Rect = onScreen(rule.onAllNodesWithTag(tag)[i].fetchSemanticsNode().boundsInWindow)
+
+    private fun onScreen(b: Rect): Rect {
         val xy = IntArray(2)
         scenario!!.onActivity { it.window.decorView.getLocationOnScreen(xy) }
         return b.translate(xy[0].toFloat(), xy[1].toFloat())
@@ -410,6 +414,55 @@ class FlowTest {
         rule.onAllNodes(tagged("talk-row:")).onFirst().performClick()
         rule.onNodeWithTag("mail-sheet").assertExists()
         await("read the branch and say what fails")
+    }
+
+    @Test
+    fun aDragLetGoWhereNothingTakesItOpensTheMenu() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        // Two tiles, so a header is a drag source.
+        rule.onNodeWithTag("add").performClick()
+        await("+ pane").performClick()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 2 }
+        // The first header, dragged a little and let go on its own tile, changed nothing: the
+        // pane menu opens, as after a hold without a move.
+        val header = onScreen("header", 0)
+        dragOnScreen(header.center, Offset(header.center.x + 80f, header.center.y))
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("pane-menu").fetchSemanticsNodes().isNotEmpty() }
+        shot("drag-in-place")
+        Espresso.pressBack()
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("pane-menu").fetchSemanticsNodes().isEmpty() }
+        // A tab dragged along the strip and let go there opens its menu too, *open beside* first.
+        val tab = onScreen("tab:alice-laptop/ask/0.0")
+        dragOnScreen(tab.center, Offset(tab.center.x + 60f, tab.center.y))
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("pane-menu").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("menu-beside").assertExists()
+        Espresso.pressBack()
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("pane-menu").fetchSemanticsNodes().isEmpty() }
+    }
+
+    @Test
+    fun theLastTileMinimisesToTheNextPaneAndTheRowIsTheDesks() {
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        await("work/0.0").performClick()
+        await("$ ")
+        // `_` on the last tile: the next awake pane takes the tile, the shell joins the row.
+        rule.onNodeWithTag("minimise").performClick()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("tile:alice-laptop/ask/0.0").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("minimised").assertExists()
+        rule.onAllNodesWithTag("tile:alice-laptop/work/0.0").assertCountEquals(0)
+        shot("last-tile-minimised")
+        // Back on the list, the other pane opened from its row: the row comes along, the desk's.
+        Thread.sleep(1_000)
+        Espresso.pressBack()
+        await("ask/0.0").performClick()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("tile:alice-laptop/ask/0.0").fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("minimised").fetchSemanticsNodes().isNotEmpty() }
+        shot("row-kept")
+        // The minimised tab tapped brings its tile back beside the other.
+        rule.onNodeWithTag("minimised").onChildren().onLast().performClick()
+        rule.waitUntil(5_000) { rule.onAllNodesWithTag("minimise").fetchSemanticsNodes().size == 2 }
     }
 
     @Test

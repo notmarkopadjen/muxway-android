@@ -67,8 +67,12 @@ focused pane.
   key row, painted like a tab and still read every `every` seconds, so
   its glyph keeps moving; its tab leaves the strip while it is below. A
   tap on it brings the tile back, focused; the add menu lists it too. The
-  last tile cannot be minimised (its `_` is dim). Minimised panes belong
-  to the view's arrangement and are forgotten with it; the pane's fit is
+  last tile minimises too: the next awake pane of the strip takes the
+  tile, or, with none awake, the pane joins the row and the app goes
+  back to the list, the desk saying so (`view: "list"`). The row is the
+  desk's: a view opened from the list takes the hub's row, less the
+  tiles it opens, once the desk is read, and writes nothing before, so
+  every client shows one row (see [the desk](desk.md)); the pane's fit is
   released when it is minimised, as a closed tile's is.
 - The **controls** sit at the right end of the same row: `▦` (with
   several panes) the next arrangement, held, equal shares; `⊡` zoom
@@ -86,7 +90,8 @@ focused pane.
   setting on, `Ctrl+]` and `Ctrl+[` on a hardware keyboard do the same
   from anywhere in the view, the line and direct typing included (see
   *Typing*). A tab **held and let go in place** (the drag's long
-  press without a move) opens the **pane menu**: *open
+  press without a move), or dragged and let go where nothing takes it
+  (the strip, its own tile, the keys), opens the **pane menu**: *open
   beside* opens its pane beside the focused one, as the browser's
   Shift+click does; *⇆ beside <partner>*, one row per pane this one
   talked with lately (four at most, see [the list](panes.md)), lays
@@ -132,7 +137,10 @@ focused pane.
   tile from an edge, the others keeping their places, or comes in
   across the split from a bar; with four panes open, tiles and
   minimised together, the whole tile is its middle and the pane takes
-  its place, and a bar says `up to 4 panes side by side`. A tile closed or
+  its place, and a bar says `up to 4 panes side by side`. A header or a
+  tab dragged and let go where nothing takes it, its own tile, the
+  strip or the keys, changed nothing and opens the pane menu where it
+  started, as the hold without a move does. A tile closed or
   minimised leaves a made tree closed up around it. **Zoom**: `⊡`, or
   a double tap on a header, shows the focused pane alone and remembers
   the tiles it came from; `⊡` from that pane goes back to them, in
