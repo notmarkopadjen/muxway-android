@@ -41,9 +41,10 @@ waiting panes, and a tap lands on the pane behind the lock screen. A
 question asked with fixed answers (<code>muxway ask</code>) is answered
 from the notification, the tile, the inbox or the wrist, nothing typed.
 <code>⚑ n</code> in the header opens the inbox: everything that waits,
-on every hub, oldest first. A pane that can wait is parked for
-<em>later</em> from a held tab, header or the watch's menu: its tab goes
-last with <code>☾</code>, nothing calls for it, and a tap wakes it. Agents that talk to each other are framed as
+on every hub, oldest first. A pane that can wait is minimised from its
+header or the watch's menu: parked for <em>later</em>, its tab goes to
+the row above the keys with <code>☾</code>, nothing calls for it, and a
+tap there wakes it. Agents that talk to each other are framed as
 one group, like browser tabs, and a pane with unread mail from another
 agent says <code>✉ n</code>: a tap on the envelope opens the mail in
 full, with a line to answer it, never typed; <code>✉</code> in the header

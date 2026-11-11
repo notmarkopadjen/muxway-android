@@ -37,21 +37,21 @@ focused pane.
   hue on a plain tab and in the tab's ink on a painted one, and a tap on
   the envelope alone opens the pane's [mail sheet](mail.md). The panes
   parked for later (`☾`, see [notifications](notifications.md#later))
-  come after every other, in the order they would otherwise have and
-  outside any frame; a tap on a parked tab focuses it and wakes it, and
-  its tab goes back to its place.
+  are not in the strip: they are the minimised row's (below), and a tap
+  there wakes one and brings it back.
 - **`+`** after the last tab opens the **add menu**, built from the
   listing the app holds, in this order: `+ pane` (one more pane beside
   the focused one on its host, where the token may type there), `+
   session` (on the focused pane's host, where its agent starts sessions),
-  a rule, the panes minimised below, a rule, every other readable pane
+  a rule, the panes minimised below (parked for later; a pick wakes
+  one), a rule, every other readable pane
   not on screen, grouped by hub (with several), host and session in
   listing order, each as its glyph and name with its place dimmed after
   it, a minimised one too; the place is cut with an ellipsis before the
   name is, and the menu never scrolls sideways. The focused pane and the open tiles are not listed. An entry the
   token or the host does not allow is dimmed with the reason (`read only`,
   `no sessions here`). A pick becomes one more tile, focused; with four
-  panes open, tiles and minimised together, the menu's heading says `four open: a pick replaces <focused>`
+  tiles open the menu's heading says `four open: a pick replaces <focused>`
   and the pick swaps into the focused tile, as a tab does. `+ pane` and
   `+ session` ask the hub (the session through the same dialog as the
   list's); a pick asks nothing. Back closes the menu. The rows are
@@ -62,18 +62,27 @@ focused pane.
   host that names panes a field for the name; see [pane
   names](pane-names.md). A tap on another tile's name focuses it, and the
   header's double tap still zooms.
-- **`_`** on a tile's header **minimises** it: the tile leaves the
-  arrangement and its tab moves to the **minimised row** right above the
-  key row, painted like a tab and still read every `every` seconds, so
-  its glyph keeps moving; its tab leaves the strip while it is below. A
-  tap on it brings the tile back, focused; the add menu lists it too. The
-  last tile minimises too: the next awake pane of the strip takes the
-  tile, or, with none awake, the pane joins the row and the app goes
-  back to the list, the desk saying so (`view: "list"`). The row is the
-  desk's: a view opened from the list takes the hub's row, less the
-  tiles it opens, once the desk is read, and writes nothing before, so
-  every client shows one row (see [the desk](desk.md)); the pane's fit is
-  released when it is minimised, as a closed tile's is.
+- **`_`** on a tile's header **minimises** it: the pane is parked for
+  [later](notifications.md#later) on its host, the mark every client
+  sees, the tile leaves the arrangement and its tab leaves the strip for
+  the **minimised row** right above the key row. The row is the panes
+  the listing says are parked, less the tiles, oldest parking first,
+  each as a tab with `☾`, the glyph of what waits underneath dimmed
+  (`☾ · !`) and its name, painted from the listing, nothing of its own
+  read. A pane parked from anywhere else (the browser, the list, the
+  inbox, the watch, a script) joins the row the same way, and a tile
+  whose pane another client parked leaves for the row within a listing.
+  A tap on the row's tab wakes the pane and brings the tile back,
+  focused; the add menu lists it too, and a pick does the same. A parked
+  pane opened from the list, the inbox or a link is woken as it opens.
+  The last tile minimises too: the next awake pane of the strip takes
+  the tile, or, with none awake, the app goes back to the list, the desk
+  saying so (`view: "list"`). Because the row is the host's mark, every
+  client shows the same one with nothing in the desk (see [the
+  desk](desk.md)); the pane's fit is released when it is minimised, as a
+  closed tile's is. Minimising is a write: `_` is dim on a read-only
+  pane and on a host whose agent is older than the mark, and a parked
+  pane a reader opens stays a tile, its name leaning under `☾ later`.
 - The **controls** sit at the right end of the same row: `▦` (with
   several panes) the next arrangement, held, equal shares; `⊡` zoom
   (with several panes, or a pane whose window has more); `⤢` fit on,
@@ -85,8 +94,8 @@ focused pane.
 - A **swipe** left or right across the page moves the focus to the next
   or previous tile, or with one tile open swaps the strip's next or
   previous pane into it, coming round at either end as `]` and `[` do
-  in the browser; the panes parked for later are skipped, since a swipe
-  that landed on one would only wake it. With the *hardware keyboard*
+  in the browser; the panes parked for later are not on the way, being
+  the minimised row's and not the strip's. With the *hardware keyboard*
   setting on, `Ctrl+]` and `Ctrl+[` on a hardware keyboard do the same
   from anywhere in the view, the line and direct typing included (see
   *Typing*). A tab **held and let go in place** (the drag's long
@@ -99,9 +108,7 @@ focused pane.
   it is open, opened after it when there is room, in the place of the
   tile focused longest ago when four are open (`protocol/Beside.kt`,
   unit-tested; from a tab whose pane is not open, the pane first takes
-  the focused tile, as a tap on the tab would); *☾ later* parks the pane and *☾ wake* wakes it (dim,
-  with the reason, on a read-only pane or a host without `later`; see
-  [notifications](notifications.md#later)); *✉ mail* opens the pane's
+  the focused tile, as a tap on the tab would); *✉ mail* opens the pane's
   [mail sheet](mail.md) with its line focused; *⇗ share* opens the
   [share sheet](share.md) for a writable pane, on a hub that shares
   panes. A tile's header held and let
@@ -191,14 +198,14 @@ focused pane.
   with *effects* off the box is blank until the frame. Never a borrowed
   screen, never a spinner. When the host renumbers a tile's pane, the
   tile **follows it** to its new address (the addresses change, the
-  focus, the arrangement, the minimised row and a fit turned off stay);
+  focus, the arrangement and a fit turned off stay);
   when the pane is gone, the tile closes with a word in the status
   area, `<name> is gone` (on the list, when it was the last), and no
   other tile changes pane. `Follow` in the protocol module decides,
   from each listing, which tiles move and which are gone; unit-tested.
 - The view is the **desk** (see [desk](desk.md)): half a second after a
-  change of the tiles, the focus, the arrangement, a split's shares or
-  the minimised row it is written to the focused tile's hub, and another
+  change of the tiles, the focus, the arrangement or a split's shares
+  it is written to the focused tile's hub, and another
   client's change to the desk is followed within a second, the focus
   excepted.
 - The line under the input shows the time of the last successful read, or

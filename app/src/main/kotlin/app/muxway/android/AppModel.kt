@@ -535,10 +535,10 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * An opening the view takes once, the desk laid out for the tiles about to open: the
-     * arrangement, the tree and the shares, the minimised row and, when the desk is opened on
-     * purpose, the focus (a desk followed moves no focus).
+     * arrangement, the tree and the shares and, when the desk is opened on purpose, the focus
+     * (a desk followed moves no focus).
      */
-    class Opening(val keys: List<String>, val arrangement: String, val tree: WindowLayout.Node?, val weights: Map<String, List<Float>>, val minimised: List<String>, val focused: String?)
+    class Opening(val keys: List<String>, val arrangement: String, val tree: WindowLayout.Node?, val weights: Map<String, List<Float>>, val focused: String?)
     var opening: Opening? = null
 
     /** The desk the view opened from, in the view's own words: a view equal to it writes nothing back. */
@@ -596,16 +596,16 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Opens the hub's desk: its tiles in their arrangement with the minimised row and, with
-     * [focus], the focused one; a window desk opens the window's panes from the listing, four at
-     * most, as the zoom from a lone pane does. A desk without panes opens nothing.
+     * Opens the hub's desk: its tiles in their arrangement and, with [focus], the focused one; a
+     * window desk opens the window's panes from the listing, four at most, as the zoom from a
+     * lone pane does. A desk without panes opens nothing. The minimised row needs no opening: it
+     * is the listing's parked panes.
      */
     fun openDesk(hub: String, focus: Boolean = true) {
         val c = connections.firstOrNull { it.id == hub } ?: return
         val d = c.desk ?: return
         c.deskKnown = d
         val keys: List<String>
-        var minimised: List<String> = emptyList()
         var arrangement = ""
         var tree: WindowLayout.Node? = null
         var weights: Map<String, List<Float>> = emptyMap()
@@ -618,14 +618,13 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         } else {
             val panes = Desks.panesOf(d).map { Keys.make(c.id, it) }
             if (panes.isEmpty()) return
-            keys = (panes + d.minimised.map { Keys.make(c.id, it) }).distinct().take(AddMenu.MAX_TILES)
-            minimised = keys.drop(panes.size)
+            keys = panes.distinct().take(AddMenu.MAX_TILES)
             arrangement = d.arrangement
             tree = d.tree
             weights = d.weights
             focused = Keys.make(c.id, d.focused).takeIf { d.focused.isNotEmpty() && it in panes }
         }
-        opening = Opening(keys, arrangement, tree, weights, minimised, if (focus) focused else null)
+        opening = Opening(keys, arrangement, tree, weights, if (focus) focused else null)
         open(Screen.View(keys))
     }
 
@@ -682,7 +681,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * The tiles the last listing moved, old key to new, and a count of the moves, for the view
-     * to carry its own per-key state (the minimised row, fit off) along.
+     * to carry its own per-key state (fit off, the tiles seen awake) along.
      */
     var moved by mutableStateOf<Map<String, String>>(emptyMap())
         private set

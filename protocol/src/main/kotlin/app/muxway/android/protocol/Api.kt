@@ -298,7 +298,7 @@ class Api(private val baseUrl: String, private val token: String, private val us
 
     /** Replaces the desk with [d]; the desk as the hub stored it, with its `rev`. A writer's call. */
     fun putDesk(d: Desk): Desk {
-        require(d.panes.size <= Desks.MAX_PANES && d.minimised.size <= Desks.MAX_MINIMISED && d.order.size <= Desks.MAX_ORDER) { "desk" }
+        require(d.panes.size <= Desks.MAX_PANES && d.order.size <= Desks.MAX_ORDER) { "desk" }
         val body = Json.deskBody(d)
         require(body.length <= 8 * 1024) { "desk size" }
         return Json.desk(call("PUT", "desk", body.toByteArray(Charsets.UTF_8), "application/json", null).body)

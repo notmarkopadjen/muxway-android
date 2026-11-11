@@ -5,10 +5,10 @@ import app.muxway.android.protocol.WindowLayout.Node
 /**
  * The desk: the view the owner's clients share, kept by the hub (`GET` and `PUT /v1/desk`).
  * [view] is `panes`, with the tiles in [panes], the [focused] one, the [arrangement] (`row`,
- * `column`, `grid`, `main-left`, `main-top`, or `custom` with a [tree] and [weights]), the
- * [minimised] panes and the tab [order]; or `window`, with the [window] the window view shows;
- * or `list`, nothing open and the [minimised] row kept (the last tile minimised with no other
- * pane awake).
+ * `column`, `grid`, `main-left`, `main-top`, or `custom` with a [tree] and [weights]) and the
+ * tab [order]; or `window`, with the [window] the window view shows; or `list`, nothing open
+ * (the last tile minimised with no other pane awake). The minimised row is not the desk's: it
+ * is the panes parked for later, which the listing carries (`later`).
  * [updated], [by] and [rev] are the hub's: [rev] counts the writes and orders two desks.
  */
 data class Desk(
@@ -18,7 +18,6 @@ data class Desk(
     val arrangement: String = "",
     val tree: Node? = null,
     val weights: Map<String, List<Float>> = emptyMap(),
-    val minimised: List<String> = emptyList(),
     val order: List<String> = emptyList(),
     val window: String = "",
     val updated: Long = 0,
@@ -29,7 +28,6 @@ data class Desk(
 object Desks {
     val ARRANGEMENTS = listOf("row", "column", "grid", "main-left", "main-top", "custom")
     const val MAX_PANES = 4
-    const val MAX_MINIMISED = 16
     const val MAX_ORDER = 64
     const val MAX_KEY = 16
     const val MAX_BY = 64
@@ -41,7 +39,7 @@ object Desks {
     fun body(d: Desk): String = listOf(
         d.view, d.panes.joinToString(","), d.focused, d.arrangement, d.tree?.toString() ?: "",
         d.weights.entries.sortedBy { it.key }.joinToString(";") { "${it.key}=${it.value.joinToString(",")}" },
-        d.minimised.joinToString(","), d.order.joinToString(","), d.window,
+        d.order.joinToString(","), d.window,
     ).joinToString("\u001f")
 
     fun same(a: Desk?, b: Desk?): Boolean = a != null && b != null && body(a) == body(b)
@@ -56,13 +54,12 @@ object Desks {
     fun words(d: Desk?): String {
         if (d == null) return "desk"
         if (d.view == "window" && d.window.isNotEmpty()) return "desk · the window ${d.window}"
-        if (d.view == "list") return "desk · the list" + (if (d.minimised.isNotEmpty()) " · ${d.minimised.size} minimised" else "")
+        if (d.view == "list") return "desk · the list"
         val n = panesOf(d).size
         if (n == 0) return "desk · empty"
         val parts = ArrayList<String>()
         parts.add("$n pane${if (n == 1) "" else "s"}")
         if (d.arrangement.isNotEmpty() && n > 1) parts.add(d.arrangement)
-        if (d.minimised.isNotEmpty()) parts.add("${d.minimised.size} minimised")
         if (d.by.isNotEmpty()) parts.add("by ${d.by}")
         return "desk · ${parts.joinToString(" · ")}"
     }

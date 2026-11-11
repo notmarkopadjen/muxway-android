@@ -26,10 +26,10 @@ import app.muxway.android.protocol.Keys
 /**
  * The pane menu, under a tab or a tile's header held and let go in place (the drag-and-drop
  * long press without a move): *open beside* for a tab, *beside* a partner the pane talked with
- * (see [Beside]), *across* the width or the height for a tile among several, then *later* or
- * *wake*, the owner's mark on the host (see the notifications page), then *mail*, the pane's
- * mail sheet with its line focused, and *share*, the share sheet, on a hub that shares panes.
- * A row is dim with the reason on a read-only pane or a host that does not park panes.
+ * (see [Beside]), *across* the width or the height for a tile among several, then *mail*, the
+ * pane's mail sheet with its line focused, and *share*, the share sheet, on a hub that shares
+ * panes. Parking a pane for later is the header's `_` (minimise), not a row here.
+ * A row is dim with the reason on a pane the listing lacks or the token cannot write.
  */
 @Composable
 fun PaneMenu(
@@ -59,14 +59,6 @@ fun PaneMenu(
                 item("⬌ across the width", if (acrossNow(false)) "already" else null, "menu-across-width") { onClose(); onAcross(false) }
                 item("⬍ across the height", if (acrossNow(true)) "already" else null, "menu-across-height") { onClose(); onAcross(true) }
             }
-            val parked = pane?.later == true
-            val reason = when {
-                pane == null -> "not listed"
-                !pane.writable -> "read only"
-                !model.hostParks(key) -> "host without later"
-                else -> null
-            }
-            item(if (parked) "☾ wake" else "☾ later", reason, "menu-later") { onClose(); model.later(key, !parked) }
             item("✉ mail", if (pane == null) "not listed" else null, "menu-mail") { onClose(); model.mailOpen = MailTarget(key, line = true) }
             val shares = model.hubShares(key)
             if (shares != false) {
