@@ -1675,7 +1675,8 @@ class E2ETest {
         assertEquals("not_yours", assertThrows(ApiException::class.java) { narrow.putDesk(deskTwo) }.code)
         // Odd bodies the client would not build: the hub refuses each.
         for (body in listOf(
-            """{"view":"panes","panes":["$a","$HOST/work/0.1","$HOST/work/0.2","$HOST/work/0.3","$HOST/work/0.4"]}""",
+            // More panes than a desk takes (the hub's cap is eight).
+            """{"view":"panes","panes":["$a","$HOST/work/0.1","$HOST/work/0.2","$HOST/work/0.3","$HOST/work/0.4","$HOST/work/0.5","$HOST/work/0.6","$HOST/work/0.7","$HOST/work/0.8"]}""",
             """{"view":"panes","panes":["$a","$a"]}""",
             """{"view":"panes","panes":["alice laptop/work/0.0"]}""",
             """{"view":"board","panes":["$a"]}""",
