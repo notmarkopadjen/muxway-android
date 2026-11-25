@@ -48,16 +48,18 @@ class Api(private val baseUrl: String, private val token: String, private val us
      * lines, colours kept), the frame a read would give; null when the hub answered no screen
      * (`204`: a hub older than 2026-11-09), and the caller reads as before.
      */
-    fun type(address: String, text: String, lines: Int = 0): PaneRead? {
+    fun type(address: String, text: String, lines: Int = 0, client: String? = null): PaneRead? {
         val clean = Input.typed(text)
         require(clean.isNotEmpty() && Input.utf8Length(clean) <= Input.MAX_TEXT_BYTES) { "text length" }
-        return input(address, Json.text(clean), lines)
+        if (client != null) require(client == Label.of(client)) { "client" }
+        return input(address, Json.text(clean, client), lines)
     }
 
     /** Sends the named key; with [lines] the screen comes back as [type] says. */
-    fun key(address: String, name: String, lines: Int = 0): PaneRead? {
+    fun key(address: String, name: String, lines: Int = 0, client: String? = null): PaneRead? {
         require(Input.isKey(name)) { "unknown key" }
-        return input(address, Json.key(name), lines)
+        if (client != null) require(client == Label.of(client)) { "client" }
+        return input(address, Json.key(name, client), lines)
     }
 
     private fun input(address: String, json: String, lines: Int): PaneRead? {
@@ -123,9 +125,10 @@ class Api(private val baseUrl: String, private val token: String, private val us
      * A mouse button at a cell (1-based) of the pane, the wheel turned [count] notches; a hub
      * without mouse input answers bad_json, one from before the count bad_input to a count.
      */
-    fun mouse(address: String, button: String, x: Int, y: Int, count: Int = 1) {
+    fun mouse(address: String, button: String, x: Int, y: Int, count: Int = 1, client: String? = null) {
         require(Input.isMouse(button, x, y, count)) { "mouse" }
-        post("panes/${encode(address)}/input", Json.mouse(button, x, y, count))
+        if (client != null) require(client == Label.of(client)) { "client" }
+        post("panes/${encode(address)}/input", Json.mouse(button, x, y, count, client))
     }
 
     /**

@@ -258,16 +258,22 @@ object Json {
         ""
     }
 
-    fun text(s: String): String = JSONObject().put("text", s).toString()
+    // Input carries this device's label, as a resize does: typing is a command, and the host
+    // gives a window back to the client whose command lands in it, at the size that client is
+    // showing it at. A hub older than this ignores the field.
+    fun text(s: String, client: String? = null): String =
+        JSONObject().put("text", s).apply { if (client != null) put("client", client) }.toString()
 
-    fun key(name: String): String = JSONObject().put("key", name).toString()
+    fun key(name: String, client: String? = null): String =
+        JSONObject().put("key", name).apply { if (client != null) put("client", client) }.toString()
 
     fun choice(c: String): String = JSONObject().put("choice", c).toString()
 
     /** The count only above one, so a single notch is the body an older hub knows. */
-    fun mouse(button: String, x: Int, y: Int, count: Int = 1): String =
+    fun mouse(button: String, x: Int, y: Int, count: Int = 1, client: String? = null): String =
         JSONObject().put("mouse", JSONObject().put("button", button).put("x", x).put("y", y)
-            .apply { if (count > 1) put("count", count) }).toString()
+            .apply { if (count > 1) put("count", count) })
+            .apply { if (client != null) put("client", client) }.toString()
 
     /**
      * A resize: the pane alone, or its whole window, with the pane zoomed over its siblings or

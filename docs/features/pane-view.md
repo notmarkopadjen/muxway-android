@@ -4,7 +4,7 @@ One or more panes on one screen, tabs above to switch, one input bar for the
 focused pane.
 
 ```
-[‹] [ ⟳ build ][ ! review ][ logs ] [+]   ▦ ⊡ ⤢ abc ⚑ 1 ✉ ⚙
+[‹] [ ⟳ build ][ ! review ][ logs ] [+]   ▦ ⊡ abc ⚑ 1 ✉ ⚙
 ┌──────────────────────────────────────────────────┐
 │ build · claude · write        ⟳ working 96×28 _ × │
 │ $ make test                                       │
@@ -72,11 +72,11 @@ focused pane.
   back to the list, the desk saying so (`view: "list"`). The row is the
   desk's: a view opened from the list takes the hub's row, less the
   tiles it opens, once the desk is read, and writes nothing before, so
-  every client shows one row (see [the desk](desk.md)); the pane's fit is
+  every client shows one row (see [the desk](desk.md)); the pane's size is
   released when it is minimised, as a closed tile's is.
 - The **controls** sit at the right end of the same row: `▦` (with
   several panes) the next arrangement, held, equal shares; `⊡` zoom
-  (with several panes, or a pane whose window has more); `⤢` fit on,
+  (with several panes, or a pane whose window has more);
   again or off for the focused tile; `abc` the on-screen keyboard (only
   with the hardware keyboard setting); `⚑ n` while any pane waits (the
   [inbox](inbox.md)); `✉`, with the count of messages not looked at,
@@ -152,7 +152,7 @@ focused pane.
   taken whenever the host's shape differs from the tiles', not over a
   change made here in the last three seconds nor the layout this view
   sent) and what is changed here moves the panes on the host (see
-  *Fit*; with fit off the arrangement still goes as the window's layout
+  *Size*; the arrangement goes as the window's layout
   without a size). Moving them needs every pane of the window writable:
   otherwise `▦`, the bars and the drops are off and the tiles only
   follow, a drop saying so. Each header is painted like its
@@ -166,7 +166,7 @@ focused pane.
   underneath dimmed after it, for a parked pane, whose name in the
   header is in italics), for a question or a permission the notice's
   own words after the word (`? question · deploy to staging?`, one
-  line, cut, in the room the name leaves), with fit on the size, and `⇗ n`, dim, while
+  line, cut, in the room the name leaves), the size, and `⇗ n`, dim, while
   the pane has live [shares](share.md) made by this token (a tap opens
   the share sheet);
   the focused one has the thick border and bold name; a waiting tile
@@ -191,7 +191,7 @@ focused pane.
   with *effects* off the box is blank until the frame. Never a borrowed
   screen, never a spinner. When the host renumbers a tile's pane, the
   tile **follows it** to its new address (the addresses change, the
-  focus, the arrangement, the minimised row and a fit turned off stay);
+  focus, the arrangement and the minimised row stay);
   when the pane is gone, the tile closes with a word in the status
   area, `<name> is gone` (on the list, when it was the last), and no
   other tile changes pane. `Follow` in the protocol module decides,
@@ -219,13 +219,15 @@ flowchart LR
     A --> T[Text in the bundled monospace font, scaled to fit]
 ```
 
-- **Fit.** With **fit** on (`⤢` in the top row, on by default for every
-  pane you may write to, one or several; per tile, `⤢` serving the
-  focused one, as the browser's `f`), the pane on the host is sized to the
-  columns and rows that fit the tile at the **text** setting, the way a
-  terminal tells tmux its size: `POST .../resize`, debounced, once per
-  distinct size, and `fit: auto` when you leave the view or turn it off,
-  which gives the window back to tmux. The header shows the size. The
+- **Size.** A pane you may write to **always follows its tile**: there
+  is nothing to turn on. The pane on the host is sized to the columns
+  and rows that fit the tile at the **text** setting, the way a terminal
+  tells tmux its size: `POST .../resize`, debounced, once per distinct
+  size. **A window keeps the size it was given**: leaving the view hands
+  nothing back, so a session carries the size it is being shown at and
+  coming back finds it as it was. `fit: auto` gives a window back to
+  tmux and no client sends it. A pane you may not write is drawn scaled
+  instead, since nothing may size it. The header shows the size. The
   person at the host sees the change, as with any terminal that attaches.
   While the on-screen keyboard is
   up the tile is half its height, so the host keeps its size until the
@@ -233,7 +235,7 @@ flowchart LR
   phone sends its size once more after twenty seconds and then leaves it,
   because two clients fitting one tmux window can only fight: the header
   shows the host's size in the alert colour with "held". A held tile is
-  drawn scaled to the tile, as with fit off: the text shrinks until the
+  drawn scaled to the tile: the text shrinks until the
   host's columns fit and no row is cut twice; what the phone asks of
   the host stays the cells that fit at the **text** setting, so a tile
   scaled to the host's columns never asks for them (`TileScale`). The
@@ -248,18 +250,18 @@ flowchart LR
   `Label` in the protocol module), and **the client touched last
   wins**: typing into the pane here, a key sent to it, its tile tapped
   into focus or the keyboard going away with it focused sends this
-  phone's fit once more, two seconds apart at most, so the pane you are
+  phone's size once more, two seconds apart at most, so the pane you are
   using takes its size back, while a browser tab left open at the desk,
-  which nobody touches, keeps still and says who has it. `held` alone
+  which nobody touches, keeps still and says who has it. The host helps:
+  it keeps what each client last asked a window to be and puts it back
+  when a command from that client lands there, so typing is enough and
+  nothing need be sent. `held` alone
   means nobody is named: the floor, a terminal at the host, or this very
-  phone's own fit the host could not keep. Tapping `⤢`
-  while it is on sends the size again at once, and holding it turns fit
-  off for the focused tile alone; the others keep theirs, and `⤢` shows
-  the focused tile's state. A pane shorter than the tile sits at the bottom with empty rows
+  phone's own size the host could not keep.
+  A pane shorter than the tile sits at the bottom with empty rows
   above; nothing can make 27 host rows fill 44. **One fit per window:**
   tiles that are every pane of one tmux window, every one writable, fit
-  the window as one (`"scope": "window"` with a `layout`), while the
-  focused tile's fit is on, laid out as
+  the window as one (`"scope": "window"` with a `layout`), laid out as
   the tiles are, so each pane is its tile and the host's panes follow
   the phone's arrangement and its dragged splits
   (`docs/plans/2026-10-29-one-window-fit-and-parity.md`). The layout is
@@ -276,12 +278,13 @@ flowchart LR
   only **some** of a window's panes, or any of them read-only, share one
   fit, because two fits on one row can only undo each other: the focused
   tile's pane fits (or the first of them, when the focus is in another
-  window) and the others say "held", keep fit off, are scaled to their
+  window) and the others say "held", are scaled to their
   tile and keep the size they have; the focus moving to another tile of
   the window moves the fit there, and the pane left behind keeps its
   size until the view is left.
-  A pane **alone in the view** sizes its whole window instead
-  (`"scope": "window"`), with the pane zoomed over its siblings
+  A tile that is **the only open one of its window** — alone in the
+  view, or beside tiles of other windows — sizes its whole window
+  instead (`"scope": "window"`), with the pane zoomed over its siblings
   (`"zoom": true`, tmux's own zoom) when the window holds any, so no
   neighbour is squeezed to make room for the phone's screen. The
   siblings are counted from the window's layout in the listing
@@ -291,7 +294,7 @@ flowchart LR
   **gives way to another** in the view keeps the size it was given and is
   not sized again when it comes back at that size; every pane the view
   sized is given back when the view is left.
-- **Width.** With fit off, rows are shown at the pane's own width, as tmux
+- **Width.** In a pane nothing may size, rows are shown at the pane's own width, as tmux
   shows them, and the font is sized so that width fits the tile, never
   larger than the **text** setting. A 96-column pane on a phone comes out
   small but intact, a 194-column one half that size; full-screen programs
@@ -460,7 +463,7 @@ it is writable:
   between the bracketed-paste marks when the program asked for them, so
   Claude Code takes it as one message and bash as one block it shows
   before `Enter` runs it. The rows the line takes beyond one are not a
-  resize: with fit on, the pane keeps its size while a message is
+  resize: the pane keeps its size while a message is
   written, and the rows scroll under the line instead.
 - right of the line, in this order: `⌨` the keyboard, `⇪` files
   (where the host has an inbox), `◉` the microphone (where the hub has

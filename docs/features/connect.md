@@ -84,7 +84,7 @@ for.
 | block screenshots | Sets `FLAG_SECURE` on the pane screen: no screenshots, no thumbnail in recents. Off by default. |
 | assume a hardware keyboard | The input field takes focus without raising the on-screen keyboard; `abc` in the pane view's top row brings it up. The input connection stays, so dictation keyboards keep working. Off by default. |
 | effects | Glow, scanlines, vignette, power-on and pulses (see [look](look.md)). On by default. |
-| reflow | With fit off, reflow long rows to the screen instead of scaling the pane's width. Off by default. |
+| reflow | In a pane nothing may size, reflow long rows to the screen instead of scaling the pane's width. Off by default. |
 | names | In a writable shell pane on a host with preview roots, the names of the pane's directory on its screen are links (see [shell helper](shell-helper.md)). On by default. |
 | suggest | While a shell pane is typed into, the rest of a known line is drawn dim after the text, for a tap or a swipe right to take (see [shell helper](shell-helper.md), the ghost word). On by default; off for a host shell that draws its own. |
 | forget | Empties the lines sent to shells from this phone (the command row's recent lines and the ghost word's pool). Removing a hub empties them too. |

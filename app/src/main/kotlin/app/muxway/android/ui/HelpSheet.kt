@@ -51,7 +51,6 @@ private val PARTS = listOf(
         "lay a tile across a split" to "drop a header onto the divider, on the half it should take",
         "lay the focused tile across the whole view" to "hold its header still: ⬌ across the width, ⬍ across the height",
         "lay the pane a tile talks with beside it" to "hold its header still: ⇆ beside; the chain on the divider marks the pair",
-        "fit on, again, off: this tile" to "⤢ tap, tap again, hold",
         "minimise a tile; bring it back" to "_ on the header; tap its tab in the row above the keys",
         "close the pane on its host, or the tile" to "× on the header; y / n on the question",
         "the repository's changes" to "⎇ count on the header",

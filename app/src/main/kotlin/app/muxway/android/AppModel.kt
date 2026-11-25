@@ -1081,8 +1081,8 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         // The screen comes back with the send, the view's own lines; with Enter, Enter's frame is
         // the later one and the text's own is let go.
         val sent = send(key) { api, address ->
-            val typed = if (clean.isNotEmpty()) api.type(address, clean, settings.lines) else null
-            if (enter) api.key(address, "Enter", settings.lines) else typed
+            val typed = if (clean.isNotEmpty()) api.type(address, clean, settings.lines, clientLabel) else null
+            if (enter) api.key(address, "Enter", settings.lines, clientLabel) else typed
         }
         if (sent) touched(key)
         if (sent && enter && '\n' !in clean && view(key).pane?.let { Commands.isShell(it.command) } == true) remember(clean)
@@ -1164,9 +1164,13 @@ class AppModel(app: Application) : AndroidViewModel(app) {
         views[key]?.fitJob?.cancel()
     }
 
-    /** Gives back every pane this view sized; the view calls it when it is left. */
-    fun releaseFits() {
-        for (key in views.keys.toList()) release(key)
+    /**
+     * The view is left: every pane it sized keeps the size it was given, so a session carries
+     * the size it is being shown at and coming back finds it as it was. Nothing is handed back;
+     * `fit: auto` is the command line's and the MCP tool's.
+     */
+    fun keepFits() {
+        for (key in views.keys.toList()) keep(key)
     }
 
     /** Gives the pane back to tmux, if this app ever sized it. */
@@ -1284,7 +1288,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
     private fun mouse(key: String, button: String, x: Int, y: Int) = send(key) { api, address ->
         if (view(key).pane?.mouse == false) throw ApiException(400, "no_mouse_pane")
         try {
-            api.mouse(address, button, x, y)
+            api.mouse(address, button, x, y, client = clientLabel)
         } catch (e: ApiException) {
             throw ApiException(e.status, mouseCode(e))
         }
@@ -1302,7 +1306,7 @@ class AppModel(app: Application) : AndroidViewModel(app) {
 
     /** False when the pane is still busy with the previous send. */
     fun key(key: String, name: String): Boolean {
-        val sent = send(key) { api, address -> api.key(address, name, settings.lines) }
+        val sent = send(key) { api, address -> api.key(address, name, settings.lines, clientLabel) }
         if (sent) touched(key)
         return sent
     }

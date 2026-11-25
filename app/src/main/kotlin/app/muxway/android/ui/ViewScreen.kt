@@ -183,12 +183,6 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val index = focusedIndex.coerceIn(0, tiles.lastIndex)
     val focused = tiles[index]
     val state = model.view(focused)
-    // Fit, per tile: the host pane follows its tile, as a terminal would. On unless the tile's
-    // address is in the set; ⤢ serves the focused tile. Kept by the count of panes, not their
-    // addresses: a layout the host took may rename them.
-    var fitOff by rememberSaveable(addresses.size, saver = listSaver<MutableState<Set<String>>, String>({ it.value.toList() }, { mutableStateOf(it.toSet()) })) { mutableStateOf(setOf()) }
-    val fit = focused !in fitOff
-    var fitAgain by remember { mutableIntStateOf(0) }
     val hardware = model.settings.hardwareKeyboard
     // With a hardware keyboard assumed the on-screen one stays down until asked for.
     var ime by rememberSaveable(hardware) { mutableStateOf(!hardware) }
@@ -204,14 +198,13 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     var custom by remember { mutableStateOf<WindowLayout.Node?>(null) }
     val weights = remember { mutableStateMapOf<String, List<Float>>() }
     val kept = remember { Remembered().also { it.moves = model.moves } }
-    // The host renumbered a tile's pane and the model moved the tile: the minimised row and the
-    // fit-off set, kept here by key, follow it.
+    // The host renumbered a tile's pane and the model moved the tile: the minimised row,
+    // kept here by key, follows it.
     LaunchedEffect(model.moves) {
         if (model.moves == kept.moves) return@LaunchedEffect
         kept.moves = model.moves
         val by = model.moved
         parked = parked.map { by[it] ?: it }
-        fitOff = fitOff.map { by[it] ?: it }.toSet()
     }
     // A made tree is drawn only while it has a leaf per tile: for the frame between a tile
     // leaving or arriving and the effect below catching up, the preset stands in.
@@ -375,7 +368,7 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
     val now = ticker()
     // The swipe's order: the listing without the parked panes, which a swipe would only wake.
     val order = model.panes.filter { !it.later || it.key == focused }.map { it.key }.ifEmpty { addresses }
-    DisposableEffect(Unit) { onDispose { model.releaseFits() } }
+    DisposableEffect(Unit) { onDispose { model.keepFits() } }
     // The `+` menu after the tabs, and the session dialog it may open; the pane menu under a tab
     // or a header held and let go in place, by the pane's key.
     var adding by remember { mutableStateOf(false) }
@@ -596,8 +589,6 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             // ▦: the next preset; held, every split's shares equal. ⊡: the focused pane alone, and back.
             if (tiles.size > 1) Btn("▦", { touch(); layout = layout.next(tiles.size) }, enabled = rearrangeable, onLongClick = { touch(); weights.clear() })
             if (tiles.size > 1 || model.panes.any { it.key != focused && windowOf(it.key) == windowOf(focused) }) Btn("⊡", ::zoom, modifier = Modifier.testTag("zoom"))
-            // Tap: fit on, or send this size once more when it is on already; hold: fit off.
-            Btn("⤢", { if (fit) fitAgain++ else fitOff = fitOff - focused }, selected = fit, enabled = writable, onLongClick = { fitOff = fitOff + focused })
             if (hardware) Btn("abc", { ime = !ime; if (ime) { fieldFocus.request(); keyboard?.show() } else keyboard?.hide() }, selected = ime)
             InboxCount(model)
             MessagesCount(model)
@@ -641,32 +632,19 @@ fun ViewScreen(model: AppModel, addresses: List<String>) {
             val exact = if (ids != null && synced && tiles.all { it in sizes }) WindowLayout.exact(shape, tiles.map { sizes.getValue(it) }, ids) else null
             val lead = tiles.firstOrNull { model.panes.any { p -> p.key == it && p.writable } } ?: tiles[0]
             val imeUp = WindowInsets.isImeVisible
-            var sentAgain by remember { mutableIntStateOf(fitAgain) }
-            LaunchedEffect(ids, exact?.layout, fit, imeUp, fitAgain) {
-                if (ids == null) return@LaunchedEffect
-                if (!fit) { for (t in tiles) model.release(t); return@LaunchedEffect }
-                if (exact == null || imeUp) return@LaunchedEffect
+            LaunchedEffect(ids, exact?.layout, imeUp) {
+                if (ids == null || exact == null || imeUp) return@LaunchedEffect
                 kept.sent = exact.layout
-                model.fit(lead, exact.cols.coerceIn(20, 500), exact.rows.coerceIn(5, 300), again = fitAgain != sentAgain, window = true, layout = exact.layout, mates = tiles)
-                sentAgain = fitAgain
-            }
-            // With fit off the arrangement still goes to the host, without a size.
-            val proportional = if (ids != null && movable && synced && !fit) Tiles.layoutFor(shape, weights, ids) else ""
-            LaunchedEffect(proportional, hostLayout) {
-                if (proportional.isEmpty()) return@LaunchedEffect
-                val h = Tiles.fromHost(hostLayout, ids!!)
-                if (h != null && Tiles.sameTree(h.node, shape) && Tiles.nearWeights(shape, h.weights, weights, 0.01f)) return@LaunchedEffect
-                delay(300)
-                kept.sent = proportional
-                model.arrange(lead, proportional, tiles)
+                model.fit(lead, exact.cols.coerceIn(20, 500), exact.rows.coerceIn(5, 300), window = true, layout = exact.layout, mates = tiles)
             }
             val sent = ids != null && model.view(lead).fitted
             val groups = remember(model.panes) { Groups.of(model.panes) }
             val tile: @Composable (Int, Modifier) -> Unit = { i, m ->
                 key(tiles[i]) {
                     PaneTile(
-                        model, tiles[i], i == index, tiles.size > 1, tiles[i] in groups, tiles[i] !in fitOff, tiles[i] in held, siblings(tiles[i]), ids != null, exact?.sizes?.get(i)?.takeIf { sent },
-                        fitAgain, now, if (i in bottom) slackPx else 0, m,
+                        model, tiles[i], i == index, tiles.size > 1, tiles[i] in groups, tiles[i] in held, siblings(tiles[i]),
+                        tiles.none { it != tiles[i] && windowOf(it) == windowOf(tiles[i]) }, ids != null,
+                        exact?.sizes?.get(i)?.takeIf { sent }, now, if (i in bottom) slackPx else 0, m,
                         onMeasured = { sizes[tiles[i]] = it },
                         onDrop = { from, zone -> drop(from, i, zone) },
                         onZoom = ::zoom,
@@ -1245,16 +1223,16 @@ private fun InputBar(model: AppModel, state: PaneState, fieldFocus: FieldFocus, 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun PaneTile(
-    model: AppModel, address: String, focused: Boolean, several: Boolean, grouped: Boolean, fitAsked: Boolean, shared: Boolean, siblings: Boolean,
-    windowFit: Boolean, expected: WindowLayout.Size?, fitAgain: Int, now: Long, slackPx: Int, modifier: Modifier,
+    model: AppModel, address: String, focused: Boolean, several: Boolean, grouped: Boolean, shared: Boolean, siblings: Boolean,
+    sole: Boolean, windowFit: Boolean, expected: WindowLayout.Size?, now: Long, slackPx: Int, modifier: Modifier,
     onMeasured: (WindowLayout.Size) -> Unit, onDrop: (String, Tiles.Zone) -> Unit, onZoom: () -> Unit, onClose: () -> Unit, onCloseTile: () -> Unit,
     onMinimise: (() -> Unit)?, onFile: (Shown) -> Unit, onChanges: () -> Unit, onName: () -> Unit, onShare: () -> Unit, onPrompt: () -> Unit, ghost: String? = null,
     menu: Boolean = false, onMenu: () -> Unit = {}, onMenuClose: () -> Unit = {}, onPartner: (String) -> Unit = {},
     onAcross: ((Boolean) -> Unit)? = null, acrossNow: (Boolean) -> Boolean = { false }, onFocus: () -> Unit,
 ) {
-    // Another tile of this window carries the fit: this one is held. With the window fitted as
+    // Another tile of this window carries the size: this one is held. With the window fitted as
     // one ([windowFit]) the view sends the size and this tile is [expected] to be its share.
-    val fit = fitAsked && !shared
+    // [sole] says this is the only open tile of its window, which sizes the window itself.
     var asking by remember(address) { mutableStateOf(false) }
     val p = LocalPalette.current
     val state = model.view(address)
@@ -1351,7 +1329,7 @@ private fun PaneTile(
         // floor (20 columns a pane) is wider than the tile, another tile of the window carries the
         // fit, or a one-window fit gave this pane another share. The header says so, in the alert
         // colour, and the screen is drawn scaled to the tile, as with fit off (TileScale).
-        val heldSize = fitAsked && pane?.writable == true && when {
+        val heldSize = pane?.writable == true && when {
             shared -> true
             windowFit -> expected != null && (pane.width != expected.cols || pane.height != expected.rows)
             else -> state.fitKey.isNotEmpty() && state.fitKey.substringBefore(' ') != "${pane.width}x${pane.height}"
@@ -1383,7 +1361,7 @@ private fun PaneTile(
                 if (pane != null && waiting) Choices(model, pane)
             }
             if (menu) PaneMenu(model, address, onBeside = null, onClose = onMenuClose, onPartner = onPartner, onAcross = onAcross, acrossNow = acrossNow)
-            if (fitAsked && pane?.writable == true) {
+            if (pane?.writable == true) {
                 Text(" ${pane.width}×${pane.height}${if (heldSize) " " + Held.words(holder) else ""} ", color = if (heldSize) p.alert else ink, maxLines = 1, modifier = Modifier.testTag("size"))
             }
             // The pane's live shares made by this token, counted and dim; a tap opens the share sheet.
@@ -1421,7 +1399,9 @@ private fun PaneTile(
             val heightPx = constraints.maxHeight.coerceAtLeast(1)
             var zoom by remember(address) { mutableFloatStateOf(1f) }
             val maxSp = model.settings.textSp.toFloat()
-            val fitting = fit && pane?.writable == true
+            // A writable pane always follows its tile; one the token cannot write is drawn
+            // scaled, since nothing may size it, and one another tile carries is held.
+            val fitting = !shared && pane?.writable == true
             val reflow = model.settings.reflow
             val unwrapped = remember(state.content) { Ansi.rows(state.content, 0) }
             val paneCols = pane?.width?.takeIf { it > 0 } ?: unwrapped.maxOf { r -> r.sumOf { it.text.length } }.coerceIn(1, 400)
@@ -1445,8 +1425,10 @@ private fun PaneTile(
             // The on-screen keyboard halves the tile for a moment; the host keeps its size then.
             val imeUp = WindowInsets.isImeVisible
             val listed = pane?.let { "${it.width}x${it.height}" }
-            // Alone in the view the window takes the size, with the pane zoomed over its siblings.
-            val fitWindow = !several
+            // The only open tile of its window sizes the *window*, with the pane zoomed over
+            // its siblings, so none of them is squeezed and the window is never grown for a
+            // pane the view does not show.
+            val fitWindow = sole
             val fitZoom = fitWindow && siblings
             LaunchedEffect(visibleCols, visibleRows) { onMeasured(WindowLayout.Size(visibleCols, visibleRows)) }
             // A held tile keeps the size it has; fit turned off gives it back.
@@ -1458,7 +1440,7 @@ private fun PaneTile(
             val touch = state.touchedAt
             var seenTouch by remember(address) { mutableLongStateOf(touch) }
             val touchedNow = touch != seenTouch || (focused && !wasFocused)
-            LaunchedEffect(fitting, visibleCols, visibleRows, imeUp, fitAgain, listed, fitWindow, fitZoom, windowFit, shared, touch, focused) {
+            LaunchedEffect(fitting, visibleCols, visibleRows, imeUp, listed, fitWindow, fitZoom, windowFit, shared, touch, focused) {
                 val now = System.currentTimeMillis()
                 val refit = touchedNow && !imeUp && Refit.wanted(holder, lastRefit, now)
                 // A touch made while the keyboard is up waits for it to go: the fit is deferred
@@ -1469,15 +1451,16 @@ private fun PaneTile(
                 }
                 when {
                     windowFit -> {}
-                    !fitting -> if (shared && fitAsked) model.keep(address) else model.release(address)
+                    // A pane nothing here may size keeps the size it has: nothing is handed back.
+                    !fitting -> model.keep(address)
                     !imeUp -> {
                         if (refit) lastRefit = now
-                        model.fit(address, visibleCols.coerceIn(20, 500), visibleRows.coerceIn(5, 300), again = (fitAgain > 0 && listed != null) || refit, window = fitWindow, zoom = fitZoom)
+                        model.fit(address, visibleCols.coerceIn(20, 500), visibleRows.coerceIn(5, 300), again = refit, window = fitWindow, zoom = fitZoom)
                     }
                 }
             }
-            // A tile that gives way to another pane leaves its own at size; the view gives them
-            // all back when it is left.
+            // A tile that gives way to another pane leaves its own at size, and so does the
+            // view when it is left: a window keeps the size it was given.
             DisposableEffect(address) { onDispose { model.keep(address) } }
             val clickable = pane?.writable == true
             val previews = clickable && model.hostPreviews(address)

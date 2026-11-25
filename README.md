@@ -89,8 +89,9 @@ Besides: several hubs at once, each with its own token in the Android
 Keystore and its panes in the one list; `+` after the tabs adds a pane,
 new or existing, and `_` on a header parks a tile in a row above the
 keys;
-**fit** sizes the pane on the host to the phone, or pinch to read it at
-the host's own width; amber by default, phosphor green, and paper for
+a pane you may write **always follows its tile** on the host, and a
+window keeps the size it was shown at; pinch to read a pane at the
+host's own width; amber by default, phosphor green, and paper for
 daylight; the lens names every AI CLI and paints it with its state, and
 the Claude Code lens is the one that also reshapes a screen.
 

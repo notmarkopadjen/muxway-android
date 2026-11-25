@@ -61,4 +61,20 @@ class InputTest {
         for ((button, count) in listOf("wheelup" to 0, "wheeldown" to 51, "left" to 2, "right" to 2, "laser" to 1))
             assertFalse("$button $count", Input.isMouse(button, 1, 1, count))
     }
+    /**
+     * Input carries this device's label, as a resize does: the host gives a window back to the
+     * client whose command lands in it. Absent without one, so an older hub reads the body it
+     * knows.
+     */
+    @Test
+    fun inputCarriesTheClientLabel() {
+        assertEquals("Pixel 9", JSONObject(Json.text("ls", "Pixel 9")).getString("client"))
+        assertEquals("ls", JSONObject(Json.text("ls", "Pixel 9")).getString("text"))
+        assertEquals("Pixel 9", JSONObject(Json.key("Enter", "Pixel 9")).getString("client"))
+        assertEquals("Pixel 9", JSONObject(Json.mouse("left", 5, 3, 1, "Pixel 9")).getString("client"))
+        assertFalse(JSONObject(Json.text("ls")).has("client"))
+        assertFalse(JSONObject(Json.key("Enter")).has("client"))
+        assertFalse(JSONObject(Json.mouse("left", 5, 3)).has("client"))
+    }
+
 }

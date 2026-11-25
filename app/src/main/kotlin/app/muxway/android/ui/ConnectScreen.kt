@@ -170,7 +170,7 @@ fun ConnectScreen(model: AppModel) {
         Toggle("block screenshots of panes", block) { block = it }
         Toggle("assume a hardware keyboard: the on-screen one stays down until asked", hardware) { hardware = it }
         Toggle("effects: glow, scanlines, motion", effects) { effects = it }
-        Toggle("reflow long rows to the screen when fit is off (else scale the pane's width)", reflow) { reflow = it }
+        Toggle("reflow long rows to the screen in a pane nothing may size (else scale the pane's width)", reflow) { reflow = it }
         Toggle("names: in a shell pane on a host with preview roots, the names of its directory are links", names) { names = it }
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("a file opens with  ", color = p.dim)

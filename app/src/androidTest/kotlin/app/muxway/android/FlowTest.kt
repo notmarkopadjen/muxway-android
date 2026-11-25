@@ -834,13 +834,9 @@ class FlowTest {
         // Two grouped tiles side by side: the chain sits on the divider between them.
         rule.waitUntil(5_000) { rule.onAllNodesWithTag("divider-chain").fetchSemanticsNodes().isNotEmpty() }
         shot("beside-chain")
-        // Fit per tile: ⤢ held turns the focused tile's fit off and its size leaves the header; the other keeps its size.
+        // Both tiles are sized: a writable pane always follows its tile, with nothing to turn on.
         rule.waitUntil(15_000) { rule.onAllNodesWithTag("size").fetchSemanticsNodes().size == 2 }
-        rule.onNodeWithText("⤢").performTouchInput { longClick() }
-        rule.waitUntil(5_000) { rule.onAllNodesWithTag("size").fetchSemanticsNodes().size == 1 }
-        shot("fit-per-tile")
-        rule.onNodeWithText("⤢").performClick()
-        rule.waitUntil(15_000) { rule.onAllNodesWithTag("size").fetchSemanticsNodes().size == 2 }
+        shot("both-sized")
         // Across the width from the header's menu: the focused tile takes the whole width.
         val before = rule.onAllNodesWithTag("header").fetchSemanticsNodes()[0].boundsInWindow.width
         rule.onAllNodesWithTag("header")[0].performTouchInput { longClick() }
